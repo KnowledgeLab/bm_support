@@ -1,6 +1,8 @@
 import pandas as pd
+from scipy import stats
 import datahelpers.dftools as dfto
 import datahelpers.collapse as dc
+import datahelpers.plotting as dp
 
 
 def transform_df(dfi, statement_columns, action_column, claim_column,
@@ -29,7 +31,7 @@ def try_impute_else_discard(df, impute_column, grouping_column):
     m = df2[impute_column].isnull()
     print 'Number of NAs:', sum(m), 'values, total size', df2.shape[0]
     df2[impute_column] = df[working_columns].groupby(grouping_column,
-                                          as_index=False).transform(lambda g:
+                                                     as_index=False).transform(lambda g:
                                                                     g.fillna(g.mean()))[impute_column]
     m = df2[impute_column].isnull()
     print 'Could not impute', sum(m), \
@@ -46,6 +48,22 @@ def pdf_cut(df, c, value_cutoff):
     dfr = df.loc[df[c] > value_cutoff].copy()
     return dfr
 
+
 def pdf_cut_func(df, c, value_cutoff, func):
     dfr = df.loc[df[c].apply(lambda x: func(x, value_cutoff))].copy()
     return dfr
+
+
+def split_data(df, c):
+    m = (df[c] == 0)
+    data_ps = df.loc[~m].values[:, :]
+    data_ng = df.loc[m].values[:, :]
+    vals = [data_ps, data_ng]
+    return vals
+
+
+def ks_and_hist(pair, k):
+    print stats.ks_2samp(pair[0][:, k], pair[1][:, k])
+    pl_info = dp.plot_hist([pair[0][:, k], pair[1][:, k]],
+                           approx_nbins=5, opacity=0.5,
+                           ylog_axis=True, normed_flag=True)
