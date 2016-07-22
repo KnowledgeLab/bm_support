@@ -3,8 +3,8 @@ from numpy import concatenate, cumsum, cumprod
 from numpy import ones, arange
 from pymc3.math import logsumexp
 import theano.tensor as tt
+from prob_constants import very_low_logp
 
-very_low_logp = -50
 
 def inv_logit(p):
     return exp(p) / (1 + exp(p))

@@ -1,13 +1,8 @@
 from numpy import hstack, cumsum
 from numpy.random import RandomState
-
-t0_min = 0.
-t0_max = 100.
-
-mu_min = -2.0
-mu_max = 6.0
-tau_min = 0.1
-tau_max = 10.0
+from prob_constants import t0_min, t0_max, \
+                        mu_min, mu_max, \
+                        tau_min, tau_max
 
 
 def generate_log_normal_mixture(n_modes=3, seed=123, n_samples=100,
