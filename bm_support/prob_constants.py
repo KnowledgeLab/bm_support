@@ -7,7 +7,7 @@ t0_max = 100.
 
 mu_min = -2.
 mu_max = 6.
-tau_min = 0.1
-tau_max = 10.
+tau_min = 0.025
+tau_max = 40.
 
 
