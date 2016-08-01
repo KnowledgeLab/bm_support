@@ -50,7 +50,7 @@ def generate_log_normal_guess(data, n_modes=2, mode='random', seed=123):
         raise ValueError('keyword mode value should be either of: '
                          + ('{} ' * len(mode_values)).format(*mode_values))
 
-    return ratios_seed, t0s_seed, mus_seed, taus_seed
+    return array([ratios_seed, t0s_seed, mus_seed, taus_seed])
 
 
 def guess_ranges(data):

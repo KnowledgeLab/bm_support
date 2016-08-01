@@ -22,6 +22,7 @@ def generate_log_normal_mixture(n_modes=3, seed=123, n_samples=100,
 
 
 def generate_log_normal_mixture_with_logistic(n_modes=3, seed=123, n_samples=100,
+                                              n_features = 1,
                                               t0_range=(t0_min, t0_max),
                                               mu_range=(mu_min, mu_max),
                                               tau_range=(tau_min, tau_max)):
@@ -40,15 +41,16 @@ def generate_log_normal_mixture_with_logistic(n_modes=3, seed=123, n_samples=100
     values, pps = generate_log_normal(n_modes, seed, n_samples,
                                       t0_range, mu_range, tau_range)
 
-    ns = array(pps, dtype=int)[:, 0]
-    xy_data, betas_list, x_berns, probs = generate_logistic(1, ns, n_modes, seed)
+    ns = array(pps[0], dtype=int)
+    xy_data, betas, x_berns, probs = generate_logistic(1, ns, n_modes, seed)
 
     data = vstack([reshape(values, (1, values.shape[0])), xy_data])
 
     rns.shuffle(data.T)
+    pps = vstack([pps, betas])
     data = data[:, data[0, :] < t0_range[1]]
 
-    return data, pps, betas_list, x_berns
+    return data, pps, x_berns
 
 
 def generate_log_normal(n_modes=3, seed=123, n_samples=100,
@@ -70,8 +72,8 @@ def generate_log_normal(n_modes=3, seed=123, n_samples=100,
     t0s_init_prep = t0_range[0] + (t0_range[1] - t0_range[0])*rns.dirichlet([5.]*(n_modes+2))
     t0s_init = cumsum(t0s_init_prep)[:-2]
     values = hstack([rns.lognormal(m, 1./s**0.5, size=n) + t0 for (m, s, t0, n) in
-                   zip(mus_init, taus_init, t0s_init, ns)])
-    pps = zip(ns, mus_init, taus_init, t0s_init)
+                     zip(mus_init, taus_init, t0s_init, ns)])
+    pps = array([ns, t0s_init,  mus_init, taus_init])
 
     return values, pps
 
@@ -96,10 +98,10 @@ def generate_logistic(n_features=3, ns_list=(100, 200),
 
     beta1 = -1
     beta2 = 1
-    betas_list = [rns.uniform(beta1, beta2, size=(n_features + 1, 1)) for i in range(n_cycles)]
-    betas_np = hstack([repeat(betas, n, axis=1) for n, betas in zip(ns_list, betas_list)])
+    betas = rns.uniform(beta1, beta2, size=(n_features + 1, n_cycles))
+    betas_np = hstack([repeat(betas.T[j], ns_list[j]).reshape(n_features + 1, ns_list[j]) for j in range(n_cycles)])
     probs = f_logistic(sum(betas_np * x_data_ext, axis=0))
     y_data = rns.binomial(1, probs)
     xy_data = vstack([x_data_ext, y_data])
 
-    return xy_data, betas_list, x_bernoulli_p, probs
+    return xy_data, betas, x_bernoulli_p, probs
