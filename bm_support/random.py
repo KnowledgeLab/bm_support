@@ -10,11 +10,16 @@ from prob_constants import t0_min, t0_max, \
 def generate_log_normal_mixture(n_modes=3, seed=123, n_samples=100,
                                 t0_range=(t0_min, t0_max),
                                 mu_range=(mu_min, mu_max),
-                                tau_range=(tau_min, tau_max)):
+                                tau_range=(tau_min, tau_max),
+                                names={'ns': 'ns',
+                                       't0': 't0', 'mu': 'mu',
+                                       'tau': 'tau', 'ps': 'ps'}
+                                ):
 
     rns = RandomState(seed)
     data, pps = generate_log_normal(n_modes, seed, n_samples,
-                                    t0_range, mu_range, tau_range)
+                                    t0_range, mu_range, tau_range,
+                                    names)
     rns.shuffle(data)
     data = data[data < t0_range[1]]
 
@@ -22,32 +27,42 @@ def generate_log_normal_mixture(n_modes=3, seed=123, n_samples=100,
 
 
 def generate_log_normal_mixture_with_logistic(n_modes=3, seed=123, n_samples=100,
-                                              n_features = 1,
+                                              n_features=1,
                                               t0_range=(t0_min, t0_max),
                                               mu_range=(mu_min, mu_max),
-                                              tau_range=(tau_min, tau_max)):
+                                              tau_range=(tau_min, tau_max),
+                                              names={'ns': 'ns',
+                                                     't0': 't0', 'mu': 'mu',
+                                                     'tau': 'tau', 'ps': 'ps',
+                                                     'beta': 'beta'}):
     """
 
     :param n_modes:
     :param seed:
     :param n_samples:
+    :param n_features:
     :param t0_range:
     :param mu_range:
     :param tau_range:
+    :param names
     :return:
     """
 
     rns = RandomState(seed)
     values, pps = generate_log_normal(n_modes, seed, n_samples,
-                                      t0_range, mu_range, tau_range)
+                                      t0_range, mu_range, tau_range, names)
 
-    ns = array(pps[0], dtype=int)
-    xy_data, betas, x_berns, probs = generate_logistic(1, ns, n_modes, seed)
+    # ns = array(pps[], dtype=int)
+    xy_data, beta_pps, x_berns, probs = generate_logistic(n_features, pps[names['ns']],
+                                                          n_modes, seed, names)
 
     data = vstack([reshape(values, (1, values.shape[0])), xy_data])
 
     rns.shuffle(data.T)
-    pps = vstack([pps, betas])
+
+    # size = (n_features + 1, n_cycles)
+    # pps = vstack([pps, betas])
+    pps.update(beta_pps)
     data = data[:, data[0, :] < t0_range[1]]
 
     return data, pps, x_berns
@@ -56,7 +71,14 @@ def generate_log_normal_mixture_with_logistic(n_modes=3, seed=123, n_samples=100
 def generate_log_normal(n_modes=3, seed=123, n_samples=100,
                         t0_range=(t0_min, t0_max),
                         mu_range=(mu_min, mu_max),
-                        tau_range=(tau_min, tau_max)):
+                        tau_range=(tau_min, tau_max),
+                        names={'ns': 'ns',
+                               't0': 't0', 'mu': 'mu',
+                               'tau': 'tau', 'ps': 'ps'}
+                        ):
+
+    #TODO issue -- mutable default parameter names
+
     rns = RandomState(seed)
 
     ps = rns.dirichlet([5.]*n_modes)
@@ -73,13 +95,22 @@ def generate_log_normal(n_modes=3, seed=123, n_samples=100,
     t0s_init = cumsum(t0s_init_prep)[:-2]
     values = hstack([rns.lognormal(m, 1./s**0.5, size=n) + t0 for (m, s, t0, n) in
                      zip(mus_init, taus_init, t0s_init, ns)])
-    pps = array([ns, t0s_init,  mus_init, taus_init])
 
-    return values, pps
+    # pps = array([ns, t0s_init,  mus_init, taus_init])
+    pps_dict = {}
+    pps_dict.update({names['t0'] + '_' + str(i): array(v) for i, v in zip(range(len(t0s_init)), t0s_init)})
+    pps_dict.update({names['mu'] + '_' + str(i): array(v) for i, v in zip(range(len(mus_init)), mus_init)})
+    pps_dict.update({names['tau'] + '_' + str(i): array(v) for i, v in zip(range(len(taus_init)), taus_init)})
+    pps_dict['ns'] = array(ns, dtype=int)
+    pps_dict[names['ps']] = array(ps)
+
+    return values, pps_dict
 
 
 def generate_logistic(n_features=3, ns_list=(100, 200),
-                      n_cycles=2, seed=123):
+                      n_cycles=2, seed=123,
+                      names={'beta': 'beta'}
+                      ):
     rns = RandomState(seed)
     n_samples = sum(ns_list)
 
@@ -92,10 +123,6 @@ def generate_logistic(n_features=3, ns_list=(100, 200),
     x_data = rns.binomial(1, repeat(reshape(x_bernoulli_p, (n_features, 1)), n_samples, axis=1))
     x_data_ext = vstack([x_data, ones(n_samples)])
 
-    # jjs = list(cumsum(ns_list))
-    # js = [0] + jjs[:-1]
-    # jpairs = zip(js, jjs)
-
     beta1 = -1
     beta2 = 1
     betas = rns.uniform(beta1, beta2, size=(n_features + 1, n_cycles))
@@ -103,5 +130,6 @@ def generate_logistic(n_features=3, ns_list=(100, 200),
     probs = f_logistic(sum(betas_np * x_data_ext, axis=0))
     y_data = rns.binomial(1, probs)
     xy_data = vstack([x_data_ext, y_data])
+    pps = {names['beta'] + '_' + str(i): array(betas[:, i]) for i in range(betas.shape[1])}
 
-    return xy_data, betas, x_bernoulli_p, probs
+    return xy_data, pps, x_bernoulli_p, probs

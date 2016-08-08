@@ -67,6 +67,11 @@ def logp_ln_shifted(mu, tau, t0, value):
                      very_low_logp)
 
 
+def tt_inv_logit(betas):
+    def logp_(value):
+        return 1. / (1. + tt.exp(-value.dot(betas)))
+    return logp_
+
 # Log likelihood of Gaussian mixture distribution
 def logp_glmix(pi, mus, taus, t0s):
     def logp_(value):

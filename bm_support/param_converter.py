@@ -1,80 +1,86 @@
 from numpy import array, zeros, argsort
+import pymc3 as pm
+from bm_support.math_aux import sb_forward, sb_backward, \
+    int_forward, int_backward
+
+cdict = {pm.Dirichlet: {}, pm.Uniform: {}}
+
+cdict[pm.Dirichlet]['fwd_transform_func'] = sb_forward
+cdict[pm.Dirichlet]['bwd_transform_func'] = sb_backward
+cdict[pm.Dirichlet]['suffix'] = '_stickbreaking_'
+cdict[pm.Uniform]['fwd_transform_func'] = int_forward
+cdict[pm.Uniform]['bwd_transform_func'] = int_backward
+cdict[pm.Uniform]['suffix'] = '_interval_'
 
 
-class params_converter(object):
+def map_parameters(left_dict, model_dict, ranges, forward):
     """
-    very open parameter converter
+
+    :param left_dict:
+    :param model_dict:
+    :param conv_dict:
+    :param ranges:
+    :param forward:
+    :return:
     """
+# left_dict -> right_dict
+# raw -> trans if forward, else trans -> raw
+    md = model_dict
+#     left_dict
+    ld = left_dict
+    rd = {}
+    cd = cdict
 
-    def __init__(self, n):
-        self.vars_dict = None
-
-        self.guess_map = None
-        self.names = None
-
-        self.arr_guess = None
-        self.arr_best = None
-
-        self.raw_dict = None
-        self.best_guess_dict = None
-
-        self.n_modes = n
-
-    def guess_arr_to_dict(self):
-        vd = self.vars_dict
-        ga = self.arr_guess
-        gd = {}
-        for k in vd:
-            f = vd[k]['fwd_transform_func']
-            if vd[k]['plate']:
-                for j in range(self.n_modes):
-                    kk = k + '_' + str(j) + vd[k]['suffix']
-                    min_ = vd[k]['min']
-                    max_ = vd[k]['max']
-                    value = ga[self.guess_map[k], j]
-                    gd[kk] = array([f(min_, max_, value)])
-            else:
-                kk = k + vd[k]['suffix']
-                value = ga[self.guess_map[k]]
-                gd[kk] = array(f(value))
-
-        self.best_guess_dict = gd
-        return gd
-
-    def trans_dict_to_raw_dict(self):
-        vd = self.vars_dict
-        bgd = self.best_guess_dict
-        rd = {}
-        for k in vd:
-            f = vd[k]['bwd_transform_func']
-            if vd[k]['plate']:
-                for j in range(self.n_modes):
-                    kj = k + '_' + str(j)
-                    kk = k + '_' + str(j) + vd[k]['suffix']
-                    min_ = vd[k]['min']
-                    max_ = vd[k]['max']
-                    value = bgd[kk]
-                    rd[kj] = array([f(min_, max_, value)])
-            else:
-                kk = k + vd[k]['suffix']
-                value = bgd[kk]
-                rd[k] = array(f(value))
-        self.raw_dict = rd
-        return rd
-
-    def raw_dict_to_arr(self, key_to_order='t0'):
-        gm = self.guess_map
-        rd = self.raw_dict
-        self.arr_best = zeros(self.arr_guess.shape)
-        for k in gm.keys():
-            kkeys = [q for q in rd.keys() if k in q]
-            for kk in kkeys:
-                words = kk.split('_')
-                if len(words) > 1:
-                    self.arr_best[gm[k], int(words[1])] = rd[kk]
+    for k in ld:
+        kk = k.split('_')[0]
+#       distr_type
+        if kk in md.keys():
+            dt = md[kk]['type']
+            if dt in cd.keys():
+                suffix = cd[dt]['suffix']
+                if forward:
+                    f = cd[dt]['fwd_transform_func']
+                    krd = k + suffix
                 else:
-                    self.arr_best[gm[k]] = rd[kk]
+                    f = cd[dt]['bwd_transform_func']
+                    if k.endswith(suffix):
+                        krd = k[:-len(suffix)]
+                    else:
+                        raise ValueError('suffix {} should be present in key {}'.format(suffix, k))
+                if kk in ranges:
+                    rd[krd] = array(f(ranges[kk][0], ranges[kk][1], ld[k]))
+                else:
+                    rd[krd] = array(f(ld[k]))
+            else:
+                rd[k] = ld[k]
+    return rd
 
-        ord_key = argsort(self.arr_best[gm[key_to_order]])
-        self.arr_best = self.arr_best[:, ord_key]
-        return self.arr_best
+
+def dict_cmp(d1, d2):
+    if set(d1.keys()) == set(d2.keys()):
+        dcmp = {k: sum((d1[k] - d2[k])/d2[k]) if d1[k].shape
+                else (d1[k] - d2[k])/d2[k] for k in d1.keys()}
+        print sum(dcmp.values())
+        return dcmp
+    else:
+        raise ValueError('dictionaries have incompatible keys: '
+                         + ('{} '*len(d1.keys())).format(*d1.keys()) + ' and '
+                         + ('{} '*len(d2.keys())).format(*d2.keys()))
+
+
+def raw_dict_to_arr(self, key_to_order='t0'):
+    gm = self.guess_map
+    rd = self.raw_dict
+    self.arr_best = zeros(self.arr_guess.shape)
+    for k in gm.keys():
+        kkeys = [q for q in rd.keys() if k in q]
+        for kk in kkeys:
+            words = kk.split('_')
+            if len(words) > 1:
+                self.arr_best[gm[k], int(words[1])] = rd[kk]
+            else:
+                self.arr_best[gm[k]] = rd[kk]
+
+    ord_key = argsort(self.arr_best[gm[key_to_order]])
+    self.arr_best = self.arr_best[:, ord_key]
+    return self.arr_best

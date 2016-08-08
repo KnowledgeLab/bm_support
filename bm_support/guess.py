@@ -1,11 +1,14 @@
-from numpy import log, exp, mean, min, max, std, array, floor
+from numpy import log, exp, mean, min, max, std, array, \
+    floor, append, cumsum
 from sklearn.cluster import KMeans
 from numpy.random import RandomState
 from prob_constants import norm_const
 from prob_constants import tau_min, tau_max
 
 
-def generate_log_normal_guess(data, n_modes=2, mode='random', seed=123):
+def generate_log_normal_guess(data, n_modes=2, mode='random', seed=123,
+                              names={'t0': 't0', 'mu': 'mu',
+                                     'tau': 'tau', 'ps': 'ps'}):
 
     rns = RandomState(seed)
     tmin = min(data)
@@ -44,13 +47,20 @@ def generate_log_normal_guess(data, n_modes=2, mode='random', seed=123):
         if mode == 't_uniform':
             t0s_seed = [k*(thi-tlow)/n_modes + tlow + norm_const for k in range(n_modes)]
         elif mode == 'random':
-            t0s_seed = [rns.uniform(tlow, thi) for i in range(n_modes)]
+            ps = rns.dirichlet([1.]*n_modes)
+            right = tlow + norm_const + (thi - tlow - norm_const)*cumsum(ps[:-1])
+            t0s_seed = append(tlow + norm_const, right)
     else:
         mode_values = ['random', 't_uniform', 'kmeans']
         raise ValueError('keyword mode value should be either of: '
                          + ('{} ' * len(mode_values)).format(*mode_values))
 
-    return array([ratios_seed, t0s_seed, mus_seed, taus_seed])
+    pps_dict = {}
+    pps_dict.update({names['t0'] + '_' + str(i): array(v) for i, v in zip(range(len(t0s_seed)), t0s_seed)})
+    pps_dict.update({names['mu'] + '_' + str(i): array(v) for i, v in zip(range(len(mus_seed)), mus_seed)})
+    pps_dict.update({names['tau'] + '_' + str(i): array(v) for i, v in zip(range(len(taus_seed)), taus_seed)})
+    pps_dict[names['ps']] = array(ratios_seed)
+    return pps_dict
 
 
 def guess_ranges(data):
