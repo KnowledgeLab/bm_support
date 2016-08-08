@@ -47,7 +47,7 @@ def generate_log_normal_guess(data, n_modes=2, mode='random', seed=123,
         if mode == 't_uniform':
             t0s_seed = [k*(thi-tlow)/n_modes + tlow + norm_const for k in range(n_modes)]
         elif mode == 'random':
-            ps = rns.dirichlet([1.]*n_modes)
+            ps = rns.dirichlet([5.]*n_modes)
             right = tlow + norm_const + (thi - tlow - norm_const)*cumsum(ps[:-1])
             t0s_seed = append(tlow + norm_const, right)
     else:

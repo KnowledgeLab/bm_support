@@ -1,10 +1,10 @@
 from numpy import hstack, cumsum, sum, exp, dot,\
     vstack, repeat, reshape, \
-    ones, arange, array
+    ones, arange, array, append
 from numpy.random import RandomState
 from prob_constants import t0_min, t0_max, \
                         mu_min, mu_max, \
-                        tau_min, tau_max
+                        tau_min, tau_max, norm_const
 
 
 def generate_log_normal_mixture(n_modes=3, seed=123, n_samples=100,
@@ -91,8 +91,12 @@ def generate_log_normal(n_modes=3, seed=123, n_samples=100,
 
     taus_init = (tau_range[1] * tau_range[0]) ** 0.5 * (tau_range[1] / tau_range[0]) ** \
                                                        (collapse_coeff * (rns.uniform(0., 1.0, n_modes) - 0.5))
-    t0s_init_prep = t0_range[0] + (t0_range[1] - t0_range[0])*rns.dirichlet([5.]*(n_modes+2))
-    t0s_init = cumsum(t0s_init_prep)[:-2]
+
+    # for n modes, we break the stick in n+1 places, and drop the left most piece
+    # because the support of log-normal is half axis
+    t0_ps = rns.dirichlet([5.] * (n_modes+2))
+    t0s_init = (t0_range[0] + norm_const) + (t0_range[1] - t0_range[0] - norm_const) * cumsum(t0_ps[:-2])
+
     values = hstack([rns.lognormal(m, 1./s**0.5, size=n) + t0 for (m, s, t0, n) in
                      zip(mus_init, taus_init, t0s_init, ns)])
 

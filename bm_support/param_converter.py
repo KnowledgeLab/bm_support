@@ -68,6 +68,25 @@ def dict_cmp(d1, d2):
                          + ('{} '*len(d2.keys())).format(*d2.keys()))
 
 
+
+def sort_dict_by_sort_key(input_dict, sort_key):
+    enum_keys = [k for k in input_dict.keys() if len(k.split('_')) > 1]
+    base_keys = set([k.split('_')[0] for k in enum_keys])
+    other_keys = list(set(input_dict.keys()) - set(enum_keys))
+    enums = sorted(list(set([int(k.split('_')[-1]) for k in enum_keys])))
+    if sort_key in base_keys:
+        out_dict = {k:input_dict[k] for k in other_keys}
+        to_sort_list = [input_dict[sort_key + '_' + str(k)] for k in enums]
+        sorting_order = sorted(range(len(to_sort_list)), key=lambda k: to_sort_list[k])
+        sorting_dict = dict(zip(range(len(to_sort_list)), sorting_order))
+        for k in base_keys:
+            upd = {k + '_' + str(_to): input_dict[k + '_' + str(_from)] for _from, _to in sorting_dict.iteritems()}
+            out_dict.update(upd)
+        return out_dict
+    else:
+        raise ValueError('sort_key arg should be in the input_dict keys()')
+
+
 def raw_dict_to_arr(self, key_to_order='t0'):
     gm = self.guess_map
     rd = self.raw_dict
