@@ -59,7 +59,8 @@ def generate_log_normal_guess(data, n_modes=2, mode='random', seed=123,
     pps_dict.update({names['t0'] + '_' + str(i): array(v) for i, v in zip(range(len(t0s_seed)), t0s_seed)})
     pps_dict.update({names['mu'] + '_' + str(i): array(v) for i, v in zip(range(len(mus_seed)), mus_seed)})
     pps_dict.update({names['tau'] + '_' + str(i): array(v) for i, v in zip(range(len(taus_seed)), taus_seed)})
-    pps_dict[names['ps']] = array(ratios_seed)
+    if n_modes > 1:
+        pps_dict[names['ps']] = array(ratios_seed)
     return pps_dict
 
 

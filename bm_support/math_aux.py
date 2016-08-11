@@ -59,7 +59,7 @@ def int_forward(a, b, x):
     return r
 
 
-def logp_ln_shifted(mu, tau, t0, value):
+def logp_ln_shifted_(mu, tau, t0, value):
     delta = lambda x: tt.log(x - t0) - mu
     return tt.switch(tt.gt(value, t0),
                      -0.5*(tt.log(2 * pi) + 2.0*tt.log(value - t0) - tt.log(tau)
@@ -67,15 +67,38 @@ def logp_ln_shifted(mu, tau, t0, value):
                      very_low_logp)
 
 
+def logp_ln_shifted(mu, tau, t0):
+
+    def logp_(value):
+        delta = lambda x: tt.log(x - t0) - mu
+        return tt.switch(tt.gt(value, t0),
+                         -0.5 * (tt.log(2 * pi) + 2.0 * tt.log(value - t0) - tt.log(tau)
+                                 + delta(value).dot(tau) * delta(value)),
+                         very_low_logp)
+
+    return logp_
+
+
 def tt_inv_logit(betas):
     def logp_(value):
         return 1. / (1. + tt.exp(-value.dot(betas)))
     return logp_
 
-# Log likelihood of Gaussian mixture distribution
+
 def logp_glmix(pi, mus, taus, t0s):
+
+    """
+    Log likelihood of Gaussian mixture distribution
+
+    :param pi:
+    :param mus:
+    :param taus:
+    :param t0s:
+    :return:
+    """
+
     def logp_(value):
-        logps = [tt.log(pi[i]) + logp_ln_shifted(mu, tau, t0, value)
+        logps = [tt.log(pi[i]) + logp_ln_shifted_(mu, tau, t0, value)
                  for (i, mu, tau, t0) in zip(range(len(mus)), mus, taus, t0s)]
 
         return tt.sum(logsumexp(tt.stacklists(logps)[:, :], axis=0))

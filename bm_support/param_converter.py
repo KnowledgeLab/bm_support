@@ -1,4 +1,4 @@
-from numpy import array, zeros, argsort
+from numpy import array, zeros, argsort, sqrt
 import pymc3 as pm
 from bm_support.math_aux import sb_forward, sb_backward, \
     int_forward, int_backward
@@ -57,8 +57,16 @@ def map_parameters(left_dict, model_dict, ranges, forward):
 
 
 def dict_cmp(d1, d2):
+    """
+    produce the numeric relative differences
+    of two dictionaries with identical keys,
+    providing the square root of the sum of the squares for the array
+    :param d1: first dict
+    :param d2: second dict
+    :return: dict with rel diffs
+    """
     if set(d1.keys()) == set(d2.keys()):
-        dcmp = {k: sum((d1[k] - d2[k])/d2[k]) if d1[k].shape
+        dcmp = {k: sqrt(sum(((d1[k] - d2[k])/d2[k])**2)) if d1[k].shape
                 else (d1[k] - d2[k])/d2[k] for k in d1.keys()}
         print sum(dcmp.values())
         return dcmp
@@ -68,23 +76,52 @@ def dict_cmp(d1, d2):
                          + ('{} '*len(d2.keys())).format(*d2.keys()))
 
 
+def sort_dict_by_key(input_dict, sort_key):
+    # enum_keys = [k for k in input_dict.keys() if len(k.split('_')) > 1]
+    # base_keys = set([k.split('_')[0] for k in enum_keys])
+    # other_keys = list(set(input_dict.keys()) - set(enum_keys))
+    # enums = sorted(list(set([int(k.split('_')[-1]) for k in enum_keys])))
 
-def sort_dict_by_sort_key(input_dict, sort_key):
+    enums, base_keys, other_keys, enum_keys = break_dict_to_enums_and_notenums(input_dict)
+
+    if sort_key in base_keys:
+        out_dict = {}
+        to_sort_list = [input_dict[sort_key + '_' + str(k)] for k in enums]
+        sorting_order = sorted(range(len(to_sort_list)), key=lambda i: to_sort_list[i])
+        sorting_dict = dict(zip(sorting_order, range(len(to_sort_list))))
+        for k in base_keys:
+            upd = {k + '_' + str(_to): input_dict[k + '_' + str(_from)] for _from, _to in sorting_dict.iteritems()}
+            out_dict.update(upd )
+        out_dict.update({k: input_dict[k][sorting_order] for k in other_keys})
+        return out_dict
+    else:
+        raise ValueError('sort_key arg should be in the input_dict keys()')
+
+
+def break_dict_to_enums_and_notenums(input_dict):
     enum_keys = [k for k in input_dict.keys() if len(k.split('_')) > 1]
     base_keys = set([k.split('_')[0] for k in enum_keys])
     other_keys = list(set(input_dict.keys()) - set(enum_keys))
     enums = sorted(list(set([int(k.split('_')[-1]) for k in enum_keys])))
-    if sort_key in base_keys:
-        out_dict = {k:input_dict[k] for k in other_keys}
-        to_sort_list = [input_dict[sort_key + '_' + str(k)] for k in enums]
-        sorting_order = sorted(range(len(to_sort_list)), key=lambda k: to_sort_list[k])
-        sorting_dict = dict(zip(range(len(to_sort_list)), sorting_order))
-        for k in base_keys:
-            upd = {k + '_' + str(_to): input_dict[k + '_' + str(_from)] for _from, _to in sorting_dict.iteritems()}
-            out_dict.update(upd)
-        return out_dict
-    else:
-        raise ValueError('sort_key arg should be in the input_dict keys()')
+    return enums, base_keys, other_keys, enum_keys
+
+
+def merge_two_dicts(x, y):
+    """
+    Given two dicts, merge them into a new dict as a shallow copy
+    """
+    z = x.copy()
+    z.update(y)
+    return z
+
+
+def dict_to_list(input_dict):
+    enums, base_keys, other_keys, _ = break_dict_to_enums_and_notenums(input_dict)
+
+    par_dicts = [{k: input_dict[k + '_' + str(i)] for k in base_keys} for i in enums]
+    par_dicts2 = [{k: input_dict[k][i] for k in other_keys} for i in enums]
+    p_dicts = [merge_two_dicts(d1, d2) for d1, d2 in zip(par_dicts, par_dicts2)]
+    return p_dicts
 
 
 def raw_dict_to_arr(self, key_to_order='t0'):
