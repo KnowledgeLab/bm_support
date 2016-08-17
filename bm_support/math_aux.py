@@ -1,9 +1,20 @@
-from numpy import exp, sqrt, log, pi
+from numpy import exp, sqrt, log, pi, ceil
 from numpy import concatenate, cumsum, cumprod
 from numpy import ones, arange
 from pymc3.math import logsumexp
 import theano.tensor as tt
 from prob_constants import very_low_logp
+
+
+def find_intlike_delta(a, b, n):
+    if a < b:
+        xs = (b - a)/n
+        if xs > 1:
+            return ceil(xs)
+        else:
+            return 1./ceil(1./xs)
+    else:
+        raise ValueError('~(a < b)')
 
 
 def inv_logit(p):
@@ -85,10 +96,10 @@ def tt_inv_logit(betas):
     return logp_
 
 
-def logp_glmix(pi, mus, taus, t0s):
+def logp_shifted_ln_mix(pi, mus, taus, t0s):
 
     """
-    Log likelihood of Gaussian mixture distribution
+    Log likelihood of log-normal mixture distribution
 
     :param pi:
     :param mus:
@@ -100,6 +111,28 @@ def logp_glmix(pi, mus, taus, t0s):
     def logp_(value):
         logps = [tt.log(pi[i]) + logp_ln_shifted_(mu, tau, t0, value)
                  for (i, mu, tau, t0) in zip(range(len(mus)), mus, taus, t0s)]
+
+        return tt.sum(logsumexp(tt.stacklists(logps)[:, :], axis=0))
+
+    return logp_
+
+
+def logp_mixture(pis, func, **kwargs):
+    """
+    general mixture of funcs
+    :param pis: Dirichlet distribution, class probs
+    :param func: func (a, b,c, value)
+    :param kwargs: dictionary {a: [a_1, a_2, ...], ...}
+    :return:
+    """
+
+    def logp_(value):
+        kw = dict(kwargs)
+        n_dim = pis.tag.test_value.shape[0]
+        kw['value'] = [value]*n_dim
+        dds = [{key: kw[key][k] for key in kw.keys()} for k in range(n_dim)]
+        logps = [tt.log(pis[i]) + func(**kw2)
+                 for (i, kw2) in zip(range(n_dim), dds)]
 
         return tt.sum(logsumexp(tt.stacklists(logps)[:, :], axis=0))
 
