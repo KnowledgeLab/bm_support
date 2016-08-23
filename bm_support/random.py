@@ -150,7 +150,7 @@ def generate_bernoullis(n_features=2, n_samples=30, p_range=(0.2, 0.8),
     :param seed: seed for random generation, used only if no rns provided
     :return:
     NB: shape of x_data is (n_features+1, n_samples),
-        one row of dummy variables is added
+        one row of dummy variables is added as the first (0th row)
     """
     if n_features > 0:
         p1, p2 = p_range
@@ -163,7 +163,7 @@ def generate_bernoullis(n_features=2, n_samples=30, p_range=(0.2, 0.8),
         else:
             raise ValueError('mode parameter value \'{}\' is \
                              not one of : \'random\', \'determ\''.format(mode))
-        x_bernoulli_p = array(append(x_bernoulli_p, [1.0]))
+        x_bernoulli_p = array(append([1.0], x_bernoulli_p))
         x_bernoulli_p_dict = {names['prior_p']: x_bernoulli_p}
         x_data = rns.binomial(1, repeat(reshape(x_bernoulli_p, (n_features + 1, 1)), n_samples, axis=1))
     else:
@@ -319,10 +319,10 @@ def generate_logistic_y_from_bernoulli_x_steplike_beta(input_data,
                                                        beta_range=(-2, 2),
                                                        mode='determ',
                                                        rns=None, seed=123,
-                                                       names={'beta_right': 'br',
-                                                              'beta_left': 'bl',
-                                                              'beta_center': 'bc',
-                                                              'beta_steepness': 'bs',
+                                                       names={'beta_right': 'beta_right',
+                                                              'beta_left': 'beta_left',
+                                                              'beta_center': 'beta_center',
+                                                              'beta_steepness': 'beta_steepness'
                                                               }):
     if not rns:
         rns = RandomState(seed)
@@ -335,13 +335,14 @@ def generate_logistic_y_from_bernoulli_x_steplike_beta(input_data,
     pps_dict.update(par_betas_dict)
     beta_data = generate_beta_per_data(par_betas, input_data)
 
-    xdata, pps_xdata = generate_bernoullis(n_features, len(input_data), (0.2, 0.8),
-                                           mode, rns, seed)
+    x_data, pps_xdata = generate_bernoullis(n_features, len(input_data), (0.2, 0.8),
+                                            mode, rns, seed)
 
     pps_dict.update(pps_xdata)
 
-    y_data, _ = convolve_logistic(xdata, beta_data, rns, seed)
-    return y_data, pps_dict
+    y_data, _ = convolve_logistic(x_data, beta_data, rns, seed)
+    data = vstack([x_data, y_data])
+    return data, pps_dict
 
 
 

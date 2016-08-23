@@ -1,4 +1,4 @@
-from numpy import exp, sqrt, log, pi, ceil
+from numpy import exp, sqrt, log, pi, ceil, dot
 from numpy import concatenate, cumsum, cumprod
 from numpy import ones, arange
 from pymc3.math import logsumexp
@@ -90,9 +90,40 @@ def logp_ln_shifted(mu, tau, t0):
     return logp_
 
 
-def tt_inv_logit(betas):
+def tt_inv_logit(arg):
     def logp_(value):
-        return 1. / (1. + tt.exp(-value.dot(betas)))
+        return 1. / (1. + tt.exp(-value.dot(arg)))
+    return logp_
+
+
+def tt_logistic_step(b1, b2, t0, g, value):
+    return b1 + (b2 - b1) / (1. + tt.exp(-g.dot(value - t0)))
+
+
+def np_logistic_step(b1, b2, t0, g, value):
+    return b1 + (b2 - b1) / (1. + exp( -dot(value - t0, g)))
+
+
+def tt_logistic(value):
+    return 1./(1. + tt.exp(value))
+
+
+def logp_shln_steplike_logistic(beta_l, beta_r, beta_c, beta_s, mu, tau, t0):
+    def logp_(value):
+        betas = tt.stacklists([tt_logistic_step(b1, b2, c, gamma, value[0])
+                               for (b1, b2, c, gamma) in
+                               zip(beta_l, beta_r, beta_c, beta_s)])
+        xs = tt.stacklists([value[j + 1] for j in range(len(beta_l))])
+
+        args = tt.sum(betas * xs, axis=0)
+        # probability from logistic
+        pr_log = tt_logistic(-args)
+        ll = tt.sum(value[-1] * tt.log(pr_log) +
+                    (1. - value[-1]) * tt.log(1. - pr_log) +
+                    logp_ln_shifted_(mu, tau, t0, value[0]))
+
+        return ll
+
     return logp_
 
 

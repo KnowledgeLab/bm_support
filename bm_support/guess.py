@@ -1,5 +1,5 @@
 from numpy import log, exp, mean, min, max, std, array, \
-    floor, append, cumsum
+    floor, append, cumsum, vstack
 from sklearn.cluster import KMeans
 from numpy.random import RandomState
 from prob_constants import norm_const
@@ -75,3 +75,38 @@ def guess_ranges(data):
     mu_min = mu_order - 4.0
     mu_max = mu_order + 4.0
     return (tlow, thi), (mu_min, mu_max)
+
+
+def generate_beta_step_guess(data, n_features, mode='random', seed=123,
+                             beta_range=(-3., 3.),
+                             gamma_range=(0., 10.),
+                             names={'beta_c': 'beta_c',
+                                    'beta_l': 'beta_l',
+                                    'beta_r': 'beta_r',
+                                    'beta_s': 'beta_s'}):
+    rns = RandomState(seed)
+    trange = min(data), max(data)
+    #     beta centers
+    beta_cs = rns.uniform(*trange, size=n_features)
+    beta_range_ext = beta_range[0], mean(beta_range), beta_range[1]
+    if mode == 'random':
+        betas = rns.uniform(*beta_range_ext[::2], size=(2, n_features))
+    else:
+        betas = vstack([rns.uniform(*beta_range_ext[:-1], size=(1, n_features)),
+                        rns.uniform(*beta_range_ext[1:], size=(1, n_features))])
+
+    # beta steepness
+
+    beta_ss = rns.uniform(*gamma_range, size=n_features)
+    pps_dict = {}
+
+    pps_dict.update({names['beta_s'] + '_' + str(i): array(v)
+                     for i, v in zip(range(len(beta_ss)), beta_ss)})
+    pps_dict.update({names['beta_c'] + '_' + str(i): array(v)
+                     for i, v in zip(range(len(beta_cs)), beta_cs)})
+    pps_dict.update({names['beta_l'] + '_' + str(i): array(v)
+                     for i, v in zip(range(betas.shape[1]), betas[0])})
+    pps_dict.update({names['beta_r'] + '_' + str(i): array(v)
+                     for i, v in zip(range(betas.shape[1]), betas[1])})
+
+    return pps_dict
