@@ -110,3 +110,9 @@ def generate_beta_step_guess(data, n_features, mode='random', seed=123,
                      for i, v in zip(range(betas.shape[1]), betas[1])})
 
     return pps_dict
+
+
+def generate_bernoulli_guess(data, name, first_index):
+    rdict = {name + '_%d' % (i+first_index):
+             (1.- 1e-4)*float(sum(data[i]))/data.shape[1] for i in range(data.shape[0])}
+    return rdict

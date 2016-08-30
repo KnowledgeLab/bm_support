@@ -8,6 +8,8 @@ from prob_constants import t0_min, t0_max, \
                         mu_min, mu_max, \
                         tau_min, tau_max, norm_const
 
+from math_aux import np_logistic_step
+
 
 def f_logistic(x):
     return 1 / (1 + exp(-x))
@@ -137,7 +139,7 @@ def generate_log_normal(n_modes=3, seed=123, n_samples=100,
 
 def generate_bernoullis(n_features=2, n_samples=30, p_range=(0.2, 0.8),
                         mode='determ', rns=None, seed=123,
-                        names={'prior_p': 'prior_p'}):
+                        names={'xprior': 'xprior'}):
     """
     generate n_features bernoulli parameters
         and for each generate n_samples datapoints
@@ -164,10 +166,11 @@ def generate_bernoullis(n_features=2, n_samples=30, p_range=(0.2, 0.8),
             raise ValueError('mode parameter value \'{}\' is \
                              not one of : \'random\', \'determ\''.format(mode))
         x_bernoulli_p = array(append([1.0], x_bernoulli_p))
-        x_bernoulli_p_dict = {names['prior_p']: x_bernoulli_p}
+        x_bernoulli_p_dict = {names['xprior'] + '_%d' % j: x_bernoulli_p[j]
+                              for j in range(n_features + 1)}
         x_data = rns.binomial(1, repeat(reshape(x_bernoulli_p, (n_features + 1, 1)), n_samples, axis=1))
     else:
-        x_bernoulli_p_dict = {'prior_p': array(1.)}
+        x_bernoulli_p_dict = {names['xprior']+ '_%d' % 0: array(1.)}
         x_data = reshape(ones(n_samples), (1, n_samples))
     return x_data, x_bernoulli_p_dict
 
@@ -207,7 +210,7 @@ def convolve_logistic(x_data, betas_data, rns=None, seed=123):
 
 
 def generate_logistic_y_from_bernoulli_x(n_features=3, ns_list=(100, 200), rns=None, seed=123,
-                                         names={'beta': 'beta', 'prior_p': 'prior_p'}):
+                                         names={'beta': 'beta', 'xprior': 'xprior'}):
 
     """
 
@@ -232,13 +235,8 @@ def generate_logistic_y_from_bernoulli_x(n_features=3, ns_list=(100, 200), rns=N
     return xy_data, pps, logistic_probs
 
 
-def logistic_step(b1, b2, t0, g, value):
-    return b1 + (b2 - b1) * f_logistic(g * (value - t0))
-
-
-# TODO: rename to beta_steplike_determ
-def determ_parameters(input_data, n_features=2,
-                      beta_range=(-2., 2.)):
+def beta_steplike_determ_parameters(input_data, n_features=2,
+                                    beta_range=(-2., 2.)):
     #         pp = beta1, beta2, t0, gamma
     ave = 0.5 * (max(input_data) - min(input_data))
     if ave != 0:
@@ -251,11 +249,9 @@ def determ_parameters(input_data, n_features=2,
         raise ValueError('degenerate input_data: min == max')
 
 
-# TODO: rename to beta_steplike_random
-def random_parameters(input_data, n_features=2,
-                      beta_range=(-2., 2.),
-                      rns=None, seed=123):
-    #     betas = rns.uniform(*beta_range, size=(2, n_features))
+def beta_steplike_random_parameters(input_data, n_features=2,
+                                    beta_range=(-2., 2.),
+                                    rns=None, seed=123):
     beta_range_ext = beta_range[0], mean(beta_range), beta_range[1]
     betas = vstack([rns.uniform(*beta_range_ext[:-1], size=(1, n_features)),
                     rns.uniform(*beta_range_ext[1:], size=(1, n_features))])
@@ -271,7 +267,10 @@ def random_parameters(input_data, n_features=2,
     m1 = min(input_data)
     m2 = max(input_data)
     med = median(input_data)
-    t0s = rns.uniform(med - 0.25 * (m2 - m1), med + 0.25 * (m2 - m1), size=n_features)
+    print 'gamma range', gamma_range
+    print m2, m1, med
+    t0s = rns.uniform(med - 0.5*(m2 - m1), med + 0.5*(m2 - m1), size=n_features)
+
     gammas = rns.uniform(*gamma_range, size=n_features)
     out = vstack([betas, t0s, gammas])
 
@@ -282,7 +281,7 @@ def generate_beta_per_data(pps, data):
     #     pps : array of parameters 4 * (1+n_f)
     #
     beta1, beta2, t0, gamma = pps
-    foos = [partial(logistic_step, *vec) for vec in pps.T]
+    foos = [partial(np_logistic_step, *vec) for vec in pps.T]
     betas = array([map(bfoo, data) for bfoo in foos])
     return betas
 
@@ -296,9 +295,9 @@ def generate_steplike_betas(input_data, n_features=2, beta_range=(-2, 2),
     if not rns:
         rns = RandomState(seed)
     if mode == 'determ':
-        pps = determ_parameters(input_data, n_features + 1, beta_range)
+        pps = beta_steplike_determ_parameters(input_data, n_features + 1, beta_range)
     elif mode == 'random':
-        pps = random_parameters(input_data, n_features + 1, beta_range, rns)
+        pps = beta_steplike_random_parameters(input_data, n_features + 1, beta_range, rns)
     else:
         raise ValueError('mode parameter value \'{}\' is \
                          not one of : \'random\', \'determ\''.format(mode))
@@ -336,7 +335,7 @@ def generate_logistic_y_from_bernoulli_x_steplike_beta(input_data,
     beta_data = generate_beta_per_data(par_betas, input_data)
 
     x_data, pps_xdata = generate_bernoullis(n_features, len(input_data), (0.2, 0.8),
-                                            mode, rns, seed)
+                                            mode, rns, seed, names)
 
     pps_dict.update(pps_xdata)
 

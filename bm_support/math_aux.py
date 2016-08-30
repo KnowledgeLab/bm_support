@@ -33,9 +33,12 @@ def unorm(x, m, s):
     return norm((x-m)/s)/s
 
 
-def ln_shifted(x, m, s, t):
+def lnormal_shifted(x, m, s, t):
     return 0.0 if x <= t else unorm(log(x-t), m, s)/(x-t)
 
+logodds_forward = logit
+logistic = inv_logit
+logodds_backward = inv_logit
 
 def sb_forward(x):
     x0 = x[:-1]
@@ -78,51 +81,90 @@ def logp_ln_shifted_(mu, tau, t0, value):
                      very_low_logp)
 
 
-def logp_ln_shifted(mu, tau, t0):
+def ln_shifted(mu, tau, t0):
 
     def logp_(value):
-        delta = lambda x: tt.log(x - t0) - mu
+        def delta(x):
+            return tt.log(x - t0) - mu
+
         return tt.switch(tt.gt(value, t0),
                          -0.5 * (tt.log(2 * pi) + 2.0 * tt.log(value - t0) - tt.log(tau)
-                                 + delta(value).dot(tau) * delta(value)),
-                         very_low_logp)
+                         + delta(value).dot(tau) * delta(value)), very_low_logp)
 
     return logp_
-
-
-def tt_inv_logit(arg):
-    def logp_(value):
-        return 1. / (1. + tt.exp(-value.dot(arg)))
-    return logp_
-
-
-def tt_logistic_step(b1, b2, t0, g, value):
-    return b1 + (b2 - b1) / (1. + tt.exp(-g.dot(value - t0)))
-
-
-def np_logistic_step(b1, b2, t0, g, value):
-    return b1 + (b2 - b1) / (1. + exp( -dot(value - t0, g)))
-
-
-def tt_logistic(value):
-    return 1./(1. + tt.exp(value))
 
 
 def logp_shln_steplike_logistic(beta_l, beta_r, beta_c, beta_s, mu, tau, t0):
     def logp_(value):
+        # n_f x n_d
         betas = tt.stacklists([tt_logistic_step(b1, b2, c, gamma, value[0])
                                for (b1, b2, c, gamma) in
                                zip(beta_l, beta_r, beta_c, beta_s)])
-        xs = tt.stacklists([value[j + 1] for j in range(len(beta_l))])
+        # n_f x n_d
+        # xs = tt.stacklists([value[j + 1] for j in range(len(beta_l))])
 
-        args = tt.sum(betas * xs, axis=0)
+        # 1 x n_d
+        args = tt.sum(betas * value[1:-1], axis=0)
         # probability from logistic
+        # 1 x n_d
         pr_log = tt_logistic(-args)
         ll = tt.sum(value[-1] * tt.log(pr_log) +
                     (1. - value[-1]) * tt.log(1. - pr_log) +
                     logp_ln_shifted_(mu, tau, t0, value[0]))
 
         return ll
+
+    return logp_
+
+
+def logp_shln_steplike_logistic2(beta_l, beta_r, beta_c, beta_s, mu, tau, t0):
+    def logp_(value):
+        # n_f x n_d
+        betas = tt.stacklists([tt_logistic_step(b1, b2, c, gamma, value[0])
+                               for (b1, b2, c, gamma) in
+                               zip(beta_l, beta_r, beta_c, beta_s)])
+
+        penalty = tt.sum(tt.sum(tt.abs_(tt.stacklists([beta_l, beta_r]))))
+        # 1 x n_d
+        args = tt.sum(betas * value[1:-1], axis=0)
+
+        # 1 x n_d : probability from logistic
+        pr_log = tt_logistic(args)
+
+        # n_f x n_d
+        # xss = [value[j+1] for j in range(len(xp))]
+        # 1 x n_d
+        # xpp = tt.sum(tt.stacklists([v * tt.log(nu) + (1. - v)*tt.log(1. - nu) for v, nu in zip(xss, xp)]))
+
+        ll = tt.sum(value[-1] * tt.log(pr_log) +
+                    (1. - value[-1]) * tt.log(1. - pr_log) +
+                    logp_ln_shifted_(mu, tau, t0, value[0])
+                    # + xpp
+                    )
+
+        return ll + penalty
+
+    return logp_
+
+
+def steplike_logistic(beta_l, beta_r, beta_c, beta_s):
+    def logp_(value):
+        # n_f x n_d
+        betas = tt.stacklists([tt_logistic_step(b1, b2, c, gamma, value[0])
+                               for (b1, b2, c, gamma) in
+                               zip(beta_l, beta_r, beta_c, beta_s)])
+
+        penalty = tt.sum(tt.sum(tt.abs_(tt.stacklists([beta_l, beta_r]))))
+        # 1 x n_d
+        args = tt.sum(betas * value[1:-1], axis=0)
+
+        # 1 x n_d : probability from logistic
+        pr_log = tt_logistic(args)
+
+        ll = tt.sum(value[-1] * tt.log(pr_log) +
+                    (1. - value[-1]) * tt.log(1. - pr_log))
+
+        return ll + penalty
 
     return logp_
 
@@ -168,3 +210,30 @@ def logp_mixture(pis, func, **kwargs):
         return tt.sum(logsumexp(tt.stacklists(logps)[:, :], axis=0))
 
     return logp_
+
+
+# def logistic_step
+
+
+def tt_inv_logit(arg):
+    def logp_(value):
+        return 1. / (1. + tt.exp(-value.dot(arg)))
+    return logp_
+
+
+def tt_logistic_step(b1, b2, t0, g, value):
+    return b1 + (b2 - b1) / (1. + tt.exp(-g*(value - t0)))
+
+
+def tt_logistic_step_dist(b1, b2, t0, g):
+    def logp_(value):
+        return b1 + (b2 - b1) / (1. + tt.exp(-g*(value - t0)))
+    return logp_
+
+
+def np_logistic_step(b1, b2, t0, g, value):
+    return b1 + (b2 - b1) / (1. + exp(-g*(value - t0)))
+
+
+def tt_logistic(value):
+    return 1./(1. + tt.exp(-value))

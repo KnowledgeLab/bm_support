@@ -1,9 +1,13 @@
 from numpy import array, zeros, argsort, sqrt
 import pymc3 as pm
 from bm_support.math_aux import sb_forward, sb_backward, \
-    int_forward, int_backward
+    int_forward, int_backward, logodds_forward, logodds_backward
 
-cdict = {pm.Dirichlet: {}, pm.Uniform: {}}
+cdict = {pm.Dirichlet: {}, pm.Uniform: {}, pm.Beta: {}}
+
+cdict[pm.Beta]['fwd_transform_func'] = logodds_forward
+cdict[pm.Beta]['bwd_transform_func'] = logodds_backward
+cdict[pm.Beta]['suffix'] = '_logodds_'
 
 cdict[pm.Dirichlet]['fwd_transform_func'] = sb_forward
 cdict[pm.Dirichlet]['bwd_transform_func'] = sb_backward
