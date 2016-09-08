@@ -12,6 +12,7 @@ cdict[pm.Beta]['suffix'] = '_logodds_'
 cdict[pm.Dirichlet]['fwd_transform_func'] = sb_forward
 cdict[pm.Dirichlet]['bwd_transform_func'] = sb_backward
 cdict[pm.Dirichlet]['suffix'] = '_stickbreaking_'
+
 cdict[pm.Uniform]['fwd_transform_func'] = int_forward
 cdict[pm.Uniform]['bwd_transform_func'] = int_backward
 cdict[pm.Uniform]['suffix'] = '_interval_'

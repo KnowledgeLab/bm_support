@@ -280,7 +280,6 @@ def beta_steplike_random_parameters(input_data, n_features=2,
 def generate_beta_per_data(pps, data):
     #     pps : array of parameters 4 * (1+n_f)
     #
-    beta1, beta2, t0, gamma = pps
     foos = [partial(np_logistic_step, *vec) for vec in pps.T]
     betas = array([map(bfoo, data) for bfoo in foos])
     return betas
