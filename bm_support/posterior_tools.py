@@ -34,18 +34,30 @@ def find_max_neighbourhood(data, i):
     if k * j == 0:
         k = 0
         j = 0
-    return 0.5 * (k + j), sum(data[i - j:i + k + 1])
+    return 0.5 * (k + j), sum(data[i - j:i + k + 1]),
 
 
 def analyse_local_maxima(data, xr, n_bins=20,
                          n_ext=2, alpha=0.2, beta=0.5,
                          gamma=0.2):
+    """
+
+    :param data:
+    :param xr:
+    :param n_bins:
+    :param n_ext:
+    :param alpha: fraction
+    :param beta:
+    :param gamma:
+    :return:
+    """
     cnts, xcoords = histogram_range(data, xr, n_bins)
     # the maxima are either a) in the interior or b) the boundaries
     # a) interior of cnts
     # get the extrema indices
     inds_ext = argrelextrema(cnts, greater)[0]
     # print type(inds_ext), inds_ext
+    # print zip(xcoords, cnts)
     if len(inds_ext) > 0:
         # get the extrema values
         cnts_ext = cnts[inds_ext]
@@ -58,9 +70,12 @@ def analyse_local_maxima(data, xr, n_bins=20,
         top_inds = inds_ext[ranks_ext[:-n_ext - 1:-1]]
         fs = cnts[top_inds]
         nhoods = array([find_max_neighbourhood(cnts, pos) for pos in top_inds]).T
+        # print nhoods
         report = True, 'Posterior acceptable'
         ans = xcoords[top_inds[0]]
+        # is the second peak smaller than alpha * (first peak)?
         if top_inds.shape[0] > 1 and alpha * fs[0] < fs[1]:
+
             if beta * nhoods[1, 0] < nhoods[1, 1]:
                 if abs((xcoords[top_inds[0]] - xcoords[top_inds[1]])/(xr[1] - xr[0])) > gamma:
                     report = False, 'Posterior unacceptable: at least two prominnent peaks'

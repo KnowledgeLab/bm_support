@@ -8,7 +8,7 @@ from prob_constants import very_low_logp
 
 def find_intlike_delta(a, b, n):
     if a < b:
-        xs = (b - a)/n
+        xs = float(b - a)/n
         if xs > 1:
             return ceil(xs)
         else:
