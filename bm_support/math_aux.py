@@ -63,6 +63,14 @@ def sb_backward(y):
     return x
 
 
+def log_forward(x):
+    return log(x)
+
+
+def log_backward(x):
+    return exp(x)
+
+
 def int_backward(a, b, x):
     r = (b - a) * exp(x) / (1 + exp(x)) + a
     return r

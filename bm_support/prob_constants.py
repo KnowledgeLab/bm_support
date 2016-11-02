@@ -1,6 +1,6 @@
 
 very_low_logp = -50.
-norm_const = 1.0
+norm_const = 1.e-6
 
 t0_min = 0.
 t0_max = 100.

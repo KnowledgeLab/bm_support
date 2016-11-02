@@ -1,9 +1,10 @@
 from numpy import array, zeros, argsort, sqrt
 import pymc3 as pm
 from bm_support.math_aux import sb_forward, sb_backward, \
-    int_forward, int_backward, logodds_forward, logodds_backward
+    int_forward, int_backward, logodds_forward, logodds_backward,\
+    log_forward, log_backward
 
-cdict = {pm.Dirichlet: {}, pm.Uniform: {}, pm.Beta: {}}
+cdict = {pm.Dirichlet: {}, pm.Uniform: {}, pm.Beta: {}, pm.Lognormal: {}}
 
 cdict[pm.Beta]['fwd_transform_func'] = logodds_forward
 cdict[pm.Beta]['bwd_transform_func'] = logodds_backward
@@ -16,6 +17,10 @@ cdict[pm.Dirichlet]['suffix'] = '_stickbreaking_'
 cdict[pm.Uniform]['fwd_transform_func'] = int_forward
 cdict[pm.Uniform]['bwd_transform_func'] = int_backward
 cdict[pm.Uniform]['suffix'] = '_interval_'
+
+cdict[pm.Lognormal]['fwd_transform_func'] = log_forward
+cdict[pm.Lognormal]['bwd_transform_func'] = log_backward
+cdict[pm.Lognormal]['suffix'] = '_interval_'
 
 
 def map_parameters(left_dict, model_dict, ranges, forward):

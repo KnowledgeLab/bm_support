@@ -1,9 +1,8 @@
 import bm_support.random as br
 from numpy.random import RandomState
-import unittest
+from unittest import TestCase
 
-
-class TestCollapse(unittest.TestCase):
+class TestCollapse(TestCase):
 
     ref_par_lognormal_list = ['ps', 't0_1', 't0_0', 't0_2', 'mu_2',
                               'mu_1', 'mu_0', 'ns', 'tau_2', 'tau_0', 'tau_1']

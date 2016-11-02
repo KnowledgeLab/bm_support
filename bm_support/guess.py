@@ -86,7 +86,7 @@ def generate_beta_step_guess(data, n_features, mode='random', seed=123,
                                     'beta_s': 'beta_s'}):
     rns = RandomState(seed)
     trange = min(data), max(data)
-    #     beta centers
+    #   beta centers
     beta_cs = rns.uniform(*trange, size=n_features)
     beta_range_ext = beta_range[0], mean(beta_range), beta_range[1]
     if mode == 'random':
