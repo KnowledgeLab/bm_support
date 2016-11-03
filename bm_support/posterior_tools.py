@@ -4,7 +4,7 @@ from numpy import ceil, median, repeat, reshape, mean
 from numpy import histogram
 from numpy.random import RandomState
 import datahelpers.plotting as dp
-
+from bm_support.prob_constants import very_low_logp
 
 from matplotlib.pyplot import subplots
 from seaborn import set_style
@@ -20,6 +20,8 @@ from datahelpers.plotting import plot_beta_steps
 from scipy.optimize import fmin_powell
 import pymc3 as pm
 from pymc3 import find_MAP, DensityDist, Metropolis, sample, traceplot
+import theano.tensor as tt
+from scipy import stats
 
 
 def trim_data(data, n_bins=10):
@@ -110,9 +112,20 @@ def analyse_local_maxima(data, xr, n_bins=20,
     return ans, report
 
 
-def fit_step_model(data_set, verbosity=0, plot_fits=False, fname_prefix='abc', fpath='./', n_total=10000,
-                       n_watch=9000, n_step=10):
+def analyse_flatness(data, xr, alpha=0.05):
+    data_cut = data[(data >= xr[0]) & (data <= xr[1])]
+    length = xr[1] - xr[0]
+    # r[0] - ks-stat; r[1] - p-value
+    r = stats.kstest(data_cut, stats.uniform(loc=xr[0], scale=length).cdf)
+    if r[1] < alpha:
+        report = True, 'Posterior is likely not flat'
+    else:
+        report = False, 'Posterior might be flat'
+    return r[1], report
 
+
+def fit_step_model(data_set, verbosity=0, plot_fits=False, fname_prefix='abc', fpath='./', n_total=10000,
+                   n_watch=9000, n_step=10):
     set_id = data_set[0]
     data = data_set[1]
     print 'Processing id', set_id
@@ -122,7 +135,7 @@ def fit_step_model(data_set, verbosity=0, plot_fits=False, fname_prefix='abc', f
     seed = 17
     beta_min, beta_max = -4., 4.
     gamma_min, gamma_max = 0.1, 1.
-    slow, shi = 0.01, 5.0
+    slow, shi = -5., 5.0
 
     (tlow, thi), (mu_min, mu_max) = guess_ranges(data[0])
 
@@ -138,6 +151,13 @@ def fit_step_model(data_set, verbosity=0, plot_fits=False, fname_prefix='abc', f
 
         beta_c = [pm.Uniform('betaCenter_%d' % i, lower=tlow, upper=thi)
                   for i in range(n_features_ext)]
+
+        #     p_min_potential = pm.Potential('p_min_potential', tt.switch(tt.min(pi_) < .1, -np.inf, 0))
+        order_means_potential = [pm.Potential('order_means_potential_%d' % j,
+                                              tt.switch(beta_right > beta_left, 0, very_low_logp))
+                                 for j, beta_left, beta_right in
+                                 zip(range(n_features_ext), beta_l, beta_r)]
+
         data_xs = vstack([data[0], data[-1]])
         ys = DensityDist('yobs', steplike_logistic(beta_l, beta_r, beta_c, beta_s), observed=data)
 
@@ -229,6 +249,7 @@ def fit_step_model(data_set, verbosity=0, plot_fits=False, fname_prefix='abc', f
         # a = min(trace_cur)
         # b = max(trace_cur)
         report[k] = analyse_local_maxima(traces[k], (a, b), 10, n_ext=2)
+        report['flat_' + k] = analyse_flatness(traces[k], (a, b))
         if verbosity > 0:
             print k, report[k]
 
