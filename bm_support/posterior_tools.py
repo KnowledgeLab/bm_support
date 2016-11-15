@@ -1,15 +1,10 @@
 from numpy import array, arange, histogram, argmax, greater, nan
 from numpy import sqrt, floor, ones, sum, exp, vstack, int
-from numpy import ceil, median, repeat, reshape, mean
 from numpy import histogram
 from numpy.random import RandomState
-import datahelpers.plotting as dp
 from bm_support.prob_constants import very_low_logp
 
-from matplotlib.pyplot import subplots
-from seaborn import set_style
-from seaborn import plt as sns_plt
-from functools import partial
+from matplotlib.pyplot import close
 
 from scipy.signal import argrelextrema
 from guess import guess_ranges, generate_beta_step_guess
@@ -128,7 +123,7 @@ def fit_step_model(data_set, verbosity=0, plot_fits=False, fname_prefix='abc', f
                    n_watch=9000, n_step=10):
     set_id = data_set[0]
     data = data_set[1]
-    print 'Processing id', set_id
+    print 'Processing id', set_id, 'size of data set is', data.shape[1], 'freq is ', float(sum(data[-1]))/data.shape[1]
 
     n_features = data.shape[0] - 3
     n_features_ext = n_features + 1
@@ -242,6 +237,9 @@ def fit_step_model(data_set, verbosity=0, plot_fits=False, fname_prefix='abc', f
     varnames = [name for name in trace.varnames if not name.endswith('_')]
     report = {}
     traces = {}
+    report['data_size'] = (data.shape[1], (True, 'Size of data'))
+    report['freq'] = (float(sum(data[-1]))/data.shape[1], (True, 'Frequency of positives'))
+
     for k in varnames:
         traces[k] = trace[n_watch::n_step][k]
         #     print min(trace_cur), mean(trace_cur), median(trace_cur), max(trace_cur)
@@ -254,8 +252,10 @@ def fit_step_model(data_set, verbosity=0, plot_fits=False, fname_prefix='abc', f
             print k, report[k]
 
     bool_report = {k: report[k][1][0] for k in report.keys()}
+
     if not all(bool_report.values()):
         with model:
             axx = traceplot(trace[n_watch::n_step], fname_prefix=fname_pre, path=fpath)
+            close()
 
     return report, traces
