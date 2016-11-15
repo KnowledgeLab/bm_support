@@ -4,6 +4,7 @@ from numpy import ones, arange
 from pymc3.math import logsumexp
 import theano.tensor as tt
 from prob_constants import very_low_logp
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 
 def find_intlike_delta(a, b, n):
@@ -245,3 +246,17 @@ def np_logistic_step(b1, b2, t0, g, value):
 
 def tt_logistic(value):
     return 1./(1. + tt.exp(-value))
+
+
+def get_scalers(arr):
+    # reshape (convert 1D array to 2D) is necessary for future compatability
+    scalers_dict = {k: MinMaxScaler().fit(arr[k].reshape(-1, 1))
+                    for k in range(arr.shape[0]) if len(set(arr[k])) > 2}
+    return scalers_dict
+
+
+def use_scalers(arr, scalers_dict):
+    arr2 = arr.copy()
+    for k in scalers_dict.keys():
+        arr2[k] = scalers_dict[k].transform(arr[k].reshape(-1, 1)).flatten()
+    return arr2
