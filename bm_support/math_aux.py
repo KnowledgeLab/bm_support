@@ -116,7 +116,7 @@ def logp_shln_steplike_logistic(beta_l, beta_r, beta_c, beta_s, mu, tau, t0):
         args = tt.sum(betas * value[1:-1], axis=0)
         # probability from logistic
         # 1 x n_d
-        pr_log = tt_logistic(-args)
+        pr_log = tt_logistic(args)
         ll = tt.sum(value[-1] * tt.log(pr_log) +
                     (1. - value[-1]) * tt.log(1. - pr_log) +
                     logp_ln_shifted_(mu, tau, t0, value[0]))
