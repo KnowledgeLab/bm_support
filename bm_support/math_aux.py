@@ -178,6 +178,56 @@ def steplike_logistic(beta_l, beta_r, beta_c, beta_s):
     return logp_
 
 
+def logp_bmix_shift_claims(lams_left, lams_right, t0, betas, n_modes):
+    """
+    lams_left[i] = P(Pi_s = pi_k)
+    lams_right[i] = P(Pi_s = pi_k)
+    betas : n_fext - 2 logistic coefficients of guess pdf
+
+    """
+
+    def xor_metric(x, y):
+        """
+        use xor_metric rather than xor to avoid int casting
+        :param x:
+        :param y:
+        :return:
+        """
+        return tt.abs_(x - y)
+
+    def logp_(value):
+        """
+        value n_fext x n_d array,
+            where n_fext is the extended feature dim
+            and n_d is the number of datapoints
+
+        value[0] is time coordinate
+        value[1:-1] are the features (potentially with the dummy-zero)
+        value[-1] is the boolean claim
+        """
+
+        mask_left = (value[0] < t0)
+        # inds_list = [mask_left.nonzero(), (~mask_left).nonzero()]
+        inds_list = [mask_left.nonzero()[0], (~mask_left).nonzero()[0]]
+        lams_list = [lams_left, lams_right]
+        args = tt.sum(tt.stacklists(betas).reshape((len(betas), 1))*value[1:-1], axis=0)
+        # pr_log is the logistic probability of the correct guess (True)
+        pr_log = tt_logistic(args)
+        # rho == 1 is equiv to True
+        # lam_k, k = 0 is the prob of True
+        # [::-1] indexing forces the first element of the list to correspond to pi_i == True
+
+        logps = [[tt.sum(xor_metric(k, value[-1, inds]) * tt.log(pr_log[inds])
+                         + (1. - xor_metric(k, value[-1, inds]))*tt.log(1. - pr_log[inds]))
+                  + tt.log(lams[l]) for k, l in zip(range(n_modes)[::-1], range(n_modes))]
+                 for inds, lams in zip(inds_list, lams_list)]
+
+        res = tt.sum([logsumexp(tt.stacklists(logprob), axis=0) for logprob in logps])
+        return res
+
+    return logp_
+
+
 def logp_shifted_ln_mix(pi, mus, taus, t0s):
 
     """
@@ -250,8 +300,10 @@ def tt_logistic(value):
 
 def get_scalers(arr):
     # reshape (convert 1D array to 2D) is necessary for future compatability
-    scalers_dict = {k: MinMaxScaler().fit(arr[k].reshape(-1, 1))
+    scalers_dict = {k: StandardScaler().fit(arr[k].reshape(-1, 1))
                     for k in range(arr.shape[0]) if len(set(arr[k])) > 2}
+    # scalers_dict = {k: MinMaxScaler().fit(arr[k].reshape(-1, 1))
+    #                 for k in range(arr.shape[0]) if len(set(arr[k])) > 2}
     return scalers_dict
 
 

@@ -55,7 +55,7 @@ def find_max_neighbourhood(data, i):
     return 0.5 * (k + j), sum(data[i - j:i + k + 1]),
 
 
-def analyse_local_maxima(data, xr, n_bins=20,
+def analyse_local_maxima(data, xr=None, n_bins=20,
                          n_ext=2, alpha=0.5, beta=0.5,
                          gamma=0.5):
     """
@@ -69,6 +69,9 @@ def analyse_local_maxima(data, xr, n_bins=20,
     :param gamma:
     :return:
     """
+
+    if not xr:
+        xr = min(data), max(data)
     cnts, xcoords = histogram_range(data, xr, n_bins)
     # the maxima are either a) in the interior or b) the boundaries
     # a) interior of cnts
@@ -107,7 +110,10 @@ def analyse_local_maxima(data, xr, n_bins=20,
     return ans, report
 
 
-def analyse_flatness(data, xr, alpha=0.05):
+def analyse_flatness(data, xr=None, alpha=0.05):
+
+    if not xr:
+        xr = min(data), max(data)
     data_cut = data[(data >= xr[0]) & (data <= xr[1])]
     length = xr[1] - xr[0]
     # r[0] - ks-stat; r[1] - p-value

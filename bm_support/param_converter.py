@@ -33,17 +33,20 @@ def map_parameters(left_dict, model_dict, ranges, forward):
     :param forward:
     :return:
     """
-# left_dict -> right_dict
-# raw -> trans if forward, else trans -> raw
+    # left_dict -> right_dict
+    # raw -> trans if forward, else trans -> raw
     md = model_dict
-#     left_dict
+    #     left_dict
     ld = left_dict
     rd = {}
     cd = cdict
 
+    #undescore should be used only once - to split
+    # the name and the ordinal number of the variable
+
     for k in ld:
         kk = k.split('_')[0]
-#       distr_type
+    #   distr_type
         if kk in md.keys():
             dt = md[kk]['type']
             if dt in cd.keys():
