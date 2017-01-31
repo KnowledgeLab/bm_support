@@ -1,5 +1,5 @@
 from numpy import exp, sqrt, log, pi, ceil, dot
-from numpy import concatenate, cumsum, cumprod
+from numpy import concatenate, cumsum, cumprod, identity
 from numpy import ones, arange
 from pymc3.math import logsumexp
 import theano.tensor as tt
@@ -271,7 +271,52 @@ def logp_mixture(pis, func, **kwargs):
     return logp_
 
 
-# def logistic_step
+def dist_hguess_hstate(beta0, betas, pis_dict):
+    def logp_aux(arg):
+        # chain : (n_f, n_p)
+        # args : (n_p)
+        # convention for binary variables :
+        #    P(v = 1| mu) = mu[1]
+        #    P(v = 0| mu) = mu[0]
+        chain, pi_hidden = arg
+        # add the dummy guy (beta0 is potentially a different distribution)
+        arg_logistic = tt.dot(tt.stacklists(betas), chain[1:-1]) + beta0 * chain[0]
+        # pr_log is the logistic probability of the correct guess (True)
+        guess = tt_logistic(arg_logistic)
+        # dim: n_g, n_p
+        guess_t = tt.stacklists([1. - guess, guess])
+        # flip pi_hidden to conform to convention
+        hidden_t = pi_hidden[::-1]
+        # n_c = n_pi = n_g = 2
+        delta = identity(2)
+        # tau_{abc} ~ P(c| g h) dim: n_c, n_g, n_h
+        tau_t = tt.stacklists([1. - delta, delta])
+        # vector of claims values dim: n_p
+        claims_v = chain[-1]
+        # promoted to tensor (n_c, n_p)
+        claims_t = tt.stacklists([1. - claims_v, claims_v])
+        # tensor khi P(c_i= c_i^obs| h_i g_i) dim: n_p, n_g, n_h
+        khi_t = tt.tensordot(claims_t, tau_t, [0, 0])
+        # recast guess tensor
+        guess_t_new = guess_t.dimshuffle(1, 0, 'x')
+        # recast hidden state tensor
+        hidden_t_new = hidden_t.dimshuffle('x', 'x', 0)
+        # tensor claim prob P(c_i | h_i, g_i) dim: n_p, n_pi)
+        # dim: n_p, n_pi (sum over n_g)
+        claims_prob_t = tt.sum(khi_t * guess_t_new * hidden_t_new, axis=(1, 2))
+        # tensor P({C_i} | Pi) dim: n_pi
+        pi_prob_t = tt.prod(claims_prob_t, axis=0)
+        return pi_prob_t
+
+    def logp_(**dict_data):
+        list_chains = [(dict_data[k], pis_dict[k]) for k in dict_data.keys()]
+        # dim; n_ch, n_pi
+        probs_pi_t = tt.stacklists(map(logp_aux, list_chains))
+        # dim: n_ch, n_pi
+        r = tt.sum(tt.log(probs_pi_t))
+        return r
+
+    return logp_
 
 
 def tt_inv_logit(arg):
@@ -300,10 +345,10 @@ def tt_logistic(value):
 
 def get_scalers(arr):
     # reshape (convert 1D array to 2D) is necessary for future compatability
-    scalers_dict = {k: StandardScaler().fit(arr[k].reshape(-1, 1))
-                    for k in range(arr.shape[0]) if len(set(arr[k])) > 2}
-    # scalers_dict = {k: MinMaxScaler().fit(arr[k].reshape(-1, 1))
+    # scalers_dict = {k: StandardScaler().fit(arr[k].reshape(-1, 1))
     #                 for k in range(arr.shape[0]) if len(set(arr[k])) > 2}
+    scalers_dict = {k: MinMaxScaler().fit(arr[k].reshape(-1, 1))
+                    for k in range(arr.shape[0]) if len(set(arr[k])) > 2}
     return scalers_dict
 
 
@@ -312,3 +357,5 @@ def use_scalers(arr, scalers_dict):
     for k in scalers_dict.keys():
         arr2[k] = scalers_dict[k].transform(arr[k].reshape(-1, 1)).flatten()
     return arr2
+
+
