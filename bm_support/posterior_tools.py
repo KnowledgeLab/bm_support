@@ -15,6 +15,8 @@ from datahelpers.plotting import plot_beta_steps
 from scipy.optimize import fmin_powell
 import pymc3 as pm
 from pymc3 import find_MAP, DensityDist, Metropolis, sample, traceplot
+from bm_support.math_aux import steplike_logistic, \
+    np_logistic_step, logp_bmix_shift_claims
 import theano.tensor as tt
 from scipy import stats
 
@@ -258,6 +260,117 @@ def fit_step_model(data_set, verbosity=0, plot_fits=False, fname_prefix='abc', f
             print k, report[k]
 
     bool_report = {k: report[k][1][0] for k in report.keys()}
+
+    if not all(bool_report.values()):
+        with model:
+            axx = traceplot(trace[n_watch::n_step], fname_prefix=fname_pre, path=fpath)
+            close()
+
+    return report, traces
+
+
+def fit_step_model_d(data_set, verbosity=0, plot_fits=False, fname_prefix='abc', fpath='./', n_total=10000,
+                     n_watch=9000, n_step=10):
+    set_id = data_set[0]
+    fname_pre = fname_prefix + '_' + str(set_id)
+    data = data_set[1]
+
+    print 'Processing id', set_id, ', size of data set is', data.shape[1], \
+        ', freq is', float(sum(data[-1])) / data.shape[1]
+
+    n_features = data.shape[0] - 3
+    n_features_ext = n_features + 1
+    n_modes = 2
+    seed = 17
+    beta_min, beta_max = -4., 4.
+    gamma_min, gamma_max = 0.1, 1.
+    slow, shi = -5., 5.0
+
+    (tlow, thi), (mu_min, mu_max) = guess_ranges(data[0])
+
+    with pm.Model(verbose=0) as model:
+
+        beta_f = [pm.Normal('beta_%d' % i, sd=2) for i in range(n_features_ext)]
+
+        t0_prior = pm.Uniform('t0', lower=tlow, upper=thi)
+        pi_priors_left = pm.Dirichlet('piLeft', a=ones(n_modes), shape=(n_modes,))
+        pi_priors_right = pm.Dirichlet('piRight', a=ones(n_modes), shape=(n_modes,))
+        guess_potential = pm.Potential('guess_potential', tt.switch(beta_f[0] > 0.0, 0.0, very_low_logp))
+
+        ys = DensityDist('yobs', logp_bmix_shift_claims(pi_priors_left,
+                                                        pi_priors_right,
+                                                        t0_prior, beta_f, n_modes), observed=data)
+    infos = []
+    rns = RandomState(seed)
+
+    for ite in range(3):
+        guess = {}
+        guess.update({'piLeft': rns.dirichlet(n_modes * [1.])})
+        guess.update({'piRight': rns.dirichlet(n_modes * [1.])})
+        tmin = min(data[0])
+        tmax = max(data[0])
+        guess.update({'t0': rns.uniform(tmin, tmax)})
+        guess.update({'beta_%d' % i: rns.normal(0.0, 1.0) for i in range(n_features_ext)})
+
+        sb_ranges = {
+            't0': (tmin, tmax)
+        }
+
+        model_dict = {
+            'beta': {'type': pm.Normal},
+            't0': {'type': pm.Uniform},
+            'piLeft': {'type': pm.Dirichlet},
+            'piRight': {'type': pm.Dirichlet}
+        }
+
+        fwd_gu = map_parameters(guess, model_dict, sb_ranges, True)
+
+        with model:
+            ll = model.logp(fwd_gu)
+
+        dargs = {'xtol': 1e-07, 'fmin': fmin_powell}
+
+        with model:
+            best = find_MAP(start=fwd_gu, vars=model.vars, **dargs)
+
+        raw_best_dict = map_parameters(best, model_dict, sb_ranges, False)
+
+        lp = model.logp(best)
+        infos.append((lp, raw_best_dict, best))
+
+    # sorted w.r.t to log likelihood
+    sorted_first = list(infos)
+    sorted_first.sort(key=lambda tup: tup[0], reverse=True)
+    if verbosity > 0:
+        print sorted_first[0]
+        print len(sorted_first)
+
+    with model:
+        step = Metropolis()
+        trace = sample(n_total, step, start=sorted_first[0][1], progressbar=False)
+
+    varnames = [name for name in trace.varnames if not name.endswith('_')]
+    report = {}
+    traces = {}
+    report['data_size'] = (data.shape[1], (True, 'Size of data'))
+    report['freq'] = (float(sum(data[-1])) / data.shape[1], (True, 'Frequency of positives'))
+    report['range_t0'] = (min(data[0]), max(data[0]))
+    report['set_id'] = set_id
+    posterior_info = {}
+
+    for k in varnames:
+        traces[k] = trace[n_watch::n_step][k]
+        arr = trace[k].copy()
+        if len(arr.shape) > 1:
+            arr = arr[:, 0]
+        #     print min(trace_cur), mean(trace_cur), median(trace_cur), max(trace_cur)
+        a, b = trim_data(arr)
+        posterior_info['post_' + k] = analyse_local_maxima(arr, (a, b), 10, n_ext=2)
+        posterior_info['flatness_' + k] = analyse_flatness(arr, (a, b))
+
+    report['posterior_info'] = posterior_info
+
+    bool_report = {k: posterior_info[k][1][0] for k in posterior_info.keys()}
 
     if not all(bool_report.values()):
         with model:
