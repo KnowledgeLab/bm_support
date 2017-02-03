@@ -3,7 +3,7 @@ from numpy.random import RandomState
 from ..posterior_tools import trim_data
 
 
-class TestTrim_data(TestCase):
+class TestTrimData(TestCase):
     rns = RandomState(17)
     data = rns.normal(size=200)
     a_ref = -1.3764
