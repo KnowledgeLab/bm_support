@@ -20,7 +20,7 @@ cdict[pm.Uniform]['suffix'] = '_interval_'
 
 cdict[pm.Lognormal]['fwd_transform_func'] = log_forward
 cdict[pm.Lognormal]['bwd_transform_func'] = log_backward
-cdict[pm.Lognormal]['suffix'] = '_interval_'
+cdict[pm.Lognormal]['suffix'] = '_log_'
 
 
 def map_parameters(left_dict, model_dict, ranges, forward):
