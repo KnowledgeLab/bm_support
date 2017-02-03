@@ -1,10 +1,6 @@
-import bm_support.param_converter as bp
+from ..bm_support.param_converter import sort_dict_by_key
 import unittest
-import pymc3 as pm
 from numpy import array, isclose
-from bm_support.prob_constants import tau_min, tau_max
-from bm_support.math_aux import sb_forward, sb_backward, \
-    int_forward, int_backward
 
 
 class TestConverter(unittest.TestCase):
@@ -20,7 +16,7 @@ class TestConverter(unittest.TestCase):
 
     def test_sort_dict_by_sort_key(self):
 
-        res = bp.sort_dict_by_key(self.dd_test, 't0')
+        res = sort_dict_by_key(self.dd_test, 't0')
         print res.keys()
         if self.assertTrue(set(res.keys()) == set(self.dd_res.keys())):
             self.assertTrue(res == self.dd_res)

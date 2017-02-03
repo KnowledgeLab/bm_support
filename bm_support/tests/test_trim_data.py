@@ -1,6 +1,8 @@
+#TODO fix imports
+
 from unittest import TestCase
 from numpy.random import RandomState
-from bm_support.posterior_tools import trim_data
+from ..bm_support.posterior_tools import trim_data
 rns = RandomState(17)
 
 

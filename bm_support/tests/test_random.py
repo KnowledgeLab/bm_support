@@ -1,6 +1,9 @@
-import bm_support.random as br
-from numpy.random import RandomState
-from unittest import TestCase
+from ..bm_support.random import generate_log_normal_mixture
+from ..bm_support.random import generate_logistic_y_from_bernoulli_x
+from ..bm_support.random import generate_log_normal_mixture_with_logistic
+from ..bm_support.random import generate_logistic_y_from_bernoulli_x_steplike_beta
+
+from unittest import TestCase, main
 
 class TestCollapse(TestCase):
 
@@ -21,34 +24,30 @@ class TestCollapse(TestCase):
     guess_types = ['random', 'kmeans', 't_uniform']
 
     def test_generate_log_normal_mixture(self):
-        data, pars = br.generate_log_normal_mixture()
+        data, pars = generate_log_normal_mixture()
         self.assertEquals(set(pars.keys()), set(self.ref_par_lognormal_list))
 
     def test_generate_logistic(self):
-        data, pars, c = br.generate_logistic_y_from_bernoulli_x()
+        data, pars, c = generate_logistic_y_from_bernoulli_x()
         self.assertEquals(set(pars.keys()), set(self.ref_par_logistic_list))
 
     def test_log_normal_mixture_with_logistic(self):
-        data, pars = br.generate_log_normal_mixture_with_logistic(2)
+        data, pars = generate_log_normal_mixture_with_logistic(2)
         # print(pars.keys())
         self.assertEquals(set(pars.keys()), set(self.ref_par_lognormal_logistic_list))
 
     def test_logistic_y_from_bernoulli_x_steplike_beta(self):
         # rns = RandomState(self.seed)
 
-        data, pps_full = br.generate_log_normal_mixture(n_modes=self.n_modes_gen,
-                                                        seed=self.seed,
-                                                        n_samples=self.ns,
-                                                        t0_range=[0., 100.],
-                                                        mu_range=[1., 4.],
-                                                        tau_range=[4., 10.],
-                                                        names={'ns': 'ns',
-                                                               't0': 't0', 'mu': 'mu',
-                                                               'tau': 'tau', 'ps': 'pi'})
+        data, pps_full = generate_log_normal_mixture(n_modes=self.n_modes_gen,
+                                                     seed=self.seed, n_samples=self.ns, t0_range=[0., 100.],
+                                                     mu_range=[1., 4.], tau_range=[4., 10.],
+                                                     names={'ns': 'ns', 't0': 't0', 'mu': 'mu',
+                                                            'tau': 'tau', 'ps': 'pi'})
 
-        yd, pps_dict = br.generate_logistic_y_from_bernoulli_x_steplike_beta(data)
+        yd, pps_dict = generate_logistic_y_from_bernoulli_x_steplike_beta(data)
         self.assertEquals(set(pps_dict.keys()),
                           set(self.ref_par_logistic_steplike_beta_list))
 
 if __name__ == '__main__':
-    unittest.main()
+    main()
