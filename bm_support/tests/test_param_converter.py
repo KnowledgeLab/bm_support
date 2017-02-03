@@ -1,4 +1,4 @@
-from ..bm_support.param_converter import sort_dict_by_key
+from ..param_converter import sort_dict_by_key
 import unittest
 from numpy import array, isclose
 
@@ -21,7 +21,8 @@ class TestConverter(unittest.TestCase):
         if self.assertTrue(set(res.keys()) == set(self.dd_res.keys())):
             self.assertTrue(res == self.dd_res)
             # self.assertTrue(all([isclose(fwd_gu[k],
-            #                              self.fwd_guess_ref[k], rtol=1e-4) for k in fwd_gu.keys()]))
+            #                              self.fwd_guess_ref[k], rtol=1e-4)
+            # for k in fwd_gu.keys()]))
 
 
 if __name__ == '__main__':

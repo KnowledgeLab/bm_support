@@ -1,9 +1,10 @@
-from ..bm_support.random import generate_log_normal_mixture
-from ..bm_support.random import generate_logistic_y_from_bernoulli_x
-from ..bm_support.random import generate_log_normal_mixture_with_logistic
-from ..bm_support.random import generate_logistic_y_from_bernoulli_x_steplike_beta
+from ..random import generate_log_normal_mixture
+from ..random import generate_logistic_y_from_bernoulli_x
+from ..random import generate_log_normal_mixture_with_logistic
+from ..random import generate_logistic_y_from_bernoulli_x_steplike_beta
 
 from unittest import TestCase, main
+
 
 class TestCollapse(TestCase):
 
