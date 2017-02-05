@@ -4,6 +4,8 @@ from bm_support.math_aux import sb_forward, sb_backward, \
     int_forward, int_backward, logodds_forward, logodds_backward,\
     log_forward, log_backward
 
+import logging
+
 cdict = {pm.Dirichlet: {}, pm.Uniform: {}, pm.Beta: {}, pm.Lognormal: {}}
 
 cdict[pm.Beta]['fwd_transform_func'] = logodds_forward
@@ -81,7 +83,7 @@ def dict_cmp(d1, d2):
     if set(d1.keys()) == set(d2.keys()):
         dcmp = {k: sqrt(sum(((d1[k] - d2[k])/d2[k])**2)) if d1[k].shape
                 else (d1[k] - d2[k])/d2[k] for k in d1.keys()}
-        print sum(dcmp.values())
+        logging.debug(sum(dcmp.values()))
         return dcmp
     else:
         raise ValueError('dictionaries have incompatible keys: '
@@ -103,7 +105,7 @@ def sort_dict_by_key(input_dict, sort_key):
         sorting_order = sorted(range(len(to_sort_list)), key=lambda i: to_sort_list[i])
         sorting_dict = dict(zip(sorting_order, range(len(to_sort_list))))
         for k in base_keys:
-            upd = {k + '_' + str(_to): input_dict[k + '_' + str(_from)] for _from, _to in sorting_dict.iteritems()}
+            upd = {k + '_' + str(_to): input_dict[k + '_' + str(_from)] for _from, _to in sorting_dict.items()}
             out_dict.update(upd )
         out_dict.update({k: input_dict[k][sorting_order] for k in other_keys})
         return out_dict
