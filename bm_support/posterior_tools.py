@@ -7,9 +7,9 @@ from bm_support.prob_constants import very_low_logp
 from matplotlib.pyplot import close
 
 from scipy.signal import argrelextrema
-from guess import guess_ranges, generate_beta_step_guess
-from param_converter import map_parameters
-from math_aux import steplike_logistic
+from .guess import guess_ranges, generate_beta_step_guess
+from .param_converter import map_parameters
+from .math_aux import steplike_logistic
 from datahelpers.plotting import plot_beta_steps
 
 from scipy.optimize import fmin_powell
@@ -19,6 +19,8 @@ from bm_support.math_aux import steplike_logistic, \
     np_logistic_step, logp_bmix_shift_claims
 import theano.tensor as tt
 from scipy import stats
+
+import logging
 
 
 def trim_data(data, n_bins=10):
@@ -127,11 +129,14 @@ def analyse_flatness(data, xr=None, alpha=0.05):
     return r[1], report
 
 
-def fit_step_model(data_set, verbosity=0, plot_fits=False, fname_prefix='abc', fpath='./', n_total=10000,
+def fit_step_model(data_set, verbosity=0, plot_fits=False, fname_prefix='abc',
+                   fpath='./', n_total=10000,
                    n_watch=9000, n_step=10):
     set_id = data_set[0]
     data = data_set[1]
-    print 'Processing id', set_id, 'size of data set is', data.shape[1], 'freq is ', float(sum(data[-1]))/data.shape[1]
+    logging.info('Processing id', set_id,
+                 'size of data set is', data.shape[1],
+                 'freq is ', float(sum(data[-1]))/data.shape[1])
 
     n_features = data.shape[0] - 3
     n_features_ext = n_features + 1
@@ -222,7 +227,7 @@ def fit_step_model(data_set, verbosity=0, plot_fits=False, fname_prefix='abc', f
     sorted_first = list(infos)
     sorted_first.sort(key=lambda tup: tup[0], reverse=True)
     if verbosity > 0:
-        print sorted_first[0]
+        logging.debug(sorted_first[0])
 
     raw_best_dict_plot_beta = {k: sorted_first[0][1][k]
                                for k in sorted_first[0][1].keys() if 'beta' in k and not 'xprior' in k}
@@ -257,7 +262,7 @@ def fit_step_model(data_set, verbosity=0, plot_fits=False, fname_prefix='abc', f
         report[k] = analyse_local_maxima(traces[k], (a, b), 10, n_ext=2)
         report['flat_' + k] = analyse_flatness(traces[k], (a, b))
         if verbosity > 0:
-            print k, report[k]
+            logging.debug(k, report[k])
 
     bool_report = {k: report[k][1][0] for k in report.keys()}
 
@@ -275,8 +280,9 @@ def fit_step_model_d(data_set, verbosity=0, plot_fits=False, fname_prefix='abc',
     fname_pre = fname_prefix + '_' + str(set_id)
     data = data_set[1]
 
-    print 'Processing id', set_id, ', size of data set is', data.shape[1], \
-        ', freq is', float(sum(data[-1])) / data.shape[1]
+    logging.info('Processing id', set_id,
+                 ', size of data set is', data.shape[1],
+                 ', freq is', float(sum(data[-1])) / data.shape[1])
 
     n_features = data.shape[0] - 3
     n_features_ext = n_features + 1
@@ -342,8 +348,8 @@ def fit_step_model_d(data_set, verbosity=0, plot_fits=False, fname_prefix='abc',
     sorted_first = list(infos)
     sorted_first.sort(key=lambda tup: tup[0], reverse=True)
     if verbosity > 0:
-        print sorted_first[0]
-        print len(sorted_first)
+        logging.debug(sorted_first[0])
+        logging.debug(len(sorted_first))
 
     with model:
         step = Metropolis()
