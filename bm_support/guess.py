@@ -1,9 +1,10 @@
 from numpy import log, exp, mean, min, max, std, array, \
     floor, append, cumsum, vstack
 from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans
 from numpy.random import RandomState
-from prob_constants import norm_const
-from prob_constants import tau_min, tau_max
+from .prob_constants import norm_const
+from .prob_constants import tau_min, tau_max
 
 
 def generate_log_normal_guess(data, n_modes=2, mode='random', seed=123,
