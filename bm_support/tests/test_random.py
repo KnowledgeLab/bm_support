@@ -7,7 +7,7 @@ from unittest import TestCase, main
 
 
 class TestCollapse(TestCase):
-
+#TODO fix tests
     ref_par_lognormal_list = ['ps', 't0_1', 't0_0', 't0_2', 'mu_2',
                               'mu_1', 'mu_0', 'ns', 'tau_2', 'tau_0', 'tau_1']
     ref_par_logistic_list = ['beta_1', 'beta_0', 'prior_p']

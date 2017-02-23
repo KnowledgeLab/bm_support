@@ -28,6 +28,9 @@ setup(
         "License :: OSI Approved :: BSD License",
     ],
     install_requires=[
-        'pandas', 'setuptools', 'datahelpers'
+        'pandas', 'setuptools',
+        'datahelpers', 'scipy',
+        'pymc3'
+
     ],
 )

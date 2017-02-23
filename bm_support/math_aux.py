@@ -3,7 +3,7 @@ from numpy import concatenate, cumsum, cumprod, identity
 from numpy import ones, arange
 from pymc3.math import logsumexp
 import theano.tensor as tt
-from prob_constants import very_low_logp
+from .prob_constants import very_low_logp
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 
@@ -40,6 +40,7 @@ def lnormal_shifted(x, m, s, t):
 logodds_forward = logit
 logistic = inv_logit
 logodds_backward = inv_logit
+
 
 def sb_forward(x):
     x0 = x[:-1]
