@@ -464,8 +464,11 @@ def fit_step_model_d_v2(data_dict, n_features, plot_fits=False,
                       (True, 'Frequency of positives'))
     posterior_info = {}
 
+    trs = {}
+
     for k in varnames:
         arr = trace[n_watch::n_step][k].copy()
+        trs[k] = arr
         if len(arr.shape) > 1:
             arr = arr[:, 0]
         a, b = trim_data(arr)
@@ -489,7 +492,7 @@ def fit_step_model_d_v2(data_dict, n_features, plot_fits=False,
             close()
 
     with gzip.open(join(trace_path, '{0}.pgz'.format(tracename_prefix)), 'wb') as fp:
-        pickle.dump(trace, fp)
+        pickle.dump(trs, fp)
 
     t1 = time.time()
 
