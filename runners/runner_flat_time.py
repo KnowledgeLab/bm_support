@@ -1,8 +1,12 @@
+import matplotlib as mpl
+mpl.use('Agg')
+
 from bm_support.posterior_tools import fit_step_model_d_v2
 import gzip
 import pickle
 import logging
 from os.path import join
+
 logging.basicConfig(level=logging.INFO)
 
 with gzip.open('../../../data/data_batches_identity_ai_hiai_pos_200.pgz') as fp:
@@ -14,8 +18,8 @@ def generate_fnames(j):
             'tracename_prefix': 'trace_model_notau_{0}'.format(j)}
 
 n_it = 45
-dataset = dataset[n_it:n_it+1]
-n_tot = 10000
+dataset = dataset[n_it:n_it+10]
+n_tot = 100000
 n_watch = int(0.9*n_tot)
 n_step = 10
 
