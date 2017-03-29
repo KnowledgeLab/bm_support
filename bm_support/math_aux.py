@@ -312,7 +312,7 @@ def dist_hguess_hstate(beta0, betas, pis_dict):
     def logp_(**dict_data):
         list_chains = [(dict_data[k], pis_dict[k]) for k in dict_data.keys()]
         # dim; n_ch, n_pi
-        probs_pi_t = tt.stacklists(map(logp_aux, list_chains))
+        probs_pi_t = tt.stacklists(list(map(logp_aux, list_chains)))
         # dim: n_ch, n_pi
         r = tt.sum(tt.log(probs_pi_t))
         return r
