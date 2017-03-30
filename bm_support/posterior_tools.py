@@ -402,6 +402,7 @@ def fit_step_model_d(data_set, verbosity=0, plot_fits=False, fname_prefix='abc',
 def fit_step_model_d_v2(data_dict, n_features, plot_fits=False,
                         figname_prefix='abc', fig_path='./',
                         tracename_prefix='tr', trace_path='./',
+                        reportname_prefix='rep', report_path='./',
                         n_total=10000,
                         n_watch=9000, n_step=10, seed=17, n_map=3):
     n_modes = 2
@@ -467,6 +468,8 @@ def fit_step_model_d_v2(data_dict, n_features, plot_fits=False,
     report['freq'] = ({k: float(sum(v[-1])) / v.shape[1] for k, v in data_dict.items()},
                       (True, 'Frequency of positives'))
     posterior_info = {}
+    posterior_info['point'] = {}
+    posterior_info['flatness'] = {}
 
     trs = {}
 
@@ -481,19 +484,23 @@ def fit_step_model_d_v2(data_dict, n_features, plot_fits=False,
             flag = True
         else:
             flag = False
-        posterior_info['post_' + k] = analyse_local_maxima(arr, (a, b), n_bins=10, n_ext=2, logx=flag)
-        posterior_info['flatness_' + k] = analyse_flatness(arr, (a, b))
+        posterior_info['point'][k] = analyse_local_maxima(arr, (a, b), n_bins=10, n_ext=2, logx=flag)
+        posterior_info['flatness'][k] = analyse_flatness(arr, (a, b))
 
     report['posterior_info'] = posterior_info
 
-    bool_report = {k: posterior_info[k][1][0] for k in posterior_info.keys()}
+    bool_report = [posterior_info['point'][k][1][0] for k in posterior_info['point'].keys()]
+    bool_report.extend([posterior_info['flatness'][k][1][0] for k in posterior_info['flatness'].keys()])
 
-    if not all(bool_report.values()) or plot_fits:
+    if not all(bool_report) or plot_fits:
         with model:
             axx = traceplot(trace[n_watch::n_step])
             fig = axx[0, 0].get_figure()
             fig.savefig(join(fig_path, '{0}.pdf'.format(figname_prefix)))
             close()
+
+    with gzip.open(join(report_path, '{0}.pgz'.format(reportname_prefix)), 'wb') as fp:
+        pickle.dump(report, fp)
 
     with gzip.open(join(trace_path, '{0}.pgz'.format(tracename_prefix)), 'wb') as fp:
         pickle.dump(trs, fp)
