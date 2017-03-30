@@ -22,7 +22,9 @@ import theano.tensor as tt
 from scipy import stats
 from os.path import join
 import logging
-import gzip, pickle
+import gzip
+import pickle
+
 
 def trim_data(data, n_bins=10):
     # find left and right bounds such that
