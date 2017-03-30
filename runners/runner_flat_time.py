@@ -16,7 +16,9 @@ def is_int(x):
 
 def generate_fnames(modeltype, batch_size, j):
     return {'figname_prefix': 'model_{0}_{1}_{2}'.format(modeltype, batch_size, j),
-            'tracename_prefix': 'trace_{0}_{1}_{2}'.format(modeltype, batch_size, j)}
+            'tracename_prefix': 'trace_{0}_{1}_{2}'.format(modeltype, batch_size, j),
+            'reportname_prefix': 'report_{0}_{1}_{2}'.format(modeltype, batch_size, j),
+            }
 
 
 if __name__ == "__main__":
@@ -69,7 +71,7 @@ if __name__ == "__main__":
     logging.info('numberdraws : {0}'.format(numberdraws))
     logging.info('modeltype : {0}'.format(modeltype))
 
-    with gzip.open('../../../data/data_batches_identity_ai_hiai_pos_1000.pgz') as fp:
+    with gzip.open('../../../data/data_batches_{0}_{1}.pgz'.format(modeltype, batchsize)) as fp:
         dataset = pickle.load(fp)
 
     dataset = dataset[begin:end]
@@ -79,6 +81,7 @@ if __name__ == "__main__":
 
     barebone_dict_pars = {'n_features': 2,
                           'fig_path': './../../../figs/', 'trace_path': './../../../traces/',
+                          'report_path': './../../../reports/',
                           'n_total': n_tot, 'n_watch': n_watch, 'n_step': n_step, 'plot_fits': True}
 
     kwargs_list = [{**barebone_dict_pars, **generate_fnames(modeltype, batchsize, j),
@@ -90,7 +93,7 @@ if __name__ == "__main__":
     reports_list = list(map(lambda x: x[1], results_list))
 
     with gzip.open(join('./../../../reports/',
-                        'report_{0}_{1}.pgz'.format(modeltype, batchsize)), 'wb') as fp:
+                        'reports_{0}_{1}.pgz'.format(modeltype, batchsize)), 'wb') as fp:
         pickle.dump(reports_list, fp)
 
 
