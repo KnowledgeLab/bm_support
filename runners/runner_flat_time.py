@@ -79,8 +79,10 @@ if __name__ == "__main__":
 
     if end == 0:
         dataset = dataset[begin:]
+        rr = range(begin, len(dataset))
     elif end <= len(dataset):
         dataset = dataset[begin:end]
+        rr = range(begin, end)
     else:
         raise ValueError('end index is out of bounds of dataset')
 
@@ -97,7 +99,7 @@ if __name__ == "__main__":
 
     kwargs_list = [{**barebone_dict_pars, **generate_fnames(modeltype, batchsize, j),
                     **{'data_dict': d}} for j, d in
-                   zip(range(begin, end), dataset)]
+                   zip(rr, dataset)]
 
     results_list = map(lambda kwargs: fit_step_model_d_v2(**kwargs), kwargs_list)
 
