@@ -71,8 +71,11 @@ if __name__ == "__main__":
     logging.info('numberdraws : {0}'.format(numberdraws))
     logging.info('modeltype : {0}'.format(modeltype))
 
+    logging.info('opening data_batches_{0}_{1}.pgz'.format(modeltype, batchsize))
     with gzip.open('../../../data/data_batches_{0}_{1}.pgz'.format(modeltype, batchsize)) as fp:
         dataset = pickle.load(fp)
+
+    logging.info('dataset contains {0} items'.format(len(dataset)))
 
     if end == 0:
         dataset = dataset[begin:]
@@ -80,6 +83,8 @@ if __name__ == "__main__":
         dataset = dataset[begin:end]
     else:
         raise ValueError('end index is out of bounds of dataset')
+
+    logging.info('cut dataset contains {0} items'.format(len(dataset)))
 
     n_tot = numberdraws
     n_watch = int(0.9*n_tot)
