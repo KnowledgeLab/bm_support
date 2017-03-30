@@ -31,8 +31,8 @@ if __name__ == "__main__":
                         default='0',
                         help='begin (starting) index in the batch')
     parser.add_argument('-e', '--end',
-                        default='-1',
-                        help='end (last) index in the batch')
+                        default='0',
+                        help='end-1 (last) index in the batch; defaults to end of list')
     parser.add_argument('-m', '--modeltype',
                         default='identity_ai_hiai_pos',
                         help='model type specified by')
@@ -74,7 +74,13 @@ if __name__ == "__main__":
     with gzip.open('../../../data/data_batches_{0}_{1}.pgz'.format(modeltype, batchsize)) as fp:
         dataset = pickle.load(fp)
 
-    dataset = dataset[begin:end]
+    if end == 0:
+        dataset = dataset[begin:]
+    elif end <= len(dataset):
+        dataset = dataset[begin:end]
+    else:
+        raise ValueError('end index is out of bounds of dataset')
+
     n_tot = numberdraws
     n_watch = int(0.9*n_tot)
     n_step = 10
