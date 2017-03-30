@@ -5,6 +5,8 @@ from numpy import histogram
 from numpy.random import RandomState
 from bm_support.prob_constants import very_low_logp
 
+import matplotlib as mpl
+mpl.use('Agg')
 from matplotlib.pyplot import close
 
 from scipy.signal import argrelextrema
@@ -412,7 +414,7 @@ def fit_step_model_d_v2(data_dict, n_features, plot_fits=False,
     with pm.Model() as model:
         beta_f = [pm.Normal('beta_{0}'.format(i + 1), mu=0, sd=4) for i in range(n_features)]
         beta_dummy = pm.Lognormal('beta0', mu=0, tau=0.25)
-        pi_priors = {k: pm.Dirichlet('pi_{0}'.format(k), a=ones(n_modes, dtype=float32)) for k in
+        pi_priors = {k: pm.Dirichlet('pi_{0}'.format(k), a=ones(n_modes)) for k in
                      data_dict.keys()}
 
         ys = DensityDist('yobs', dist_hguess_hstate(beta_dummy, beta_f, pi_priors), observed=data_dict)
