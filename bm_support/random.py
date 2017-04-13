@@ -4,11 +4,11 @@ from numpy import hstack, cumsum, sum, exp, log,\
     ones, arange, array, append
 from numpy.random import RandomState
 from functools import partial
-from prob_constants import t0_min, t0_max, \
+from .prob_constants import t0_min, t0_max, \
                         mu_min, mu_max, \
                         tau_min, tau_max, norm_const
 
-from math_aux import np_logistic_step
+from .math_aux import np_logistic_step
 
 
 def f_logistic(x):
@@ -235,43 +235,37 @@ def generate_logistic_y_from_bernoulli_x(n_features=3, ns_list=(100, 200), rns=N
     return xy_data, pps, logistic_probs
 
 
-def beta_steplike_determ_parameters(input_data, n_features=2,
-                                    beta_range=(-2., 2.)):
-    #         pp = beta1, beta2, t0, gamma
-    ave = 0.5 * (max(input_data) - min(input_data))
-    if ave != 0:
-        gamma = 5. / ave
-        pp = beta_range[0], beta_range[1], median(input_data), gamma
-        print pp
-        out = repeat(reshape(array(pp), (4, 1)), n_features, axis=1)
-        return out
-    else:
-        raise ValueError('degenerate input_data: min == max')
-
-
 def beta_steplike_random_parameters(input_data, n_features=2,
                                     beta_range=(-2., 2.),
-                                    rns=None, seed=123):
-    beta_range_ext = beta_range[0], mean(beta_range), beta_range[1]
-    betas = vstack([rns.uniform(*beta_range_ext[:-1], size=(1, n_features)),
-                    rns.uniform(*beta_range_ext[1:], size=(1, n_features))])
+                                    rns=None, seed=123, t0s=None, mode='determ'):
 
-    if not rns:
+    beta_range_ext = beta_range[0], mean(beta_range), beta_range[1]
+    if mode != 'determ' and not rns:
         rns = RandomState(seed)
 
-    ave = 0.5 * (max(input_data) - min(input_data))
-    if ave != 0:
-        gamma_range = 2. / ave, 10. / ave
+    if mode != 'determ' and rns:
+        betas = vstack([rns.uniform(*beta_range_ext[:-1], size=(1, n_features)),
+                        rns.uniform(*beta_range_ext[1:], size=(1, n_features))])
     else:
-        raise ValueError('degenerate input_data: min == max')
+        betas = vstack([ones((1, n_features))*beta_range[0], ones((1, n_features))*beta_range[1]])
+
+    ave = 0.5 * (max(input_data) - min(input_data))
+
+    if ave != 0 and mode != 'determ' and rns:
+        gamma_range = 2. / ave, 10. / ave
+        gammas = rns.uniform(*gamma_range, size=n_features)
+    else:
+        gammas = ones(n_features)*20./ave
+
     m1 = min(input_data)
     m2 = max(input_data)
     med = median(input_data)
-    print 'gamma range', gamma_range
-    print m2, m1, med
-    t0s = rns.uniform(med - 0.5*(m2 - m1), med + 0.5*(m2 - m1), size=n_features)
 
-    gammas = rns.uniform(*gamma_range, size=n_features)
+    if not t0s and mode != 'determ' and rns:
+        t0s = rns.uniform(med - 0.5*(m2 - m1), med + 0.5*(m2 - m1), size=n_features)
+    else:
+        t0s = ones(n_features)*t0s
+
     out = vstack([betas, t0s, gammas])
 
     return out
@@ -281,7 +275,7 @@ def generate_beta_per_data(pps, data):
     #     pps : array of parameters 4 * (1+n_f)
     #
     foos = [partial(np_logistic_step, *vec) for vec in pps.T]
-    betas = array([map(bfoo, data) for bfoo in foos])
+    betas = array([list(map(bfoo, data)) for bfoo in foos])
     return betas
 
 
@@ -290,13 +284,12 @@ def generate_steplike_betas(input_data, n_features=2, beta_range=(-2, 2),
                             names={'beta_right': 'br',
                                    'beta_left': 'bl',
                                    'beta_center': 'bc',
-                                   'beta_steepness': 'bs'}):
+                                   'beta_steepness': 'bs'}, t0s=None):
     if not rns:
         rns = RandomState(seed)
-    if mode == 'determ':
-        pps = beta_steplike_determ_parameters(input_data, n_features + 1, beta_range)
-    elif mode == 'random':
-        pps = beta_steplike_random_parameters(input_data, n_features + 1, beta_range, rns)
+    if mode in ['determ', 'random']:
+        pps = beta_steplike_random_parameters(input_data, n_features + 1,
+                                              beta_range, rns, t0s=t0s, mode=mode)
     else:
         raise ValueError('mode parameter value \'{}\' is \
                          not one of : \'random\', \'determ\''.format(mode))
@@ -317,6 +310,7 @@ def generate_logistic_y_from_bernoulli_x_steplike_beta(input_data,
                                                        beta_range=(-2, 2),
                                                        mode='determ',
                                                        rns=None, seed=123,
+                                                       t0s=None,
                                                        names={'beta_right': 'beta_right',
                                                               'beta_left': 'beta_left',
                                                               'beta_center': 'beta_center',
@@ -329,7 +323,8 @@ def generate_logistic_y_from_bernoulli_x_steplike_beta(input_data,
 
     par_betas, par_betas_dict = generate_steplike_betas(input_data,
                                                         n_features, beta_range,
-                                                        mode, rns, seed, names)
+                                                        mode, rns, seed, names, t0s=t0s)
+    print(par_betas)
     pps_dict.update(par_betas_dict)
     beta_data = generate_beta_per_data(par_betas, input_data)
 
