@@ -306,11 +306,92 @@ def dist_hguess_hstate(beta0, betas, pis_dict):
         # dim: n_p, n_pi (sum over n_g)
         claims_prob_t = tt.sum(khi_t * guess_t_new * hidden_t_new, axis=(1, 2))
         # tensor P({C_i} | Pi) dim: n_pi
-        pi_prob_t = tt.prod(claims_prob_t, axis=0)
+        # pi_prob_t = tt.prod(claims_prob_t, axis=0)
+        pi_prob_t = tt.sum(tt.prod(claims_prob_t, axis=0))
         return pi_prob_t
 
     def logp_(**dict_data):
         list_chains = [(dict_data[k], pis_dict[k]) for k in dict_data.keys()]
+        # dim; n_ch, n_pi
+        probs_pi_t = tt.stacklists(list(map(logp_aux, list_chains)))
+        # dim: n_ch, n_pi
+        r = tt.sum(tt.log(probs_pi_t))
+        return r
+
+    return logp_
+
+
+def dist_hguess_hstate_timestep(beta0, betas, pis_dict, thetas_dict, n_t):
+    """
+
+    :param beta0: parameter for the logistic dummy
+    :param betas: parameters for logistic features
+    :param pis_dict: dict of list of Beta pis
+    :param thetas_dict: dict of Dirichlet (Beta) time_interval breakings
+    :param n_t:
+    :return:
+    """
+    def logp_aux_atomic(arg):
+        # chain : (n_f, n_p)
+        # args : (n_p)
+        # convention for binary variables :
+        #    P(v = 1| mu) = mu[1]
+        #    P(v = 0| mu) = mu[0]
+        chain, pi_hidden = arg
+        # add the dummy guy (beta0 is potentially a different distribution)
+        arg_logistic = tt.dot(tt.stacklists(betas), chain[1:-1]) + beta0 * chain[0]
+        # pr_log is the logistic probability of the correct guess (True)
+        guess = tt_logistic(arg_logistic)
+        # dim: n_g, n_p
+        guess_t = tt.stacklists([1. - guess, guess])
+        # flip pi_hidden to conform to convention
+        hidden_t = pi_hidden[::-1]
+        # n_c = n_pi = n_g = 2
+        delta = identity(2)
+        # tau_{abc} ~ P(c| g h) dim: n_c, n_g, n_h
+        tau_t = tt.stacklists([1. - delta, delta])
+        # vector of claims values dim: n_p
+        claims_v = chain[-1]
+        # promoted to tensor (n_c, n_p)
+        claims_t = tt.stacklists([1. - claims_v, claims_v])
+        # tensor khi P(c_i= c_i^obs| h_i g_i) dim: n_p, n_g, n_h
+        khi_t = tt.tensordot(claims_t, tau_t, [0, 0])
+        # recast guess tensor
+        guess_t_new = guess_t.dimshuffle(1, 0, 'x')
+        # recast hidden state tensor
+        hidden_t_new = hidden_t.dimshuffle('x', 'x', 0)
+        # tensor claim prob P(c_i | h_i, g_i) dim: n_p, n_pi)
+        # dim: n_p, n_pi (sum over n_g)
+        claims_prob_t = tt.sum(khi_t * guess_t_new * hidden_t_new, axis=(1, 2))
+        # tensor P({C_i} | Pi) dim: n_pi
+        pi_prob_t = tt.sum(tt.prod(claims_prob_t, axis=0))
+        return pi_prob_t
+
+    def logp_aux(arg):
+        # chain: (1 + n_f + 1 + 1) * n_ch
+        # pis: k // Dir_2
+        # thetas : 1 // Dir_{k}
+        chain, pis_hidden, thetas = arg
+        # thetas_cum : k
+        thetas_cum = tt.extra_ops.cumsum(thetas)
+        mask0 = (chain[0] <= thetas_cum[0])
+        # masks : k
+        masks = [(thetas_cum[i] < chain[0]) & (chain[0] <= thetas_cum[i + 1]) for i in range(n_t - 1)]
+        masks = [mask0] + masks
+        inds_list = [m.nonzero()[0] for m in masks]
+        # list_chains_pars (k) item:
+        # item_chain : (n_f + 1 + 1) * n_ch
+        # item_pi : Dir_2
+        list_chains_pars = [(chain[1:, m], pi) for m, pi in zip(inds_list, pis_hidden)]
+        probs_pi_t = tt.stacklists(list(map(logp_aux_atomic, list_chains_pars)))
+        # dim: n_ch, n_pi
+        r = tt.prod(probs_pi_t, axis=0)
+        return r
+
+    def logp_(**dict_data):
+        # pis_dict
+        # dict_data[k]: (1(time) + n_f + 1 + 1 (target)) * n_ch
+        list_chains = [(dict_data[k], pis_dict[k], thetas_dict[k]) for k in dict_data.keys()]
         # dim; n_ch, n_pi
         probs_pi_t = tt.stacklists(list(map(logp_aux, list_chains)))
         # dim: n_ch, n_pi
