@@ -15,11 +15,11 @@ def transform_df(dfi, statement_columns, action_column, claim_column,
     if aggregate_negs:
         df = dc.aggregate_negatives_boolean_style(df, statement_columns,
                                                   action_column, claim_column)
-        print('Number of unique (i_a, i_b, at) triplets after aggregation:', \
-            df.drop_duplicates(index_cs).shape[0])
-        print('Fraction of unique (i_a, i_b, at) '\
-            'triplets remaining after aggregation:', \
-            df.drop_duplicates(index_cs).shape[0]/float(n_unique_triplets))
+        print('Number of unique (i_a, i_b, at) triplets after aggregation:',
+              df.drop_duplicates(index_cs).shape[0])
+        print('Fraction of unique (i_a, i_b, at) '
+              'triplets remaining after aggregation:',
+              df.drop_duplicates(index_cs).shape[0]/float(n_unique_triplets))
     # create new integer index for (i_a, i_b, at)
     df = dfto.get_multiplet_to_int_index(df, index_cs, index_name)
     return df
@@ -34,8 +34,8 @@ def try_impute_else_discard(df, impute_column, grouping_column):
                                                      as_index=False).transform(lambda g:
                                                                     g.fillna(g.mean()))[impute_column]
     m = df2[impute_column].isnull()
-    print('Could not impute', sum(m), \
-        'values (discarded), out of ', df2.shape[0])
+    print('Could not impute', sum(m),
+          'values (discarded), out of ', df2.shape[0])
     return df2.loc[~m]
 
 
