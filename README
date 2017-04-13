@@ -1,2 +1,7 @@
 package BigMech 0.1
 
+example of running
+
+nohup python runner_flat_time.py -s 7000 -m identity_ai_hiai_pos -n 100000 > ../../../logs/runner_flat_7000.log &
+
+
