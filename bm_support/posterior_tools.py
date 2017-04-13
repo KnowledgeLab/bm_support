@@ -4,28 +4,30 @@ from numpy import sqrt, floor, ones, sum, exp, vstack, int, float32
 from numpy import histogram
 from numpy.random import RandomState
 from bm_support.prob_constants import very_low_logp
+from itertools import product
 
-import matplotlib as mpl
-mpl.use('Agg')
+from matplotlib import use
 from matplotlib.pyplot import close
 
 from scipy.signal import argrelextrema
 from .guess import guess_ranges, generate_beta_step_guess
 from .param_converter import map_parameters
-from .math_aux import steplike_logistic, dist_hguess_hstate
+from .math_aux import steplike_logistic, dist_hguess_hstate, dist_hguess_hstate_timestep
 from datahelpers.plotting import plot_beta_steps
 
 from scipy.optimize import fmin_powell
 import pymc3 as pm
 from pymc3 import find_MAP, DensityDist, Metropolis, sample, traceplot
-from bm_support.math_aux import steplike_logistic, \
-    np_logistic_step, logp_bmix_shift_claims
+from bm_support.math_aux import steplike_logistic, logp_bmix_shift_claims
 import theano.tensor as tt
 from scipy import stats
 from os.path import join
 import logging
 import gzip
 import pickle
+
+
+use('Agg')
 
 
 def trim_data(data, n_bins=10):
@@ -467,20 +469,141 @@ def fit_step_model_d_v2(data_dict, n_features, plot_fits=False,
     report['data_size'] = ({k: v.shape[1] for k, v in data_dict.items()}, (True, 'data sizes'))
     report['freq'] = ({k: float(sum(v[-1])) / v.shape[1] for k, v in data_dict.items()},
                       (True, 'Frequency of positives'))
-    posterior_info = {}
-    posterior_info['point'] = {}
-    posterior_info['flatness'] = {}
+
+    posterior_info = {'point': {}, 'flatness': {}}
 
     trs = {}
 
     for k in varnames:
-        arr = trace[n_watch::n_step][k].copy()
+        arr = trace[k].copy()
         trs[k] = arr
+        arr = arr[n_watch::n_step]
         if len(arr.shape) > 1:
             arr = arr[:, 0]
         a, b = trim_data(arr)
         if k in model_dict.keys() and model_dict[k]['type'] == pm.Lognormal:
-        # if k == 'beta0':
+            flag = True
+        else:
+            flag = False
+        posterior_info['point'][k] = analyse_local_maxima(arr, (a, b), n_bins=10, n_ext=2, logx=flag)
+        posterior_info['flatness'][k] = analyse_flatness(arr, (a, b))
+
+    report['posterior_info'] = posterior_info
+
+    bool_report = [posterior_info['point'][k][1][0] for k in posterior_info['point'].keys()]
+    bool_report.extend([posterior_info['flatness'][k][1][0] for k in posterior_info['flatness'].keys()])
+
+    if not all(bool_report) or plot_fits:
+        with model:
+            axx = traceplot(trace[n_watch::n_step])
+            fig = axx[0, 0].get_figure()
+            fig.savefig(join(fig_path, '{0}.pdf'.format(figname_prefix)))
+            close()
+
+    with gzip.open(join(report_path, '{0}.pgz'.format(reportname_prefix)), 'wb') as fp:
+        pickle.dump(report, fp)
+
+    with gzip.open(join(trace_path, '{0}.pgz'.format(tracename_prefix)), 'wb') as fp:
+        pickle.dump(trs, fp)
+
+    t1 = time.time()
+
+    logging.info('Calculation of batch id took {0:.2f} sec'.format(t1 - t0))
+
+    return model, report, trace, traces
+
+
+def fit_model_f(data_dict, n_features, plot_fits=False,
+                figname_prefix='abc', fig_path='./',
+                tracename_prefix='tr', trace_path='./',
+                reportname_prefix='rep', report_path='./',
+                n_total=10000,
+                n_watch=9000, n_step=10,
+                seed=17, n_map=3,
+                timestep_prior=array([4.0, 2.0])):
+    n_modes = 2
+    n_times = 2
+
+    t0 = time.time()
+    logging.info('Processing ids: {0}'.format(list(data_dict.keys())))
+    logging.info('Sizes of data sets: {0}'.format(' '.join([str(x.shape[1]) for x in data_dict.values()])))
+    shapes_dict = {k: (data_dict[k][-1].sum(), data_dict[k].shape[1]) for k in data_dict.keys()}
+    posneg_dict = {k: array([shapes_dict[k][0], shapes_dict[k][1] - shapes_dict[k][0]]) for k in shapes_dict.keys()}
+    intervals_enum = [chr(i) for i in range(ord('a'), ord('b') + 1)]
+
+    with pm.Model() as model:
+        beta_f = [pm.Normal('beta_{0}'.format(i + 1), mu=0, sd=4) for i in range(n_features)]
+        beta_dummy = pm.Lognormal('beta0', mu=0, tau=0.25)
+        pi_priors = {k:
+                         [pm.Dirichlet('pi_{0}_{1}'.format(k, letter), a=ones(n_modes)) for letter in intervals_enum]
+                     for k in data_dict.keys()}
+        t0s = {k: pm.Dirichlet('t0_{0}'.format(k), a=ones(len(intervals_enum))) for k in
+               data_dict.keys()}
+        ys = DensityDist('yobs', dist_hguess_hstate_timestep(beta_dummy, beta_f, pi_priors, t0s,
+                                                             n_times), observed=data_dict)
+
+    infos = []
+    rns = RandomState(seed)
+
+    for ite in range(n_map):
+        guess = {}
+        guess.update({'pi_{0}_{1}'.format(k, l): rns.dirichlet(0.1 * posneg_dict[k])
+                      for k, l in product(posneg_dict.keys(), intervals_enum)})
+        guess.update({'beta_{0}'.format(i + 1): rns.normal(0.0, 1.0) for i in range(n_features)})
+        guess.update({'beta0': rns.lognormal(0.0, 1.0)})
+        guess.update({'t0_{0}'.format(k): rns.dirichlet(timestep_prior) for k in posneg_dict})
+        sb_ranges = {}
+
+        model_dict = {
+            'beta0': {'type': pm.Lognormal},
+            'beta': {'type': pm.Normal},
+            'pi': {'type': pm.Dirichlet},
+            't0': {'type': pm.Dirichlet},
+        }
+
+        fwd_gu = map_parameters(guess, model_dict, sb_ranges, True)
+
+        with model:
+            ll = model.logp(fwd_gu)
+
+        dargs = {'xtol': 1e-07, 'fmin': fmin_powell, 'disp': False}
+
+        with model:
+            #         best = find_MAP(start=fwd_gu, vars=model.vars, **dargs)
+            best = find_MAP(start=fwd_gu)
+
+        raw_best_dict = map_parameters(best, model_dict, sb_ranges, False)
+
+        lp = model.logp(best)
+        infos.append((lp, raw_best_dict, best))
+
+        # sorted w.r.t to log likelihood
+        sorted_first = list(infos)
+        sorted_first.sort(key=lambda tup: tup[0], reverse=True)
+        logging.info('MAP estimates: {0} {1}'.format(len(sorted_first), sorted_first[0]))
+
+    with model:
+        step = Metropolis()
+        trace = sample(n_total, step, init=None, start=sorted_first[0][1])
+
+    varnames = [name for name in trace.varnames if not name.endswith('_')]
+    report = {}
+    traces = {}
+    report['data_size'] = ({k: v.shape[1] for k, v in data_dict.items()}, (True, 'data sizes'))
+    report['freq'] = ({k: float(sum(v[-1])) / v.shape[1] for k, v in data_dict.items()},
+                      (True, 'Frequency of positives'))
+    posterior_info = {'point': {}, 'flatness': {}}
+
+    trs = {}
+
+    for k in varnames:
+        arr = trace[k].copy()
+        trs[k] = arr
+        arr = arr[n_watch::n_step]
+        if len(arr.shape) > 1:
+            arr = arr[:, 0]
+        a, b = trim_data(arr)
+        if k in model_dict.keys() and model_dict[k]['type'] == pm.Lognormal:
             flag = True
         else:
             flag = False
