@@ -75,12 +75,33 @@ if __name__ == "__main__":
     parser.add_argument('-p', '--nparallel',
                         default='1', type=int,
                         help='number of parallel threads')
+
     parser.add_argument('-f', '--logfilename',
                         default='../../../tmp/runner_timestep_mp.log',
                         help='log filename')
     parser.add_argument('--dry', type=str2bool,
                         default=False,
                         help='select dry run')
+
+    parser.add_argument('-d', '--datapath',
+                        default='../../../data',
+                        help='data filepath')
+
+    parser.add_argument('--reportspath',
+                        default='../../../reports',
+                        help='reports filepath')
+
+    parser.add_argument('--logspath',
+                        default='../../../logs',
+                        help='logs filepath')
+
+    parser.add_argument('--figspath',
+                        default='../../../figs',
+                        help='figs filepath')
+
+    parser.add_argument('--tracespath',
+                        default='../../../traces',
+                        help='traces filepath')
 
     args = parser.parse_args()
     logger = setup_logger('main', args.logfilename, level=logging.INFO)
@@ -101,7 +122,8 @@ if __name__ == "__main__":
     logging.info('modeltype : {0}'.format(modeltype))
 
     logging.info('opening data_batches_{0}_{1}.pgz'.format(modeltype, args.batchsize))
-    with gzip.open('../../../data/data_batches_{0}_{1}.pgz'.format(modeltype, args.batchsize)) as fp:
+    with gzip.open(join(args.datapath,
+                        'data_batches_{0}_{1}.pgz'.format(modeltype, args.batchsize))) as fp:
         dataset = pickle.load(fp)
 
     logging.info('dataset contains {0} items'.format(len(dataset)))
@@ -122,8 +144,8 @@ if __name__ == "__main__":
     n_step = 10
 
     barebone_dict_pars = {'n_features': 2,
-                          'fig_path': './../../../figs/', 'trace_path': './../../../traces/',
-                          'report_path': './../../../reports/',
+                          'fig_path': args.figspath, 'trace_path': args.tracespath,
+                          'report_path': args.reportspath,
                           'n_total': n_tot, 'n_watch': n_watch, 'n_step': n_step, 'plot_fits': True,
                           'dry_run': args.dry}
 
@@ -152,7 +174,7 @@ if __name__ == "__main__":
 
     reports_list = list(map(lambda x: x[0], results_list))
 
-    with gzip.open(join('./../../../reports/',
+    with gzip.open(join(args.reportspath,
                         'reports_{0}_{1}.pgz'.format(modeltype, args.batchsize)), 'wb') as fp:
         pickle.dump(reports_list, fp)
     logging.info('execution complete')
