@@ -5,7 +5,7 @@ import gzip
 import pickle
 import logging
 from os.path import join
-
+import sys
 
 def is_int(x):
     try:
@@ -24,12 +24,13 @@ def generate_fnames(modeltype, batch_size, j):
 
 def decorate_wlogger(f, qu, log_fname):
     def foo(it, list_kwargs):
-        lfn = '{0}_{1}{2}'.format(log_fname[:-4], it, log_fname[-4:])
         logger_ = mp.get_logger()
-        fileHandler = logging.FileHandler(lfn, mode='w')
-        logger_.addHandler(fileHandler)
+        if log_fname != 'stdout':
+            lfn = '{0}_{1}{2}'.format(log_fname[:-4], it, log_fname[-4:])
+            file_handler = logging.FileHandler(lfn, mode='w')
+            logger_.addHandler(file_handler)
+            logger_.info('logfilename: {0}'.format(lfn))
         logger_.info('start f: j {0}'.format(it))
-        logger_.info('logfilename: {0}'.format(lfn))
         r = list(map(lambda kwargs: f(**kwargs), list_kwargs))
         qu.put(r)
     return foo
@@ -82,8 +83,12 @@ if __name__ == "__main__":
                         help='select dry run')
 
     args = parser.parse_args()
-    # logger = setup_logger('main', args.logfilename, level=logging.INFO)
-    logging.basicConfig(level=logging.INFO, filename=args.logfilename)
+    logger = setup_logger('main', args.logfilename, level=logging.INFO)
+
+    if args.logfilename == 'stdout':
+        logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+    else:
+        logging.basicConfig(level=logging.INFO, filename=args.logfilename)
 
     logging.info('{0} threads will be started'.format(args.nparallel))
 
@@ -111,7 +116,6 @@ if __name__ == "__main__":
         raise ValueError('end index is out of bounds of dataset')
 
     logging.info('cut dataset contains {0} items'.format(len(dataset)))
-    # logger = logging.getLogger()
 
     n_tot = args.numberdraws
     n_watch = int(0.9*n_tot)

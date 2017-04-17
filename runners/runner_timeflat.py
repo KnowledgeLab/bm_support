@@ -25,44 +25,30 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-s', '--batchsize',
-                        default='200',
+                        default='200', type=int,
                         help='Size of data batches')
     parser.add_argument('-b', '--begin',
-                        default='0',
+                        default='0', type=int,
                         help='begin (starting) index in the batch')
     parser.add_argument('-e', '--end',
-                        default='0',
+                        default='0', type=int,
                         help='end-1 (last) index in the batch; defaults to end of list')
     parser.add_argument('-m', '--modeltype',
                         default='identity_ai_hiai_pos',
                         help='model type specified by')
     parser.add_argument('-n', '--numberdraws',
-                        default='1000',
+                        default='1000', type=int,
                         help='mcmc number of draws')
 
     args = parser.parse_args()
+    batchsize = args.batchsize
+    begin = args.begin
+    end = args.end
+    modeltype = args.modeltype
+    numberdraws = args.numberdraws
 
     logging.basicConfig(level=logging.INFO)
 
-    if is_int(args.batchsize):
-        batchsize = int(args.batchsize)
-    else:
-        raise ValueError('batchsize not an integer')
-
-    if is_int(args.begin):
-        begin = int(args.begin)
-    else:
-        raise ValueError('begin not an integer')
-
-    if is_int(args.end):
-        end = int(args.end)
-    else:
-        raise ValueError('end not an integer')
-
-    if is_int(args.numberdraws):
-        numberdraws = int(args.numberdraws)
-    else:
-        raise ValueError('numberdraws not an integer')
     modeltype = args.modeltype
 
     logging.info('batchsize : {0}'.format(batchsize))
@@ -72,6 +58,7 @@ if __name__ == "__main__":
     logging.info('modeltype : {0}'.format(modeltype))
 
     logging.info('opening data_batches_{0}_{1}.pgz'.format(modeltype, batchsize))
+
     with gzip.open('../../../data/data_batches_{0}_{1}.pgz'.format(modeltype, batchsize)) as fp:
         dataset = pickle.load(fp)
 
