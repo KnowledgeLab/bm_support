@@ -403,7 +403,7 @@ def fit_step_model_d_v2(data_dict, n_features, plot_fits=False,
                         tracename_prefix='tr', trace_path='./',
                         reportname_prefix='rep', report_path='./',
                         n_total=10000,
-                        n_watch=9000, n_step=10, seed=17, n_map=3):
+                        n_watch=9000, n_step=10, seed=17, n_map=1):
     n_modes = 2
     t0 = time.time()
     logging.info('Processing ids: {0}'.format(list(data_dict.keys())))
@@ -456,9 +456,14 @@ def fit_step_model_d_v2(data_dict, n_features, plot_fits=False,
     sorted_first.sort(key=lambda tup: tup[0], reverse=True)
     logging.info('MAP estimates: {0} {1}'.format(len(sorted_first), sorted_first[0]))
 
+    t1 = time.time()
+    logging.info('map of batch {1} took {0:.2f} sec'.format(t1 - t0, list(data_dict.keys())))
+
     with model:
         step = Metropolis()
         trace = sample(n_total, step, init=None, start=sorted_first[0][1])
+
+    t2 = time.time()
 
     varnames = [name for name in trace.varnames if not name.endswith('_')]
     report = {}
@@ -503,9 +508,7 @@ def fit_step_model_d_v2(data_dict, n_features, plot_fits=False,
     with gzip.open(join(trace_path, '{0}.pgz'.format(tracename_prefix)), 'wb') as fp:
         pickle.dump(trs, fp)
 
-    t1 = time.time()
-
-    logging.info('Calculation of batch id took {0:.2f} sec'.format(t1 - t0))
+    logging.info('mcmc of batch {1} took {0:.2f} sec'.format(t2 - t1, list(data_dict.keys())))
 
     return model, report, trace, traces
 
@@ -535,6 +538,7 @@ def fit_model_f(data_dict, n_features, plot_fits=False,
         report = []
         trace = []
         traces = []
+        t2 = time.time()
     else:
         with pm.Model() as model:
             beta_f = [pm.Normal('beta_{0}'.format(i + 1), mu=0, sd=4) for i in range(n_features)]
@@ -582,14 +586,19 @@ def fit_model_f(data_dict, n_features, plot_fits=False,
             lp = model.logp(best)
             infos.append((lp, raw_best_dict, best))
 
-            # sorted w.r.t to log likelihood
-            sorted_first = list(infos)
-            sorted_first.sort(key=lambda tup: tup[0], reverse=True)
-            logger.info('MAP estimates: {0} {1}'.format(len(sorted_first), sorted_first[0]))
+        # sorted w.r.t to log likelihood
+        sorted_first = list(infos)
+        sorted_first.sort(key=lambda tup: tup[0], reverse=True)
+        logger.info('MAP estimates: {0} {1}'.format(len(sorted_first), sorted_first[0]))
+
+        t1 = time.time()
+        logging.info('map of batch {1} took {0:.2f} sec'.format(t1 - t0, list(data_dict.keys())))
 
         with model:
             step = Metropolis()
             trace = sample(n_total, step, init=None, start=sorted_first[0][1], progressbar=False)
+
+        t2 = time.time()
 
         varnames = [name for name in trace.varnames if not name.endswith('_')]
         report = {}
@@ -633,8 +642,7 @@ def fit_model_f(data_dict, n_features, plot_fits=False,
         with gzip.open(join(trace_path, '{0}.pgz'.format(tracename_prefix)), 'wb') as fp:
             pickle.dump(trs, fp)
 
-    t1 = time.time()
-
-    logger.info('Calculation of batch id took {0:.2f} sec'.format(t1 - t0))
+        logging.info('mcmc of batch {1} took {0:.2f} sec'.format(t2 - t1, list(data_dict.keys())))
+    logger.info('Calculation of batch id took {0:.2f} sec'.format(t2 - t0))
 
     return report, traces
