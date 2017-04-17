@@ -19,7 +19,7 @@ setup(
     description="tools for big mechanism project",
     license="BSD",
     keywords="pandas",
-    # url="git@github.com:alexander-belikov/datahelpers.git",
+    url="git@github.com:alexander-belikov/datahelpers.git",
     packages=['bm_support'],
     long_description=read('README'),
     classifiers=[
@@ -30,7 +30,6 @@ setup(
     install_requires=[
         'pandas', 'setuptools',
         'datahelpers', 'scipy',
-        'pymc3'
-
+        'sklearn', 'pymc3'
     ],
 )
