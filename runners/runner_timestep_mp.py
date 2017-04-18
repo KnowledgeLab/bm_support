@@ -79,11 +79,12 @@ if __name__ == "__main__":
     parser.add_argument('-f', '--logfilename',
                         default='runner_timestep_mp.log',
                         help='log filename')
+
     parser.add_argument('--dry', type=str2bool,
                         default=False,
                         help='select dry run')
 
-    parser.add_argument('-d', '--datapath',
+    parser.add_argument('--datapath',
                         default='../../../data',
                         help='data filepath')
 
@@ -104,13 +105,14 @@ if __name__ == "__main__":
                         help='traces filepath')
 
     args = parser.parse_args()
-    logger = setup_logger('main', args.logfilename, level=logging.INFO)
+    # logger = setup_logger('main', args.logfilename, level=logging.INFO)
 
     if args.logfilename == 'stdout':
         logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     else:
-        logging.basicConfig(level=logging.INFO, filename=args.logfilename)
+        logging.basicConfig(level=logging.INFO, filename=join(args.logspath, args.logfilename))
 
+    logging.info('logger {0} at {1}'.format(args.logfilename, args.logspath))
     logging.info('{0} threads will be started'.format(args.nparallel))
 
     modeltype = args.modeltype
@@ -157,7 +159,7 @@ if __name__ == "__main__":
 
     qu = mp.Queue()
 
-    decorated = decorate_wlogger(fit_model_f, qu, args.logfilename)
+    decorated = decorate_wlogger(fit_model_f, qu, join(args.logspath, args.logfilename))
 
     processes = [mp.Process(target=decorated, args=(it, l_kw))
                  for it, l_kw in zip(range(args.nparallel), super_kwargs_list)]
