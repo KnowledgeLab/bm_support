@@ -77,7 +77,7 @@ if __name__ == "__main__":
                         help='number of parallel threads')
 
     parser.add_argument('-f', '--logfilename',
-                        default='../../../tmp/runner_timestep_mp.log',
+                        default='runner_timestep_mp.log',
                         help='log filename')
     parser.add_argument('--dry', type=str2bool,
                         default=False,
