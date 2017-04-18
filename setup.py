@@ -30,6 +30,7 @@ setup(
     install_requires=[
         'pandas', 'setuptools',
         'datahelpers', 'scipy',
-        'scikit-learn', 'pymc3'
+        'scikit-learn', 'seaborn',
+        'pymc3'
     ],
 )
