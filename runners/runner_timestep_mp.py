@@ -140,6 +140,7 @@ if __name__ == "__main__":
         raise ValueError('end index is out of bounds of dataset')
 
     logging.info('cut dataset contains {0} items'.format(len(dataset)))
+    logging.info('dry run : {0}'.format(args.dry))
 
     n_tot = args.numberdraws
     n_watch = int(0.9*n_tot)
