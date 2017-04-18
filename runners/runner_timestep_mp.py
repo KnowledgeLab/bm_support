@@ -110,7 +110,7 @@ if __name__ == "__main__":
     if args.logfilename == 'stdout':
         logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     else:
-        logging.basicConfig(level=logging.INFO, filename=join(args.logspath, args.logfilename))
+        logging.basicConfig(level=logging.INFO, filename=join(args.logspath, args.logfilename), filemode='w')
 
     logging.info('logger {0} at {1}'.format(args.logfilename, args.logspath))
     logging.info('{0} threads will be started'.format(args.nparallel))
@@ -171,15 +171,15 @@ if __name__ == "__main__":
     for p in processes:
         p.join()
 
-    super_results_list = [qu.get() for p in processes]
+    # super_results_list = [qu.get() for p in processes]
 
-    results_list = [item for sublist in super_results_list for item in sublist]
+    # results_list = [item for sublist in super_results_list for item in sublist]
 
-    reports_list = list(map(lambda x: x[0], results_list))
+    # reports_list = list(map(lambda x: x[0], results_list))
 
-    with gzip.open(join(args.reportspath,
-                        'reports_{0}_{1}.pgz'.format(modeltype, args.batchsize)), 'wb') as fp:
-        pickle.dump(reports_list, fp)
+    # with gzip.open(join(args.reportspath,
+    #                     'reports_{0}_{1}.pgz'.format(modeltype, args.batchsize)), 'wb') as fp:
+    #     pickle.dump(reports_list, fp)
     logging.info('execution complete')
 
 

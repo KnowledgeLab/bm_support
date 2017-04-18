@@ -598,6 +598,8 @@ def fit_model_f(data_dict, n_features, plot_fits=False,
             step = Metropolis()
             trace = sample(n_total, step, init=None, start=sorted_first[0][1], progressbar=False)
 
+        print('sampling of {0} finished', list(data_dict.keys()))
+
         t2 = time.time()
 
         varnames = [name for name in trace.varnames if not name.endswith('_')]
