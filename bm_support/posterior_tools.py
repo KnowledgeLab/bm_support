@@ -592,7 +592,7 @@ def fit_model_f(data_dict, n_features, plot_fits=False,
         logger.info('MAP estimates: {0} {1}'.format(len(sorted_first), sorted_first[0]))
 
         t1 = time.time()
-        logging.info('map of batch {1} took {0:.2f} sec'.format(t1 - t0, list(data_dict.keys())))
+        logger.info('map of batch {1} took {0:.2f} sec'.format(t1 - t0, list(data_dict.keys())))
 
         with model:
             step = Metropolis()
@@ -642,7 +642,7 @@ def fit_model_f(data_dict, n_features, plot_fits=False,
         with gzip.open(join(trace_path, '{0}.pgz'.format(tracename_prefix)), 'wb') as fp:
             pickle.dump(trs, fp)
 
-        logging.info('mcmc of batch {1} took {0:.2f} sec'.format(t2 - t1, list(data_dict.keys())))
+        logger.info('mcmc of batch {1} took {0:.2f} sec'.format(t2 - t1, list(data_dict.keys())))
     logger.info('Calculation of batch id took {0:.2f} sec'.format(t2 - t0))
 
     return report, traces
