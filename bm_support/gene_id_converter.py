@@ -8,7 +8,9 @@ class GeneIdConverter(object):
     def __init__(self, fpath, types_list, enforce_int):
         """
 
-        :param fpath:
+        :param fpath: file path to gzipped json
+            json format is like the one taken from
+                ftp://ftp.ebi.ac.uk/pub/databases/genenames/new/json/hgnc_complete_set.json
         :param types_list: can be from
             ['hgnc_id', 'entrez_id', 'symbol', 'cosmic', 'ucsc_id']
 
@@ -18,7 +20,12 @@ class GeneIdConverter(object):
         with gzip.open(fpath, 'rb') as f:
             jsonic = json.loads(f.read().decode('utf-8'))
         self.convs = {}
+        self.sets = {}
         types_perms = list(permutations(types_list, 2))
+
+        for u in types_list:
+            s = filter(lambda x: u in x.keys(), jsonic['response']['docs'])
+            self.sets[u] = set(map(lambda x: int(x[u]) if u in enforce_int else x[u], s))
 
         for u, v in types_perms:
             ff = filter(lambda x: u in x.keys() and v in x.keys(), jsonic['response']['docs'])

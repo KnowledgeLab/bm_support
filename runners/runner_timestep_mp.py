@@ -7,6 +7,10 @@ import logging
 from os.path import join
 import sys
 
+
+function_dict = {'model_f': fit_model_f,
+                 }
+
 def is_int(x):
     try:
         int(x)
@@ -104,6 +108,11 @@ if __name__ == "__main__":
                         default='../../../traces',
                         help='traces filepath')
 
+    parser.add_argument('--func',
+                        default='model_f',
+                        help='which function to use for inference from : '
+                             '{0}'.format(list(function_dict.keys())))
+
     args = parser.parse_args()
     # logger = setup_logger('main', args.logfilename, level=logging.INFO)
 
@@ -111,6 +120,9 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     else:
         logging.basicConfig(level=logging.INFO, filename=join(args.logspath, args.logfilename), filemode='w')
+
+    if not args.func in function_dict.keys():
+        raise ValueError('specified inference function (--func) is not valid')
 
     logging.info('logger {0} at {1}'.format(args.logfilename, args.logspath))
     logging.info('{0} threads will be started'.format(args.nparallel))
@@ -160,7 +172,7 @@ if __name__ == "__main__":
 
     qu = mp.Queue()
 
-    decorated = decorate_wlogger(fit_model_f, qu, join(args.logspath, args.logfilename))
+    decorated = decorate_wlogger(args.func, qu, join(args.logspath, args.logfilename))
 
     processes = [mp.Process(target=decorated, args=(it, l_kw))
                  for it, l_kw in zip(range(args.nparallel), super_kwargs_list)]
