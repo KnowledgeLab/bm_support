@@ -1,7 +1,7 @@
 import time
 import multiprocessing as mp
 from numpy import array, arange, histogram, argmax, greater, nan, log
-from numpy import sqrt, floor, ones, sum, exp, vstack, int, float32
+from numpy import ones, sum, exp, vstack, int, float32, cumsum
 from numpy import histogram
 from numpy.random import RandomState
 from bm_support.prob_constants import very_low_logp
@@ -534,9 +534,7 @@ def fit_model_f(data_dict, n_features, plot_fits=False,
     intervals_enum = [chr(i) for i in range(ord('a'), ord('b') + 1)]
     if dry_run:
         logger.info('dry run ~ :p')
-        model = None
         report = []
-        trace = []
         traces = []
         t2 = time.time()
     else:
@@ -645,6 +643,71 @@ def fit_model_f(data_dict, n_features, plot_fits=False,
             pickle.dump(trs, fp)
 
         logger.info('mcmc of batch {1} took {0:.2f} sec'.format(t2 - t1, list(data_dict.keys())))
+    logger.info('Calculation of batch id took {0:.2f} sec'.format(t2 - t0))
+
+    return report, traces
+
+
+def fit_model_e(data_dict, reportname_prefix='rep', report_path='./',
+                timestep_prior=array([0.8, 0.2]),
+                dry_run=True, **kwargs):
+    # here timestep_prior is a partion of unity (sums to one)
+    # minimum number of datapoints for estimating freq. of the terminal interval
+
+    n_min = 6
+
+    logger = mp.get_logger()
+    t0 = time.time()
+    logger.info('Processing ids: {0}'.format(list(data_dict.keys())))
+    logger.info('Sizes of data sets: {0}'.format(' '.join([str(x.shape[1]) for x in data_dict.values()])))
+
+    if dry_run:
+        logger.info('dry run ~ :p')
+        model = None
+        report = []
+        trace = []
+        traces = []
+        t2 = time.time()
+    else:
+        t1 = time.time()
+        logger.info('map of batch {1} took {0:.2f} sec'.format(t1 - t0, list(data_dict.keys())))
+
+        report = {k: {} for k in data_dict.keys()}
+        for k in report.keys():
+            v = data_dict[k]
+            report[k]['len'] = data_dict[k].shape[1]
+            report[k]['freq'] = float(sum(v[-1])) / v.shape[1]
+
+        posterior_info = {'point': {}, 'flatness': {}}
+        report['posterior_info'] = posterior_info
+
+        for k, v in data_dict.items():
+            t, y = v[[0, -1], :]
+            args = t.argsort()
+            # sort t and y wrt to time
+            ts = t[args]
+            ys = y[args]
+
+            ssection = array(timestep_prior) / sum(timestep_prior)
+            section_cumsum = [0.] + list(cumsum(ssection))
+            masks = [(x < ts) & (ts <= y) for x, y in zip(section_cumsum[:-1], section_cumsum[1:])]
+            ml = masks[-1]
+
+            if sum(ml) < n_min:
+                tbreak = ts[-n_min]
+                ml2 = (ts >= tbreak)
+                yest = ys[ml2]
+            else:
+                yest = ys[ml]
+
+            report[k]['pi_last'] = float(sum(yest))/yest.shape[0]
+            report[k]['len_last'] = yest.shape[0]
+        t2 = time.time()
+
+        with gzip.open(join(report_path, '{0}.pgz'.format(reportname_prefix)), 'wb') as fp:
+            pickle.dump(report, fp)
+
+        logger.info('naive model of batch {1} took {0:.2f} sec'.format(t2 - t1, list(data_dict.keys())))
     logger.info('Calculation of batch id took {0:.2f} sec'.format(t2 - t0))
 
     return report, traces

@@ -1,6 +1,6 @@
 import argparse
 import multiprocessing as mp
-from bm_support.posterior_tools import fit_model_f
+from bm_support.posterior_tools import fit_model_f, fit_model_e
 import gzip
 import pickle
 import logging
@@ -9,6 +9,7 @@ import sys
 
 
 function_dict = {'model_f': fit_model_f,
+                 'model_e': fit_model_e
                  }
 def is_int(x):
     try:
@@ -18,10 +19,10 @@ def is_int(x):
     return True
 
 
-def generate_fnames(modeltype, batch_size, j):
-    return {'figname_prefix': 'model_{0}_{1}_{2}'.format(modeltype, batch_size, j),
-            'tracename_prefix': 'trace_{0}_{1}_{2}'.format(modeltype, batch_size, j),
-            'reportname_prefix': 'report_{0}_{1}_{2}'.format(modeltype, batch_size, j),
+def generate_fnames(model_type, data_type, batch_size, j):
+    return {'figname_prefix': 'fig_{0}_{1}_{2}_{3}'.format(model_type, data_type, batch_size, j),
+            'tracename_prefix': 'trace_{0}_{1}_{2}_{3}'.format(model_type, data_type, batch_size, j),
+            'reportname_prefix': 'report_{0}_{1}_{2}_{3}'.format(model_type, data_type, batch_size, j),
             }
 
 
@@ -163,7 +164,7 @@ if __name__ == "__main__":
                           'n_total': n_tot, 'n_watch': n_watch, 'n_step': n_step, 'plot_fits': True,
                           'dry_run': args.dry}
 
-    kwargs_list = [{**barebone_dict_pars, **generate_fnames(modeltype, args.batchsize, j),
+    kwargs_list = [{**barebone_dict_pars, **generate_fnames(modeltype, args.batchsize, j, args.func),
                     **{'data_dict': d}} for j, d in
                    zip(rr, dataset)]
 
@@ -192,6 +193,3 @@ if __name__ == "__main__":
     #                     'reports_{0}_{1}.pgz'.format(modeltype, args.batchsize)), 'wb') as fp:
     #     pickle.dump(reports_list, fp)
     logging.info('execution complete')
-
-
-
