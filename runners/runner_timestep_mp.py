@@ -10,7 +10,6 @@ import sys
 
 function_dict = {'model_f': fit_model_f,
                  }
-
 def is_int(x):
     try:
         int(x)
@@ -172,7 +171,7 @@ if __name__ == "__main__":
 
     qu = mp.Queue()
 
-    decorated = decorate_wlogger(args.func, qu, join(args.logspath, args.logfilename))
+    decorated = decorate_wlogger(function_dict[args.func], qu, join(args.logspath, args.logfilename))
 
     processes = [mp.Process(target=decorated, args=(it, l_kw))
                  for it, l_kw in zip(range(args.nparallel), super_kwargs_list)]
