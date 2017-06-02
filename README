@@ -2,7 +2,12 @@ package BigMech 0.1
 
 example of running
 
-nohup python runner_timeflat.py -s 7000 -m identity_ai_hiai_pos -n 100000 > ../../../logs/runner_flat_7000.log &
+dry run:
+python runner_timeflat.py --dry -s 7000 -d identity_ai_hiai_pos
+
+nohup python runner_timeflat.py -s 7000 -d identity_ai_hiai_pos -n 100000 > ../../../logs/runner_flat_7000.log &
 
 
-nohup python runner_timestep_mp.py -s 200 -m identity_ai_hiai_pos -n 10000 -p 2 -f ../../../logs/tmp.log &
+nohup python runner_timestep_mp.py -s 200 -d identity_ai_hiai_pos -n 10000 -p 2 -f ../../../logs/tmp.log &
+
+nohup python runner_timestep_mp.py -b 4 -e 6 -s 200 -d year_identity_ai_hiai_pos -n 10000 -p 2 -f ../../../logs/tmp.log &

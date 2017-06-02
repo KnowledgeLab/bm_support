@@ -679,7 +679,6 @@ def fit_model_e(data_dict, reportname_prefix='rep', report_path='./',
             report[k]['freq'] = float(sum(v[-1])) / v.shape[1]
 
         posterior_info = {'point': {}, 'flatness': {}}
-        report['posterior_info'] = posterior_info
 
         for k, v in data_dict.items():
             t, y = v[[0, -1], :]
@@ -710,4 +709,4 @@ def fit_model_e(data_dict, reportname_prefix='rep', report_path='./',
         logger.info('naive model of batch {1} took {0:.2f} sec'.format(t2 - t1, list(data_dict.keys())))
     logger.info('Calculation of batch id took {0:.2f} sec'.format(t2 - t0))
 
-    return report, traces
+    return report

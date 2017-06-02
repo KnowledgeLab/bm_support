@@ -70,9 +70,9 @@ if __name__ == "__main__":
     parser.add_argument('-e', '--end',
                         default='0', type=int,
                         help='end-1 (last) index in the batch; defaults to end of list')
-    parser.add_argument('-m', '--modeltype',
+    parser.add_argument('-d', '--datatype',
                         default='identity_ai_hiai_pos',
-                        help='model type specified by')
+                        help='data type consumed by the model')
     parser.add_argument('-n', '--numberdraws',
                         default='1000', type=int,
                         help='mcmc number of draws')
@@ -127,17 +127,17 @@ if __name__ == "__main__":
     logging.info('logger {0} at {1}'.format(args.logfilename, args.logspath))
     logging.info('{0} threads will be started'.format(args.nparallel))
 
-    modeltype = args.modeltype
+    data_type = args.datatype
 
     logging.info('batchsize : {0}'.format(args.batchsize))
     logging.info('begin : {0}'.format(args.begin))
     logging.info('end : {0}'.format(args.end))
     logging.info('numberdraws : {0}'.format(args.numberdraws))
-    logging.info('modeltype : {0}'.format(modeltype))
+    logging.info('modeltype : {0}'.format(data_type))
 
-    logging.info('opening data_batches_{0}_{1}.pgz'.format(modeltype, args.batchsize))
+    logging.info('opening data_batches_{0}_{1}.pgz'.format(data_type, args.batchsize))
     with gzip.open(join(args.datapath,
-                        'data_batches_{0}_{1}.pgz'.format(modeltype, args.batchsize))) as fp:
+                        'data_batches_{0}_{1}.pgz'.format(data_type, args.batchsize))) as fp:
         dataset = pickle.load(fp)
 
     logging.info('dataset contains {0} items'.format(len(dataset)))
@@ -164,7 +164,7 @@ if __name__ == "__main__":
                           'n_total': n_tot, 'n_watch': n_watch, 'n_step': n_step, 'plot_fits': True,
                           'dry_run': args.dry}
 
-    kwargs_list = [{**barebone_dict_pars, **generate_fnames(modeltype, args.batchsize, j, args.func),
+    kwargs_list = [{**barebone_dict_pars, **generate_fnames(args.func, data_type, args.batchsize, j),
                     **{'data_dict': d}} for j, d in
                    zip(rr, dataset)]
 
