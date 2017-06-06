@@ -70,9 +70,11 @@ if __name__ == "__main__":
     parser.add_argument('-e', '--end',
                         default='0', type=int,
                         help='end-1 (last) index in the batch; defaults to end of list')
+
     parser.add_argument('-d', '--datatype',
                         default='identity_ai_hiai_pos',
                         help='data type consumed by the model')
+
     parser.add_argument('-n', '--numberdraws',
                         default='1000', type=int,
                         help='mcmc number of draws')
@@ -113,13 +115,23 @@ if __name__ == "__main__":
                         help='which function to use for inference from : '
                              '{0}'.format(list(function_dict.keys())))
 
+    parser.add_argument('--case-suffix',
+                        default='case_a',
+                        help='test case specifier')
+
+    parser.add_argument('--partition-interval', nargs='+', default=[0.8, 0.2], type=float)
+    parser.add_argument('--index-interval', default=-1, type=int)
+
     args = parser.parse_args()
+
     # logger = setup_logger('main', args.logfilename, level=logging.INFO)
 
     if args.logfilename == 'stdout':
         logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     else:
         logging.basicConfig(level=logging.INFO, filename=join(args.logspath, args.logfilename), filemode='w')
+
+    logging.info(args._get_kwargs())
 
     if not args.func in function_dict.keys():
         raise ValueError('specified inference function (--func) is not valid')
@@ -162,7 +174,9 @@ if __name__ == "__main__":
                           'fig_path': args.figspath, 'trace_path': args.tracespath,
                           'report_path': args.reportspath,
                           'n_total': n_tot, 'n_watch': n_watch, 'n_step': n_step, 'plot_fits': True,
-                          'dry_run': args.dry}
+                          'dry_run': args.dry,
+                          'timestep_prior': args.partition_interval, 'interest_index': args.index_interval,
+                          'case_suffix': args.case_suffix}
 
     kwargs_list = [{**barebone_dict_pars, **generate_fnames(args.func, data_type, args.batchsize, j),
                     **{'data_dict': d}} for j, d in
