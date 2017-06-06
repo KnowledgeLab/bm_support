@@ -1,7 +1,7 @@
 import time
 import multiprocessing as mp
 from numpy import array, arange, histogram, argmax, greater, nan, log
-from numpy import ones, sum, exp, vstack, int, float32, cumsum
+from numpy import ones, sum, exp, vstack, int, min, max, argmin, cumsum
 from numpy import histogram
 from numpy.random import RandomState
 from bm_support.prob_constants import very_low_logp
@@ -521,7 +521,8 @@ def fit_model_f(data_dict, n_features, plot_fits=False,
                 n_watch=9000, n_step=10,
                 seed=17, n_map=1,
                 timestep_prior=array([4.0, 2.0]),
-                dry_run=True):
+                dry_run=True, **kwargs):
+
     n_modes = 2
     n_times = 2
 
@@ -649,7 +650,7 @@ def fit_model_f(data_dict, n_features, plot_fits=False,
 
 
 def fit_model_e(data_dict, reportname_prefix='rep', report_path='./',
-                timestep_prior=array([0.8, 0.2]),
+                timestep_prior=array([0.8, 0.2]), interest_index=-1,
                 dry_run=True, **kwargs):
     # here timestep_prior is a partion of unity (sums to one)
     # minimum number of datapoints for estimating freq. of the terminal interval
@@ -663,10 +664,7 @@ def fit_model_e(data_dict, reportname_prefix='rep', report_path='./',
 
     if dry_run:
         logger.info('dry run ~ :p')
-        model = None
         report = []
-        trace = []
-        traces = []
         t2 = time.time()
     else:
         t1 = time.time()
@@ -678,35 +676,55 @@ def fit_model_e(data_dict, reportname_prefix='rep', report_path='./',
             report[k]['len'] = data_dict[k].shape[1]
             report[k]['freq'] = float(sum(v[-1])) / v.shape[1]
 
-        posterior_info = {'point': {}, 'flatness': {}}
-
         for k, v in data_dict.items():
             t, y = v[[0, -1], :]
             args = t.argsort()
+            interest_index %= len(timestep_prior)
+
             # sort t and y wrt to time
             ts = t[args]
             ys = y[args]
 
             ssection = array(timestep_prior) / sum(timestep_prior)
-            section_cumsum = [0.] + list(cumsum(ssection))
+            section_cumsum = [ts[0] - 1e-8] + list(cumsum(ssection))
             masks = [(x < ts) & (ts <= y) for x, y in zip(section_cumsum[:-1], section_cumsum[1:])]
-            ml = masks[-1]
 
-            if sum(ml) < n_min:
-                tbreak = ts[-n_min]
-                ml2 = (ts >= tbreak)
-                yest = ys[ml2]
-            else:
-                yest = ys[ml]
+            flag, yest = find_minimum_length_interval(masks, ys, n_min, interest_index)
 
             report[k]['pi_last'] = float(sum(yest))/yest.shape[0]
             report[k]['len_last'] = yest.shape[0]
         t2 = time.time()
 
-        with gzip.open(join(report_path, '{0}.pgz'.format(reportname_prefix)), 'wb') as fp:
+        if 'case_suffix' in kwargs.keys():
+            rname = '{0}_{1}.pgz'.format(reportname_prefix, kwargs['case_suffix'])
+        else:
+            rname = '{0}.pgz'.format(reportname_prefix)
+
+        with gzip.open(join(report_path, rname), 'wb') as fp:
             pickle.dump(report, fp)
 
         logger.info('naive model of batch {1} took {0:.2f} sec'.format(t2 - t1, list(data_dict.keys())))
     logger.info('Calculation of batch id took {0:.2f} sec'.format(t2 - t0))
 
     return report
+
+
+def find_minimum_length_interval(masks, ys, n_min, interest_index):
+    if 0 <= interest_index < len(masks) and n_min <= ys.shape[0]:
+        ml = masks[interest_index]
+        if sum(ml) > 0:
+            flag = True
+            if sum(ml) < n_min:
+                j = min((argmin(~ml) + n_min, ml.shape[0] - 1))
+                i = max((j - n_min, 0))
+                yest = ys[i:j]
+            else:
+                yest = ys[ml]
+        elif interest_index > 0:
+            flag, yest = find_minimum_length_interval(masks, ys, n_min, interest_index-1)
+        elif interest_index == 0:
+            flag = True
+            yest = ys[:n_min]
+        return flag, yest
+    else:
+        return False, array([])
