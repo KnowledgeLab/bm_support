@@ -6,11 +6,14 @@ import pickle
 import logging
 from os.path import join
 import sys
+from os.path import expanduser
 
 
 function_dict = {'model_f': fit_model_f,
                  'model_e': fit_model_e
                  }
+
+
 def is_int(x):
     try:
         int(x)
@@ -19,11 +22,13 @@ def is_int(x):
     return True
 
 
-def generate_fnames(model_type, data_type, batch_size, j):
-    return {'figname_prefix': 'fig_{0}_{1}_{2}_{3}'.format(model_type, data_type, batch_size, j),
-            'tracename_prefix': 'trace_{0}_{1}_{2}_{3}'.format(model_type, data_type, batch_size, j),
-            'reportname_prefix': 'report_{0}_{1}_{2}_{3}'.format(model_type, data_type, batch_size, j),
+def generate_fnames(prefix_str, j):
+    suffix = '{0}_it_{1}'.format(prefix_str, j)
+    return {'figname_prefix': 'fig_{0}'.format(suffix),
+            'tracename_prefix': 'trace_{0}'.format(suffix),
+            'reportname_prefix': 'report_{0}'.format(suffix)
             }
+
 
 
 def decorate_wlogger(f, qu, log_fname):
@@ -59,6 +64,7 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-s', '--batchsize',
@@ -91,11 +97,11 @@ if __name__ == "__main__":
                         help='select dry run')
 
     parser.add_argument('--datapath',
-                        default='../../../data',
+                        default=expanduser('~/data/kl/batches'),
                         help='data filepath')
 
     parser.add_argument('--reportspath',
-                        default='../../../reports',
+                        default=expanduser('~/data/kl/reports'),
                         help='reports filepath')
 
     parser.add_argument('--logspath',
@@ -115,11 +121,15 @@ if __name__ == "__main__":
                         help='which function to use for inference from : '
                              '{0}'.format(list(function_dict.keys())))
 
-    parser.add_argument('--case-suffix',
-                        default='case_a',
+    parser.add_argument('--version',
+                        default=9,
+                        help='version of the data transformation')
+
+    parser.add_argument('--case',
+                        default='a',
                         help='test case specifier')
 
-    parser.add_argument('--partition-interval', nargs='+', default=[0.8, 0.2], type=float)
+    parser.add_argument('--partition-interval', nargs='+', default=[0.5, 0.5], type=float)
     parser.add_argument('--index-interval', default=-1, type=int)
 
     args = parser.parse_args()
@@ -139,17 +149,23 @@ if __name__ == "__main__":
     logging.info('logger {0} at {1}'.format(args.logfilename, args.logspath))
     logging.info('{0} threads will be started'.format(args.nparallel))
 
-    data_type = args.datatype
-
     logging.info('batchsize : {0}'.format(args.batchsize))
     logging.info('begin : {0}'.format(args.begin))
     logging.info('end : {0}'.format(args.end))
     logging.info('numberdraws : {0}'.format(args.numberdraws))
-    logging.info('modeltype : {0}'.format(data_type))
+    logging.info('modeltype : {0}'.format(args.datatype))
 
-    logging.info('opening data_batches_{0}_{1}.pgz'.format(data_type, args.batchsize))
+    n = 20
+    a = 0.1
+    b = 0.9
+
+    logging.info('opening data_batches_v_{0}_c_{1}_m_{2}_n_{3}_a_{4}_b_{5}.pgz'.format(args.version,
+                                                                                       args.datatype,
+                                                                                       args.batchsize,
+                                                                                       n, a, b))
     with gzip.open(join(args.datapath,
-                        'data_batches_{0}_{1}.pgz'.format(data_type, args.batchsize))) as fp:
+                        'data_batches_v_{0}_c_{1}_m_{2}_n_{3}_a_{4}_b_{5}.pgz'
+                        .format(args.version, args.datatype, args.batchsize, n, a, b))) as fp:
         dataset = pickle.load(fp)
 
     logging.info('dataset contains {0} items'.format(len(dataset)))
@@ -175,10 +191,15 @@ if __name__ == "__main__":
                           'report_path': args.reportspath,
                           'n_total': n_tot, 'n_watch': n_watch, 'n_step': n_step, 'plot_fits': True,
                           'dry_run': args.dry,
-                          'timestep_prior': args.partition_interval, 'interest_index': args.index_interval,
-                          'case_suffix': args.case_suffix}
+                          'timestep_prior': args.partition_interval, 'interest_index': args.index_interval}
 
-    kwargs_list = [{**barebone_dict_pars, **generate_fnames(args.func, data_type, args.batchsize, j),
+    prefix_str = 'v_{0}_c_{1}_m_{2}_n_{3}_a_{4}_' \
+                 'b_{5}_f_{6}_case_{7}'\
+        .format(args.version, args.datatype, args.batchsize,
+                n, a, b, args.func, args.case)
+
+    logging.info('prefix str: {0}'.format(prefix_str))
+    kwargs_list = [{**barebone_dict_pars, **generate_fnames(prefix_str, j),
                     **{'data_dict': d}} for j, d in
                    zip(rr, dataset)]
 

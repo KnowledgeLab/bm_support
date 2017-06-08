@@ -695,10 +695,7 @@ def fit_model_e(data_dict, reportname_prefix='rep', report_path='./',
             report[k]['len_last'] = yest.shape[0]
         t2 = time.time()
 
-        if 'case_suffix' in kwargs.keys():
-            rname = '{0}_{1}.pgz'.format(reportname_prefix, kwargs['case_suffix'])
-        else:
-            rname = '{0}.pgz'.format(reportname_prefix)
+        rname = '{0}.pgz'.format(reportname_prefix)
 
         with gzip.open(join(report_path, rname), 'wb') as fp:
             pickle.dump(report, fp)
