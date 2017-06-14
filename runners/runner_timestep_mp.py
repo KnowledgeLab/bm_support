@@ -30,7 +30,6 @@ def generate_fnames(prefix_str, j):
             }
 
 
-
 def decorate_wlogger(f, qu, log_fname):
     def foo(it, list_kwargs):
         logger_ = mp.get_logger()
@@ -129,6 +128,10 @@ if __name__ == "__main__":
                         default='a',
                         help='test case specifier')
 
+    parser.add_argument('--origin',
+                        default='gw',
+                        help='origin of the dataset, gw for geneways, lit for literome')
+
     parser.add_argument('--partition-interval', nargs='+', default=[0.5, 0.5], type=float)
     parser.add_argument('--index-interval', default=-1, type=int)
 
@@ -155,17 +158,21 @@ if __name__ == "__main__":
     logging.info('numberdraws : {0}'.format(args.numberdraws))
     logging.info('modeltype : {0}'.format(args.datatype))
 
-    n = 20
-    a = 0.1
-    b = 0.9
+    n = 10
+    a = 0.05
+    b = 0.95
+    # n = 20
+    # a = 0.1
+    # b = 0.9
 
-    logging.info('opening data_batches_v_{0}_c_{1}_m_{2}_n_{3}_a_{4}_b_{5}.pgz'.format(args.version,
+    logging.info('opening data_batches_{0}_v_{1}_c_{2}_m_{3}_n_{4}_a_{5}_b_{6}.pgz'.format(args.origin,
+                                                                                           args.version,
                                                                                        args.datatype,
                                                                                        args.batchsize,
                                                                                        n, a, b))
     with gzip.open(join(args.datapath,
-                        'data_batches_v_{0}_c_{1}_m_{2}_n_{3}_a_{4}_b_{5}.pgz'
-                        .format(args.version, args.datatype, args.batchsize, n, a, b))) as fp:
+                        'data_batches_{0}_v_{1}_c_{2}_m_{3}_n_{4}_a_{5}_b_{6}.pgz'
+                        .format(args.origin, args.version, args.datatype, args.batchsize, n, a, b))) as fp:
         dataset = pickle.load(fp)
 
     logging.info('dataset contains {0} items'.format(len(dataset)))
@@ -193,9 +200,9 @@ if __name__ == "__main__":
                           'dry_run': args.dry,
                           'timestep_prior': args.partition_interval, 'interest_index': args.index_interval}
 
-    prefix_str = 'v_{0}_c_{1}_m_{2}_n_{3}_a_{4}_' \
-                 'b_{5}_f_{6}_case_{7}'\
-        .format(args.version, args.datatype, args.batchsize,
+    prefix_str = '{0}_v_{1}_c_{2}_m_{3}_n_{4}_a_{5}_' \
+                 'b_{6}_f_{7}_case_{8}'\
+        .format(args.origin, args.version, args.datatype, args.batchsize,
                 n, a, b, args.func, args.case)
 
     logging.info('prefix str: {0}'.format(prefix_str))

@@ -3,6 +3,9 @@ import json
 from itertools import permutations
 
 
+types = ['hgnc_id', 'entrez_id', 'symbol']
+enforce_ints = ['entrez_id']
+
 class GeneIdConverter(object):
 
     def __init__(self, fpath, types_list, enforce_int):
@@ -41,6 +44,12 @@ class GeneIdConverter(object):
     def choose_converter(self, u, v):
         if u in self.types_list and v in self.types_list:
             self.u, self.v = u, v
+
+    def keys(self):
+        return self.convs[(self.u, self.v)].keys()
+
+    def values(self):
+        return self.convs[(self.u, self.v)].values()
 
     def __getitem__(self, key):
         return self.convs[(self.u, self.v)][key]
