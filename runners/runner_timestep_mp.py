@@ -76,13 +76,18 @@ if __name__ == "__main__":
                         default='0', type=int,
                         help='end-1 (last) index in the batch; defaults to end of list')
 
-    parser.add_argument('-d', '--datatype',
-                        default='identity_ai_hiai_pos',
-                        help='data type consumed by the model')
+    parser.add_argument('-d', '--data-columns',
+                        nargs='*',
+                        default=['year', 'identity', 'ai', 'aihi', 'pos'])
+
+    # parser.add_argument('-d', '--datatype',
+    #                     default='identity_ai_hiai_pos',
+    #                     help='data type consumed by the model')
 
     parser.add_argument('-n', '--numberdraws',
                         default='1000', type=int,
                         help='mcmc number of draws')
+
     parser.add_argument('-p', '--nparallel',
                         default='1', type=int,
                         help='number of parallel threads')
@@ -121,7 +126,7 @@ if __name__ == "__main__":
                              '{0}'.format(list(function_dict.keys())))
 
     parser.add_argument('--version',
-                        default=9,
+                        default=9, type=int,
                         help='version of the data transformation')
 
     parser.add_argument('--case',
@@ -135,8 +140,17 @@ if __name__ == "__main__":
     parser.add_argument('--partition-interval', nargs='+', default=[0.5, 0.5], type=float)
     parser.add_argument('--index-interval', default=-1, type=int)
 
+    parser.add_argument('--maxsize-sequence',
+                        default=20, type=int,
+                        help='version of data source')
+
+    parser.add_argument('--partition-sequence',
+                        nargs='+', default=[0.1, 0.9], type=float,
+                        help='define interval of observed freqs for sequence consideration')
+
     args = parser.parse_args()
 
+    data_cols = '_'.join(args.data_columns)
     # logger = setup_logger('main', args.logfilename, level=logging.INFO)
 
     if args.logfilename == 'stdout':
@@ -156,23 +170,19 @@ if __name__ == "__main__":
     logging.info('begin : {0}'.format(args.begin))
     logging.info('end : {0}'.format(args.end))
     logging.info('numberdraws : {0}'.format(args.numberdraws))
-    logging.info('modeltype : {0}'.format(args.datatype))
+    logging.info('data columns : {0}'.format(data_cols))
 
-    n = 10
-    a = 0.05
-    b = 0.95
-    # n = 20
-    # a = 0.1
-    # b = 0.9
+    a, b = args.partition_sequence
+    n = args.maxsize_sequence
 
     logging.info('opening data_batches_{0}_v_{1}_c_{2}_m_{3}_n_{4}_a_{5}_b_{6}.pgz'.format(args.origin,
                                                                                            args.version,
-                                                                                       args.datatype,
-                                                                                       args.batchsize,
-                                                                                       n, a, b))
+                                                                                           data_cols,
+                                                                                           args.batchsize,
+                                                                                           n, a, b))
     with gzip.open(join(args.datapath,
                         'data_batches_{0}_v_{1}_c_{2}_m_{3}_n_{4}_a_{5}_b_{6}.pgz'
-                        .format(args.origin, args.version, args.datatype, args.batchsize, n, a, b))) as fp:
+                        .format(args.origin, args.version, data_cols, args.batchsize, n, a, b))) as fp:
         dataset = pickle.load(fp)
 
     logging.info('dataset contains {0} items'.format(len(dataset)))
@@ -202,7 +212,7 @@ if __name__ == "__main__":
 
     prefix_str = '{0}_v_{1}_c_{2}_m_{3}_n_{4}_a_{5}_' \
                  'b_{6}_f_{7}_case_{8}'\
-        .format(args.origin, args.version, args.datatype, args.batchsize,
+        .format(args.origin, args.version, data_cols, args.batchsize,
                 n, a, b, args.func, args.case)
 
     logging.info('prefix str: {0}'.format(prefix_str))
