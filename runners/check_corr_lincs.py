@@ -13,22 +13,8 @@ ye = 'year'
 ai = 'ai'
 hi_ai = 'aihi'
 ps = 'pos'
-
-feauture_cols = [ai, hi_ai]
-data_columns = [ye, iden] + feauture_cols + [ps]
-
 up = 'up'
 dn = 'dn'
-version = 8
-origin = 'gw'
-data_cols = '_'.join(data_columns)
-batchsize = 1000
-a = 0.1
-b = 0.9
-n = 20
-o_columns = [up, dn]
-func = 'model_e'
-case = 'a'
 
 
 def get_id_up_dn_df(origin, n, a, b, version):
@@ -121,8 +107,8 @@ def process(args_reports_list, args_lincs_list):
                     z = df_cmp['pi_last'].values
                     size = df_cmp.shape[0]
 
-                    cov_freq_ = np.corrcoef(x, y)[0, 1]
-                    cov_flat_ = np.corrcoef(x, z)[0, 1]
+                    cov_freq_ = np.corrcoef(xp, y)[0, 1]
+                    cov_flat_ = np.corrcoef(xp, z)[0, 1]
 
                     res_dict = {}
                     res_dict.update(args)
@@ -132,7 +118,20 @@ def process(args_reports_list, args_lincs_list):
                     results.append(res_dict)
     return results
 
-versions = [8]
+# gw
+feauture_cols = [ai, hi_ai]
+data_columns = [ye, iden] + feauture_cols + [ps]
+
+origin = 'gw'
+data_cols = '_'.join(data_columns)
+batchsize = 1000
+a = 0.1
+b = 0.9
+n = 20
+o_columns = [up, dn]
+func = 'model_e'
+
+versions = [8, 9]
 cases = ['a', 'b']
 keys = ('version', 'case')
 invariant_args = {
@@ -149,7 +148,6 @@ full_largs = [{**invariant_args, **dd} for dd in largs]
 dfs = [get_up_dn_report(**dd) for dd in full_largs]
 reports_list = list(zip(full_largs, dfs))
 
-versions = [8]
 keys = ['version']
 
 invariant_args = {
@@ -166,9 +164,52 @@ dfls = [get_lincs_df(**dd) for dd in full_largs]
 list(zip(full_largs, [x.shape for x in dfls]))
 lincs_list = list(zip(full_largs, dfls))
 
+# lit
+data_columns = [ye, iden] + [ps]
+
+origin = 'lit'
+data_cols = '_'.join(data_columns)
+batchsize = 1000
+a = 0.1
+b = 0.9
+func = 'model_e'
+
+versions = [1]
+cases = ['a', 'b']
+sizes = [10, 20]
+keys = ('version', 'case', 'n')
+
+invariant_args = {
+    'origin': origin,
+    'datatype': data_cols,
+    'batchsize': batchsize,
+    'a': a,
+    'b': b,
+    'func': func}
+
+largs = [{k: v for k, v in zip(keys, p)} for p in product(*(versions, cases, sizes))]
+full_largs = [{**invariant_args, **dd} for dd in largs]
+dfs = [get_up_dn_report(**dd) for dd in full_largs]
+reports_list.extend(list(zip(full_largs, dfs)))
+
+keys = ['version', 'n']
+
+invariant_args = {
+    'origin': origin,
+    'a': a,
+    'b': b
+}
+
+largs = [{k: v for k, v in zip(keys, p)} for p in product(*[versions, sizes])]
+full_largs = [{**invariant_args, **dd} for dd in largs]
+
+dfls = [get_lincs_df(**dd) for dd in full_largs]
+list(zip(full_largs, [x.shape for x in dfls]))
+lincs_list.extend(list(zip(full_largs, dfls)))
+
 rr = process(reports_list, lincs_list)
 
 out_path = expanduser('~/data/kl/corrs/')
 
 dfr = pd.DataFrame.from_dict(rr)
-dfr.to_csv(join(out_path, 'corrs.csv'), index=False, float_format='%.5f')
+dfr.to_csv(join(out_path, 'corrs_cdf.csv'), index=False, float_format='%.5f')
