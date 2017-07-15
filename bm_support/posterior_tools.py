@@ -689,7 +689,12 @@ def fit_model_e(data_dict, reportname_prefix='rep', report_path='./',
             section_cumsum = [ts[0] - 1e-8] + list(cumsum(ssection))
             masks = [(x < ts) & (ts <= y) for x, y in zip(section_cumsum[:-1], section_cumsum[1:])]
 
-            flag, yest = find_minimum_length_interval(masks, ys, n_min, interest_index)
+            flag, yest = find_minimum_length_interval(masks, ts, ys, n_min, interest_index)
+
+            # inds = [int(len(ys) * j / len(timestep_prior)) for j in range(len(timestep_prior))] + [len(ys) + 1]
+            # ys_cut = [ys[k:m] for k, m in zip(inds[:-1], inds[1:])]
+            #
+            # yest = ys_cut[interest_index]
 
             report[k]['pi_last'] = float(sum(yest))/yest.shape[0]
             report[k]['len_last'] = yest.shape[0]
@@ -706,17 +711,29 @@ def fit_model_e(data_dict, reportname_prefix='rep', report_path='./',
     return report
 
 
-def find_minimum_length_interval(masks, ys, n_min, interest_index):
+def find_minimum_length_interval(masks, ts, ys, n_min, interest_index):
+    logger = mp.get_logger()
+
     if 0 <= interest_index < len(masks) and n_min <= ys.shape[0]:
-        ml = masks[interest_index]
-        if sum(ml) > 0:
+        m = masks[interest_index]
+        if sum(m) > 0:
             flag = True
-            if sum(ml) < n_min:
-                j = min((argmin(~ml) + n_min, ml.shape[0] - 1))
-                i = max((j - n_min, 0))
+            if sum(m) < n_min:
+                # j = m.shape[0] - argmax(m[::-1]) - 1
+                logger.info('types: {0} {1}'.format(type(argmin(~m) + n_min - 1), type(ts.shape[0])))
+                logger.info('values: {0} {1}'.format(argmin(~m) + n_min - 1, ts.shape[0]))
+                # print('!!!', argmin(~m) + n_min - 1, ts.shape[0] - 1, min(argmin(~m) + n_min - 1, ts.shape[0] - 1), ts.shape)
+                t0 = ts[min([int(argmin(~m) + n_min - 1), int(ts.shape[0] - 1)])]
+                m_t0 = (ts == t0)
+                j = m.shape[0] - argmax(m_t0[::-1])
+                i = argmax(m)
+                if j - i < n_min:
+                    t0 = ts[max(j - n_min + 1, 0)]
+                    m_t0 = (ts == t0)
+                    i = argmax(m_t0)
                 yest = ys[i:j]
             else:
-                yest = ys[ml]
+                yest = ys[m]
         elif interest_index > 0:
             flag, yest = find_minimum_length_interval(masks, ys, n_min, interest_index-1)
         elif interest_index == 0:
