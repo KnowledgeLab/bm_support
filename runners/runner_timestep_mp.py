@@ -198,8 +198,9 @@ if __name__ == "__main__":
     n_tot = args.numberdraws
     n_watch = int(0.9*n_tot)
     n_step = 10
+    n_features = len(args.data_columns) - 3
 
-    barebone_dict_pars = {'n_features': 2,
+    barebone_dict_pars = {'n_features': n_features,
                           'fig_path': args.figspath, 'trace_path': args.tracespath,
                           'report_path': args.reportspath,
                           'n_total': n_tot, 'n_watch': n_watch, 'n_step': n_step, 'plot_fits': True,
