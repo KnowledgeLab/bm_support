@@ -80,10 +80,6 @@ if __name__ == "__main__":
                         nargs='*',
                         default=['year', 'identity', 'ai', 'aihi', 'pos'])
 
-    # parser.add_argument('-d', '--datatype',
-    #                     default='identity_ai_hiai_pos',
-    #                     help='data type consumed by the model')
-
     parser.add_argument('-n', '--numberdraws',
                         default='1000', type=int,
                         help='mcmc number of draws')

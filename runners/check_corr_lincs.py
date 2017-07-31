@@ -118,7 +118,42 @@ def process(args_reports_list, args_lincs_list):
                     results.append(res_dict)
     return results
 
+def process_simple(args_reports_list, args_lincs_list):
+    results = []
+
+    for args, dfl in args_lincs_list:
+        # which reports cases align with current lincs?
+        reps = list(filter(lambda x: args.items() <= x[0].items(), args_reports_list))
+
+        dfl2 = dfl.groupby([up, dn]).apply(lambda x: x['score'].mean()).reset_index()
+
+        for args, df in reps:
+            df_cmp = pd.merge(df[[up, dn, 'freq', 'pi_last']], dfl2[[up, dn, 0]],
+                              how='inner', on=o_columns)
+            x = df_cmp[0].values
+            xp = list(map(lambda l: norm.cdf(l), x))
+            y = df_cmp['freq'].values
+            z = df_cmp['pi_last'].values
+            size = df_cmp.shape[0]
+
+            cov_freq_ = np.corrcoef(xp, y)[0, 1]
+            cov_flat_ = np.corrcoef(xp, z)[0, 1]
+
+            res_dict = {}
+            res_dict.update(args)
+            res_dict.update(dict(zip(['size', 'cov_freq', 'cov_model'], [size, cov_freq_, cov_flat_])))
+            results.append(res_dict)
+    return results
+
+
+reports_list = []
+lincs_list = []
+o_columns = [up, dn]
+batchsize = 1000
+
 # gw
+"""
+
 feauture_cols = [ai, hi_ai]
 data_columns = [ye, iden] + feauture_cols + [ps]
 
@@ -128,7 +163,6 @@ batchsize = 1000
 a = 0.1
 b = 0.9
 n = 20
-o_columns = [up, dn]
 func = 'model_e'
 
 versions = [8, 9]
@@ -146,7 +180,7 @@ invariant_args = {
 largs = [{k: v for k, v in zip(keys, p)} for p in product(*(versions, cases))]
 full_largs = [{**invariant_args, **dd} for dd in largs]
 dfs = [get_up_dn_report(**dd) for dd in full_largs]
-reports_list = list(zip(full_largs, dfs))
+reports_list.extend(list(zip(full_largs, dfs)))
 
 keys = ['version']
 
@@ -162,8 +196,8 @@ full_largs = [{**invariant_args, **dd} for dd in largs]
 
 dfls = [get_lincs_df(**dd) for dd in full_largs]
 list(zip(full_largs, [x.shape for x in dfls]))
-lincs_list = list(zip(full_largs, dfls))
-
+lincs_list.extend(list(zip(full_largs, dfls)))
+"""
 # lit
 data_columns = [ye, iden] + [ps]
 
@@ -207,9 +241,9 @@ dfls = [get_lincs_df(**dd) for dd in full_largs]
 list(zip(full_largs, [x.shape for x in dfls]))
 lincs_list.extend(list(zip(full_largs, dfls)))
 
-rr = process(reports_list, lincs_list)
+rr = process_simple(reports_list, lincs_list)
 
 out_path = expanduser('~/data/kl/corrs/')
 
 dfr = pd.DataFrame.from_dict(rr)
-dfr.to_csv(join(out_path, 'corrs_cdf.csv'), index=False, float_format='%.5f')
+dfr.to_csv(join(out_path, 'corrs_cdf3.csv'), index=False, float_format='%.5f')

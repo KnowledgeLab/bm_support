@@ -1,4 +1,4 @@
-package BigMech 0.1
+package BigMech 0.2
 
 example of running
 
@@ -9,13 +9,10 @@ nohup python runner_timeflat.py -s 7000 -d identity_ai_hiai_pos -n 100000 > ../.
 
 multiprocessing run:
 
-nohup python runner_timestep_mp.py -s 200 -d identity_ai_hiai_pos -n 10000 -p 2 -f ../../../logs/tmp.log &
+nohup python runner_timestep_mp.py -s 200 -d identity ai hiai pos -n 10000 -p 2 -f ../../../logs/tmp.log &
 
-nohup python runner_timestep_mp.py -b 4 -e 6 -s 200 -d year_identity_ai_hiai_pos -n 10000 -p 2 -f ../../../logs/tmp.log &
+nohup python runner_timestep_mp.py -b 4 -e 6 -s 200 -d year identity ai hiai pos -n 10000 -p 2 -f ../../../logs/tmp.log &
 
 multiprocessing run interval freqs (model_e)
 
-python runner_timestep_mp.py -s 1000 -d year_identity_ai_hiai_pos --func model_e --case-suffix case_a
-
-# --partition-interval 0.5 0.5
-# --index-interval 1
+python runner_timestep_mp.py -s 1000 -d year identity pos --index-interval 1 --partition-interval 0.5 0.5 --case b --origin lit --version 1 --func model_e --maxsize-sequence 10
