@@ -66,8 +66,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-s', '--batchsize',
-                        default='200', type=int,
+    parser.add_argument('-s', '--nsamples',
+                        default='8', type=int,
                         help='Size of data batches')
     parser.add_argument('-b', '--begin',
                         default='0', type=int,
@@ -136,7 +136,7 @@ if __name__ == "__main__":
     parser.add_argument('--partition-interval', nargs='+', default=[0.5, 0.5], type=float)
     parser.add_argument('--index-interval', default=-1, type=int)
 
-    parser.add_argument('--maxsize-sequence',
+    parser.add_argument('--minsize-sequence',
                         default=20, type=int,
                         help='version of data source')
 
@@ -162,23 +162,23 @@ if __name__ == "__main__":
     logging.info('logger {0} at {1}'.format(args.logfilename, args.logspath))
     logging.info('{0} threads will be started'.format(args.nparallel))
 
-    logging.info('batchsize : {0}'.format(args.batchsize))
+    logging.info('nsamples : {0}'.format(args.nsamples))
     logging.info('begin : {0}'.format(args.begin))
     logging.info('end : {0}'.format(args.end))
     logging.info('numberdraws : {0}'.format(args.numberdraws))
     logging.info('data columns : {0}'.format(data_cols))
 
-    a, b = args.partition_sequence
-    n = args.maxsize_sequence
+    low_f, hi_f = args.partition_sequence
+    n = args.minsize_sequence
 
     logging.info('opening data_batches_{0}_v_{1}_c_{2}_m_{3}_n_{4}_a_{5}_b_{6}.pgz'.format(args.origin,
                                                                                            args.version,
                                                                                            data_cols,
-                                                                                           args.batchsize,
-                                                                                           n, a, b))
+                                                                                           args.nsamples,
+                                                                                           n, low_f, hi_f))
     with gzip.open(join(args.datapath,
                         'data_batches_{0}_v_{1}_c_{2}_m_{3}_n_{4}_a_{5}_b_{6}.pgz'
-                        .format(args.origin, args.version, data_cols, args.batchsize, n, a, b))) as fp:
+                        .format(args.origin, args.version, data_cols, args.nsamples, n, low_f, hi_f))) as fp:
         dataset = pickle.load(fp)
 
     logging.info('dataset contains {0} items'.format(len(dataset)))
@@ -209,8 +209,8 @@ if __name__ == "__main__":
 
     prefix_str = '{0}_v_{1}_c_{2}_m_{3}_n_{4}_a_{5}_' \
                  'b_{6}_f_{7}_case_{8}'\
-        .format(args.origin, args.version, data_cols, args.batchsize,
-                n, a, b, args.func, args.case)
+        .format(args.origin, args.version, data_cols, args.nsamples,
+                n, low_f, hi_f, args.func, args.case)
 
     logging.info('prefix str: {0}'.format(prefix_str))
     kwargs_list = [{**barebone_dict_pars, **generate_fnames(prefix_str, j),
@@ -238,7 +238,4 @@ if __name__ == "__main__":
 
     # reports_list = list(map(lambda x: x[0], results_list))
 
-    # with gzip.open(join(args.reportspath,
-    #                     'reports_{0}_{1}.pgz'.format(modeltype, args.batchsize)), 'wb') as fp:
-    #     pickle.dump(reports_list, fp)
     logging.info('execution complete')
