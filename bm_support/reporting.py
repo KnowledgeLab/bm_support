@@ -52,7 +52,10 @@ def get_up_dn_report(fpath_reps, fpath,
     df_pairs = get_id_up_dn_df(fpath, origin, n, a, b, version)
     reports_df = get_reports(fpath_reps, origin, version, datatype, batchsize,
                              n, a, b, func, case, filter_out, old_format)
-    df_merged = merge(df_pairs[o_columns], reports_df, right_index=True, left_index=True, how='right')
+    if 'len' in reports_df.columns:
+        del reports_df['len']
+    # df_merged = merge(df_pairs[o_columns], reports_df, right_index=True, left_index=True, how='right')
+    df_merged = merge(df_pairs, reports_df, right_index=True, left_index=True, how='right')
     return df_merged
 
 
@@ -97,4 +100,3 @@ def convert_dict_format(old_dict):
     for k in old_dict['data_size'][0].keys():
         new_dict[k]['len'] = old_dict['data_size'][0][k]
     return new_dict
-
