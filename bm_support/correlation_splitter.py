@@ -1,5 +1,5 @@
-from pandas import Series, DataFrame, merge
-from numpy import std, mean, corrcoef
+from pandas import Series, DataFrame, merge, concat
+from numpy import std, mean, corrcoef, array, tile
 from os.path import expanduser
 from matplotlib.pyplot import subplots
 
@@ -8,7 +8,93 @@ dn = 'dn'
 o_columns = [up, dn]
 
 
-def compute_correlations(args_lincs_std_list, args_reports_list, cutting_schedule, extra_masks):
+def round_to_delta(x, delta, x0=0.0):
+    k = int((x - x0)/delta + 0.5)
+    return x0+k*delta
+
+
+def obtain_crosssection(args_lincs_std_list, args_reports_list, masks):
+    results = []
+    for args, df_exp in args_lincs_std_list:
+        m0 = Series([True]*df_exp.shape[0], df_exp.index)
+        for c, thr, foo in masks['exp']:
+            m = (foo(df_exp[c], thr))
+            m0 &= m
+        dfl_mean_std2 = df_exp.loc[m0].copy()
+        dfl_mean_std3 = dfl_mean_std2.groupby([up, dn]).apply(lambda x: Series([mean(x['mean']), std(x['mean'])],
+                                                                               index=['imean', 'istd'])).reset_index()
+        if 'exp_' in masks.keys():
+            for c, thr, foo in masks['exp_']:
+                m = (foo(dfl_mean_std3[c], thr))
+                m0 &= m
+            dfl_mean_std3 = dfl_mean_std3.loc[m0].copy()
+
+        reps = list(filter(lambda x: args.items() <= x[0].items(), args_reports_list))
+        for args_reps, df_lit in reps:
+            m0 = Series([True]*df_lit.shape[0], df_lit.index)
+            for c, thr, foo in masks['literature']:
+                m = (foo(df_lit[c], thr))
+                m0 &= m
+            df_aux = df_lit.loc[m0].copy().reset_index()
+            df_cmp = merge(df_aux, dfl_mean_std3[[up, dn, 'imean']],
+                           how='inner', on=o_columns)
+            print('literature datapoints {0} out of {1}; '
+                  'after merging onto claims : {2}'.format(df_aux.shape[0],
+                                                           df_lit.shape[0], df_cmp.shape[0]))
+            results.append((args_reps, df_cmp))
+    return results
+
+
+def obtain_crosssection2(args_lincs_std_list, args_reports_list, extra_masks, verbose=False):
+    df_acc = DataFrame()
+    for args, df_exp in args_lincs_std_list:
+        m0 = Series([True]*df_exp.shape[0], df_exp.index)
+        for c, thr, foo in extra_masks['exp']:
+            m = (foo(df_exp[c], thr))
+            m0 &= m
+        dfl_mean_std2 = df_exp.loc[m0].copy()
+        if verbose:
+            print('total number of statement passing experimental masking '
+                  '(before cell-line group-by) {0} out of {1}'.format(sum(m0), m0.shape[0]))
+        # calculate mean and std across cell lines
+        dfl_mean_std3 = dfl_mean_std2.groupby([up, dn]).apply(lambda x: Series([mean(x['mean']), std(x['mean'])],
+                                                                               index=['imean', 'istd'])).reset_index()
+        if 'exp_' in extra_masks.keys():
+            m0 = Series([True] * dfl_mean_std3.shape[0], dfl_mean_std3.index)
+
+            for c, thr, foo in extra_masks['exp_']:
+                m = (foo(dfl_mean_std3[c], thr))
+                m0 &= m
+            dfl_mean_std3 = dfl_mean_std3.loc[m0].copy()
+
+        if verbose:
+            print('total number of statement passing experimental masking '
+                  'after cell-line group-by {0} out of {1}'.format(sum(m0), m0.shape[0]))
+        # choose reports
+        reps = list(filter(lambda x: args.items() <= x[0].items(), args_reports_list))
+        for args_reps, df_lit in reps:
+            m0 = Series([True]*df_lit.shape[0], df_lit.index)
+            for c, thr, foo in extra_masks['literature']:
+                m = (foo(df_lit[c], thr))
+                m0 &= m
+            # [up, dn, 'freq', 'pi_last']
+            tmp = df_lit.loc[m0].copy()
+            tmp2 = DataFrame.from_dict(args_reps, orient='index').T
+            tmp3 = DataFrame(tile(tmp2.values, (len(tmp.index), 1)),
+                             index=tmp.index, columns=tmp2.columns)
+            tmp4 = merge(tmp, tmp3, left_index=True, right_index=True)
+            df_cmp = merge(tmp4, dfl_mean_std3[[up, dn, 'imean']], how='inner', on=o_columns)
+            if verbose:
+                print('literature datapoints {0}'
+                      'after merging onto claims : {2}'.format(df_lit.shape[0], df_cmp.shape[0]))
+            df_acc = concat([df_cmp, df_acc])
+    return df_acc
+
+
+#TODO extend cutting_schedule to []
+
+def compute_correlations(args_lincs_std_list, args_reports_list, cutting_schedule, extra_masks,
+                         round_delta_y=False, delta=0.1, x0=0.0, verbose=False):
     results = []
     cutting_column, levels = cutting_schedule
 
@@ -20,40 +106,49 @@ def compute_correlations(args_lincs_std_list, args_reports_list, cutting_schedul
             m = (foo(df_exp[c], thr))
             m0 &= m
         dfl_mean_std2 = df_exp.loc[m0].copy()
-        print('total number of degenerate (diff cell lines) claims {0}; {1}'.format(m.shape, sum(m)))
+        if verbose:
+            print('total number of statement passing experimental masking '
+                  '(before cell-line group-by) {0} out of {1}'.format(sum(m0), m0.shape[0]))
         # calculate mean and std across cell lines
         dfl_mean_std3 = dfl_mean_std2.groupby([up, dn]).apply(lambda x: Series([mean(x['mean']), std(x['mean'])],
                                                                                index=['imean', 'istd'])).reset_index()
+        if 'exp_' in extra_masks.keys():
+            m0 = Series([True] * dfl_mean_std3.shape[0], dfl_mean_std3.index)
+
+            for c, thr, foo in extra_masks['exp_']:
+                m = (foo(dfl_mean_std3[c], thr))
+                m0 &= m
+            dfl_mean_std3 = dfl_mean_std3.loc[m0].copy()
+
+        if verbose:
+            print('total number of statement passing experimental masking '
+                  'after cell-line group-by {0} out of {1}'.format(sum(m0), m0.shape[0]))
         # choose reports
         reps = list(filter(lambda x: args.items() <= x[0].items(), args_reports_list))
         for args_reps, df_lit in reps:
-            print(args_reps)
             m0 = Series([True]*df_lit.shape[0], df_lit.index)
             for c, thr, foo in extra_masks['literature']:
                 m = (foo(df_lit[c], thr))
                 m0 &= m
             df_aux = df_lit.loc[m0].copy()
-            print('given lit df', df_lit.shape, df_aux.shape)
-            sm_last = -1
             for lo, hi in zip(levels[:-1], levels[1:]):
                 mlo = (df_aux[cutting_column] >= lo)
                 mhi = (df_aux[cutting_column] < hi)
                 sm = sum(mlo & mhi)
-                print('lo and hi:', lo, hi, sm)
-                if sm > 2:
-                    df2 = df_aux.loc[mlo & mhi].copy()
-
-                    df_cmp = merge(df2[[up, dn, 'freq', 'pi_last']], dfl_mean_std3[[up, dn, 'imean']],
-                                   how='inner', on=o_columns)
-                    print(df_lit.shape, df_cmp.shape, dfl_mean_std3.shape)
-
-                    print('level: {3:.2f}; experimentally accepted pairs {0} out of {1}; '
-                          'after merging onto claims : {2}'.format(sum(mlo & mhi), mlo.shape[0], df_cmp.shape[0], lo))
-
+                df_cmp = merge(df_aux.loc[mlo & mhi, [up, dn, 'freq', 'pi_last', cutting_column]],
+                               dfl_mean_std3[[up, dn, 'imean']],
+                               how='inner', on=o_columns)
+                if verbose:
+                    print('levels: [{3:.2f}; {4:.2f}); literature datapoints {0} out of {1}; '
+                          'after merging onto claims : {2}'.format(sm, df_lit.shape[0], df_cmp.shape[0], lo, hi))
+                size = df_cmp.shape[0]
+                if size > 4:
                     x = df_cmp['imean'].values
                     y = df_cmp['freq'].values
                     z = df_cmp['pi_last'].values
-                    size = df_cmp.shape[0]
+                    if round_delta_y and delta > 0.:
+                        y = array(list(map(lambda w: round_to_delta(w, delta, x0), y)))
+                        z = array(list(map(lambda w: round_to_delta(w, delta, x0), z)))
 
                     cov_freq_ = corrcoef(x, y)[0, 1]
                     cov_flat_ = corrcoef(x, z)[0, 1]
@@ -63,17 +158,15 @@ def compute_correlations(args_lincs_std_list, args_reports_list, cutting_schedul
                     lit_mean = y.mean()
                     lit_std = y.std()
 
-                    if sm != sm_last:
-                        res_dict = {}
-                        res_dict.update(args_reps)
-                        res_dict.update(dict(zip(['size', level_mean, level_lo, level_hi,
-                                                  'cor_freq', 'cor_model',
-                                                  'e_mean', 'e_std', 'l_mean', 'l_std'],
-                                                 [size, 0.5 * (lo + hi), lo, hi,
-                                                  cov_freq_, cov_flat_,
-                                                  exp_mean, exp_std, lit_mean, lit_std])))
-                        results.append(res_dict)
-                    sm_last = sm
+                    res_dict = {}
+                    res_dict.update(args_reps)
+                    res_dict.update(dict(zip(['size', level_mean, level_lo, level_hi,
+                                              'cor_freq', 'cor_model',
+                                              'e_mean', 'e_std', 'l_mean', 'l_std'],
+                                             [size, 0.5 * (lo + hi), lo, hi,
+                                              cov_freq_, cov_flat_,
+                                              exp_mean, exp_std, lit_mean, lit_std])))
+                    results.append(res_dict)
 
     df_out = DataFrame.from_dict(results)
     return df_out
@@ -111,10 +204,11 @@ def extract_xy_werrors(df, subset_spec, xcolumn, ycolumn, x_ext_names=None, y_ex
     return xs, ys
 
 
-def plot_subsets(df, masks, ycols, markers, marker_names, title, location='upper left', save_file=False):
+def plot_subsets(df, masks, xcol, ycols, markers, marker_names, title, location='upper left',
+                 logx=False, logy=False,
+                 save_file=False):
     lwidth = 1.4
     msize = 16
-    xcol = 'delta_year'
     extensions = ['lo', 'mean', 'hi']
 
     arrays = [extract_xy_werrors(df, mask, xcol, ycol, extensions) for mask, ycol in zip(masks, ycols)]
@@ -128,6 +222,10 @@ def plot_subsets(df, masks, ycols, markers, marker_names, title, location='upper
                    zip(xs, ys, xerrs, markers)]
 
     lines = [ax.errorbar(**pars) for pars in kwargs_list]
+    if logx:
+        ax.set_xscale('log')
+    if logy:
+        ax.set_yscale('log')
 
     ax.grid(b=True, which='major', color='k', linestyle='--')
     ax.legend(lines, marker_names, loc=location, frameon=True,
