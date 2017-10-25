@@ -543,7 +543,7 @@ def fit_model_f(data_dict, n_features, plot_fits=False,
             beta_f = [pm.Normal('beta_{0}'.format(i + 1), mu=0, sd=4) for i in range(n_features)]
             beta_dummy = pm.Lognormal('beta0', mu=0, tau=0.25)
             pi_priors = {k:
-                             [pm.Dirichlet('pi_{0}_{1}'.format(k, letter), a=ones(n_modes)) for letter in intervals_enum]
+                         [pm.Dirichlet('pi_{0}_{1}'.format(k, letter), a=ones(n_modes)) for letter in intervals_enum]
                          for k in data_dict.keys()}
             t0s = {k: pm.Dirichlet('t0_{0}'.format(k), a=ones(len(intervals_enum))) for k in
                    data_dict.keys()}
@@ -655,7 +655,9 @@ def fit_model_e(data_dict, reportname_prefix='rep', report_path='./',
     # here timestep_prior is a partion of unity (sums to one)
     # minimum number of datapoints for estimating freq. of the terminal interval
 
-    n_min = 6
+    # could be adjusted to 6
+    # n_min = 6
+    n_min = 2
 
     logger = mp.get_logger()
     t0 = time.time()
@@ -676,7 +678,9 @@ def fit_model_e(data_dict, reportname_prefix='rep', report_path='./',
             report[k]['len'] = data_dict[k].shape[1]
             report[k]['freq'] = float(sum(v[-1])) / v.shape[1]
 
-        for k, v in data_dict.items():
+        kkeys = sorted(data_dict.keys())
+        for k in kkeys:
+            v = data_dict[k]
             t, y = v[[0, -1], :]
             args = t.argsort()
             interest_index %= len(timestep_prior)
@@ -689,15 +693,22 @@ def fit_model_e(data_dict, reportname_prefix='rep', report_path='./',
             section_cumsum = [ts[0] - 1e-8] + list(cumsum(ssection))
             masks = [(x < ts) & (ts <= y) for x, y in zip(section_cumsum[:-1], section_cumsum[1:])]
 
-            flag, yest = find_minimum_length_interval(masks, ts, ys, n_min, interest_index)
+            if ys.shape[0] >= 2:
+                flag, yest = find_minimum_length_interval(masks, ts, ys, n_min, interest_index)
+                # inds = [int(len(ys) * j / len(timestep_prior)) for j in range(len(timestep_prior))] + [len(ys) + 1]
+                # ys_cut = [ys[k:m] for k, m in zip(inds[:-1], inds[1:])]
+                #
+                # yest = ys_cut[interest_index]
+                if yest.shape[0] != 0:
+                    report[k]['pi_last'] = float(sum(yest))/yest.shape[0]
+                else:
+                    report[k]['pi_last'] = report[k]['freq']
+                report[k]['len_last'] = yest.shape[0]
 
-            # inds = [int(len(ys) * j / len(timestep_prior)) for j in range(len(timestep_prior))] + [len(ys) + 1]
-            # ys_cut = [ys[k:m] for k, m in zip(inds[:-1], inds[1:])]
-            #
-            # yest = ys_cut[interest_index]
+            else:
+                report[k]['pi_last'] = ys[interest_index]/ys.shape[0]
+                report[k]['len_last'] = 1
 
-            report[k]['pi_last'] = float(sum(yest))/yest.shape[0]
-            report[k]['len_last'] = yest.shape[0]
         t2 = time.time()
 
         rname = '{0}.pgz'.format(reportname_prefix)
@@ -706,9 +717,10 @@ def fit_model_e(data_dict, reportname_prefix='rep', report_path='./',
             pickle.dump(report, fp)
 
         logger.info('naive model of batch {1} took {0:.2f} sec'.format(t2 - t1, list(data_dict.keys())))
+
     logger.info('Calculation of batch id took {0:.2f} sec'.format(t2 - t0))
 
-    return report
+    return None
 
 
 def find_minimum_length_interval(masks, ts, ys, n_min, interest_index):
@@ -722,7 +734,8 @@ def find_minimum_length_interval(masks, ts, ys, n_min, interest_index):
                 # j = m.shape[0] - argmax(m[::-1]) - 1
                 logger.info('types: {0} {1}'.format(type(argmin(~m) + n_min - 1), type(ts.shape[0])))
                 logger.info('values: {0} {1}'.format(argmin(~m) + n_min - 1, ts.shape[0]))
-                # print('!!!', argmin(~m) + n_min - 1, ts.shape[0] - 1, min(argmin(~m) + n_min - 1, ts.shape[0] - 1), ts.shape)
+                # print('!!!', argmin(~m) + n_min - 1, ts.shape[0] - 1,
+                # min(argmin(~m) + n_min - 1, ts.shape[0] - 1), ts.shape)
                 t0 = ts[min([int(argmin(~m) + n_min - 1), int(ts.shape[0] - 1)])]
                 m_t0 = (ts == t0)
                 j = m.shape[0] - argmax(m_t0[::-1])
@@ -735,7 +748,7 @@ def find_minimum_length_interval(masks, ts, ys, n_min, interest_index):
             else:
                 yest = ys[m]
         elif interest_index > 0:
-            flag, yest = find_minimum_length_interval(masks, ys, n_min, interest_index-1)
+            flag, yest = find_minimum_length_interval(masks, ts, ys, n_min, interest_index-1)
         elif interest_index == 0:
             flag = True
             yest = ys[:n_min]
