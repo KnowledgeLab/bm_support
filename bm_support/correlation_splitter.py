@@ -1,7 +1,13 @@
 from pandas import Series, DataFrame, merge, concat
-from numpy import std, mean, corrcoef, array, tile
+from numpy import std, mean, corrcoef, array, tile, concatenate, log10, arange
+from datahelpers.dftools import get_multiplet_to_int_index
 from os.path import expanduser
 from matplotlib.pyplot import subplots
+from sklearn import linear_model, cross_validation
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.model_selection import StratifiedKFold, KFold
+from sklearn.preprocessing import MinMaxScaler
+from scipy import stats
 
 up = 'up'
 dn = 'dn'
@@ -63,6 +69,7 @@ def obtain_crosssection2(args_lincs_std_list, args_reports_list, extra_masks, ve
             m0 = Series([True] * dfl_mean_std3.shape[0], dfl_mean_std3.index)
 
             for c, thr, foo in extra_masks['exp_']:
+                print(c, thr)
                 m = (foo(dfl_mean_std3[c], thr))
                 m0 &= m
             dfl_mean_std3 = dfl_mean_std3.loc[m0].copy()
@@ -79,15 +86,20 @@ def obtain_crosssection2(args_lincs_std_list, args_reports_list, extra_masks, ve
                 m0 &= m
             # [up, dn, 'freq', 'pi_last']
             tmp = df_lit.loc[m0].copy()
-            tmp2 = DataFrame.from_dict(args_reps, orient='index').T
+            tmp2 = DataFrame(Series(args_reps)).T
             tmp3 = DataFrame(tile(tmp2.values, (len(tmp.index), 1)),
                              index=tmp.index, columns=tmp2.columns)
             tmp4 = merge(tmp, tmp3, left_index=True, right_index=True)
             df_cmp = merge(tmp4, dfl_mean_std3[[up, dn, 'imean']], how='inner', on=o_columns)
             if verbose:
-                print('literature datapoints {0}'
-                      'after merging onto claims : {2}'.format(df_lit.shape[0], df_cmp.shape[0]))
+                print('literature datapoints {0} '
+                      'after merging onto claims : {1}'.format(df_lit.shape[0], df_cmp.shape[0]))
+            if verbose:
+                print('df_cmp {0} '
+                      'df_acc : {1}'.format(df_cmp.shape, df_acc.shape))
             df_acc = concat([df_cmp, df_acc])
+    if verbose:
+        print('final df_acc : {0}'.format(df_acc.shape))
     return df_acc
 
 
@@ -237,3 +249,48 @@ def plot_subsets(df, masks, xcol, ycols, markers, marker_names, title, location=
         fig_title = title.replace(' ', '_')
         ffig_title = expanduser('~/data/kl/figs/') + fig_title + '.pdf'
         fig.savefig(ffig_title)
+
+
+def pivot_cased_df(df, index_columns=o_columns, new_index='ii', columns_to_pivot='case', values_to_pivot='pi_last'):
+    dfind = get_multiplet_to_int_index(df, index_columns, new_index)
+    pivoted = dfind.pivot(index=new_index, columns=columns_to_pivot, values=values_to_pivot)
+    pivoted = pivoted.rename(columns=dict(zip(pivoted.columns, ['est_{0}'.format(c) for c in pivoted.columns])))
+    df0 = merge(pivoted, dfind, right_on=new_index, left_index=True, how='right').drop_duplicates(new_index)
+    return df0
+
+
+def linear_regression_routine(args_lincs_std_list, args_reports_list, feature_cols, extra_masks, fit_intercept=False):
+    # strength of the signal window
+
+    dfr = obtain_crosssection2(args_lincs_std_list, args_reports_list, extra_masks, verbose=True)
+    dfp = pivot_cased_df(dfr)
+    lr = linear_model.LinearRegression(fit_intercept=fit_intercept, normalize=False)
+    # cross_val_predict returns an array of the same size as `y` where each entry
+    # is a prediction obtained by cross validation:
+
+    # skf = StratifiedKFold(n_splits=5)
+    skf = KFold(n_splits=3)
+
+    X = dfp[feature_cols].values
+    y = dfp['imean'].values
+    sc = MinMaxScaler()
+
+    report = {'coefs': [], 'intercept': [], 'r2_score': [],
+              'p_values': [], 't_stats': []}
+
+    X = sc.fit_transform(X)
+
+    for train_index, test_index in skf.split(X, y):
+        X_train, X_test = X[train_index], X[test_index]
+        y_train, y_test = y[train_index], y[test_index]
+        lr.fit(X_train, y_train)
+        y_pred = lr.predict(X_test)
+        report['intercept'].append(lr.intercept_)
+        report['coefs'].append(lr.coef_)
+        report['r2_score'].append(r2_score(y_test, y_pred))
+        t_stats = (sum((y_test - y_pred) ** 2) / (y_pred.shape[0] - 2))**0.5 / \
+                  (sum((X_test - mean(X_test)) ** 2)) ** 0.5
+        report['t_stats'].append(t_stats)
+        p_values = 1. - stats.t.cdf(t_stats, df=y_pred.shape[0]-2)
+        report['p_values'].append(p_values)
+    return report

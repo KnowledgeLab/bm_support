@@ -13,7 +13,7 @@ def get_id_up_dn_df(fpath, origin, n, a, b, version):
     # load id up dn freq DataFrame
     prefix_str = 'pairs_freq_{0}_v_{1}_n_{2}_a_{3}_b_{4}.csv.gz'.format(origin, version, n, a, b)
     df = read_csv(join(fpath, prefix_str),
-                  compression='gzip', index_col=2)
+                  compression='gzip', index_col=0)
     return df
 
 

@@ -229,8 +229,10 @@ if __name__ == "__main__":
     for p in processes:
         p.start()
 
+    print('pro start')
     for p in processes:
         p.join()
+    print('pro joined')
 
     # super_results_list = [qu.get() for p in processes]
 
