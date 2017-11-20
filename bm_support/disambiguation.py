@@ -150,8 +150,8 @@ def split_df(df, n_pieces):
     return dfs
 
 
-def generate_fnames(j):
-    return {'fname': expanduser('~/tmp/affiliation_alpha_beta_{0}.csv.gz'.format(j))}
+def generate_fnames(tmp_path, j):
+    return {'fname': '{0}/affiliation_alpha_beta_{1}.csv.gz'.format(tmp_path, j)}
 
 
 def wrapper_disabmi(dfa, dfb, targets, fname, full_report=False):
