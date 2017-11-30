@@ -9,9 +9,9 @@ dn = 'dn'
 o_columns = [up, dn]
 
 
-def get_id_up_dn_df(fpath, origin, n, a, b, version):
+def get_id_up_dn_df(fpath, origin, cutoff_len, a, b, version, **kwargs):
     # load id up dn freq DataFrame
-    prefix_str = 'pairs_freq_{0}_v_{1}_n_{2}_a_{3}_b_{4}.csv.gz'.format(origin, version, n, a, b)
+    prefix_str = 'pairs_freq_{0}_v_{1}_n_{2}_a_{3}_b_{4}.csv.gz'.format(origin, version, cutoff_len, a, b)
     df = read_csv(join(fpath, prefix_str),
                   compression='gzip', index_col=0)
     return df
@@ -46,12 +46,15 @@ def get_reports(fpath, origin, version, datatype, batchsize, n, a, b, func, case
 
 
 def get_up_dn_report(fpath_reps, fpath,
-                     origin, version, datatype, batchsize, n, a, b, func, case, filter_out=[],
-                     old_format=False):
+                     origin, version, datatype, batchsize, cutoff_len, a, b,
+                     func, case, filter_out=[],
+                     old_format=False, **kwargs):
     # attach [up, dn] to reports
-    df_pairs = get_id_up_dn_df(fpath, origin, n, a, b, version)
+    df_pairs = get_id_up_dn_df(fpath, origin, cutoff_len, a, b, version)
+    print(df_pairs.shape)
     reports_df = get_reports(fpath_reps, origin, version, datatype, batchsize,
-                             n, a, b, func, case, filter_out, old_format)
+                             cutoff_len, a, b, func, case, filter_out, old_format)
+    print(reports_df.shape)
     if 'len' in reports_df.columns:
         del reports_df['len']
     # df_merged = merge(df_pairs[o_columns], reports_df, right_index=True, left_index=True, how='right')
@@ -59,10 +62,10 @@ def get_up_dn_report(fpath_reps, fpath,
     return df_merged
 
 
-def get_lincs_df(fpath, origin, version, n, a, b):
+def get_lincs_df(fpath, origin, version, cutoff_len, a, b, **kwargs):
     # load lincs data
-    # fpath = expanduser('~/data/kl/claims')
-    df = read_csv(join(fpath, 'lincs_{0}_v_{1}_n_{2}_a_{3}_b_{4}.csv.gz'.format(origin, version, n, a, b)),
+    df = read_csv(join(fpath, 'lincs_{0}_v_{1}_n_{2}_a_{3}_b_{4}.csv.gz'.format(origin, version,
+                                                                                cutoff_len, a, b)),
                   compression='gzip')
     return df
 

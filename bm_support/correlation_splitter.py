@@ -3,9 +3,9 @@ from numpy import std, mean, corrcoef, array, tile, concatenate, log10, arange
 from datahelpers.dftools import get_multiplet_to_int_index
 from os.path import expanduser
 from matplotlib.pyplot import subplots
-from sklearn import linear_model, cross_validation
+from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.model_selection import StratifiedKFold, KFold
+from sklearn.model_selection import KFold
 from sklearn.preprocessing import MinMaxScaler
 from scipy import stats
 
@@ -162,23 +162,31 @@ def compute_correlations(args_lincs_std_list, args_reports_list, cutting_schedul
                         y = array(list(map(lambda w: round_to_delta(w, delta, x0), y)))
                         z = array(list(map(lambda w: round_to_delta(w, delta, x0), z)))
 
-                    cov_freq_ = corrcoef(x, y)[0, 1]
-                    cov_flat_ = corrcoef(x, z)[0, 1]
+                    std_x = std(x)
+                    std_y = std(y)
+                    std_z = std(z)
+                    if std_x > 0 and std_y > 0 and std_z > 0:
+                        cov_freq_ = corrcoef(x, y)[0, 1]
+                        cov_flat_ = corrcoef(x, z)[0, 1]
 
-                    exp_mean = x.mean()
-                    exp_std = x.std()
-                    lit_mean = y.mean()
-                    lit_std = y.std()
+                        cov_freq_err = (1. - cov_freq_**2)/(size**0.5)
+                        cov_flat_err = (1. - cov_flat_**2)/(size**0.5)
+                        exp_mean = x.mean()
+                        exp_std = x.std()
+                        lit_mean = y.mean()
+                        lit_std = y.std()
 
-                    res_dict = {}
-                    res_dict.update(args_reps)
-                    res_dict.update(dict(zip(['size', level_mean, level_lo, level_hi,
-                                              'cor_freq', 'cor_model',
-                                              'e_mean', 'e_std', 'l_mean', 'l_std'],
-                                             [size, 0.5 * (lo + hi), lo, hi,
-                                              cov_freq_, cov_flat_,
-                                              exp_mean, exp_std, lit_mean, lit_std])))
-                    results.append(res_dict)
+                        res_dict = {}
+                        res_dict.update(args_reps)
+                        res_dict.update(dict(zip(['size', level_mean, level_lo, level_hi,
+                                                  'cor_freq', 'cor_model',
+                                                  'cor_freq_err', 'cor_model_err',
+                                                  'e_mean', 'e_std', 'l_mean', 'l_std'],
+                                                 [size, 0.5 * (lo + hi), lo, hi,
+                                                  cov_freq_, cov_flat_,
+                                                  cov_freq_err, cov_flat_err,
+                                                  exp_mean, exp_std, lit_mean, lit_std])))
+                        results.append(res_dict)
 
     df_out = DataFrame.from_dict(results)
     return df_out
