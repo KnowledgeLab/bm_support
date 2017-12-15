@@ -1,5 +1,6 @@
 from pandas import Series, DataFrame, merge, concat
-from numpy import std, mean, corrcoef, array, tile, concatenate, log10, arange
+from numpy import std, mean, corrcoef, array, tile, arctanh, tanh, concatenate, log10, arange
+from scipy.stats import t
 from datahelpers.dftools import get_multiplet_to_int_index
 from os.path import expanduser
 from matplotlib.pyplot import subplots
@@ -12,6 +13,18 @@ from scipy import stats
 up = 'up'
 dn = 'dn'
 o_columns = [up, dn]
+
+
+def corr_errs(c, n, confidence=0.95):
+    if n > 3:
+        rho = arctanh(c)
+        se = 1./(n-3)**0.5
+        h = se * t.ppf(0.5*(1 + confidence), n-1)
+        left_, right_ = rho - h, rho + h
+        left, right = tanh(left_), tanh(right_)
+        return c - left, right - c
+    else:
+        return None
 
 
 def round_to_delta(x, delta, x0=0.0):
@@ -171,6 +184,10 @@ def compute_correlations(args_lincs_std_list, args_reports_list, cutting_schedul
 
                         cov_freq_err = (1. - cov_freq_**2)/(size**0.5)
                         cov_flat_err = (1. - cov_flat_**2)/(size**0.5)
+
+                        cov_freq_err_left, cov_freq_err_right = corr_errs(cov_freq_, size)
+                        cov_flat_err_left, cov_flat_err_right = corr_errs(cov_flat_, size)
+
                         exp_mean = x.mean()
                         exp_std = x.std()
                         lit_mean = y.mean()
@@ -180,11 +197,14 @@ def compute_correlations(args_lincs_std_list, args_reports_list, cutting_schedul
                         res_dict.update(args_reps)
                         res_dict.update(dict(zip(['size', level_mean, level_lo, level_hi,
                                                   'cor_freq', 'cor_model',
-                                                  'cor_freq_err', 'cor_model_err',
+                                                  'cor_freq_err_left', 'cor_freq_err_right',
+
+                                                  'cor_model_err_left', 'cor_model_err_right',
                                                   'e_mean', 'e_std', 'l_mean', 'l_std'],
                                                  [size, 0.5 * (lo + hi), lo, hi,
                                                   cov_freq_, cov_flat_,
-                                                  cov_freq_err, cov_flat_err,
+                                                  cov_freq_err_left, cov_freq_err_right,
+                                                  cov_flat_err_left, cov_flat_err_right,
                                                   exp_mean, exp_std, lit_mean, lit_std])))
                         results.append(res_dict)
 
