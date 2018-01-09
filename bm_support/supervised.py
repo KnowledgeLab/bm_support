@@ -15,8 +15,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.ensemble import RandomForestClassifier
 from bm_support.reporting import get_id_up_dn_df, get_lincs_df
-from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni
+from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp
 from datahelpers.dftools import dict_to_array, accumulate_dicts
+from sklearn.cluster import KMeans
+from .gap_stat import choose_nc
 
 
 def get_dataset(fpath_batches, origin, version, datatype, batchsize, cutoff_len, a, b, **kwargs):
@@ -70,7 +72,7 @@ def load_samples(origin, version, lo, hi, n_batches, cutoff_len):
     return dr
 
 
-def generate_samples(origin, version, lo, hi, n_batches, cutoff_len):
+def generate_samples(origin, version, lo, hi, n_batches, cutoff_len, verbose=False):
     o_columns = [up, dn]
 
     feauture_cols = [ai, ar]
@@ -98,7 +100,8 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len):
 
     largs = [{k: v for k, v in zip(keys, p)} for p in product(*(versions, cutoff_lens))]
     full_largs = [{**invariant_args, **dd} for dd in largs]
-    print(full_largs[0])
+    if verbose:
+        print(full_largs[0])
 
     ids_list = []
     lincs_list = []
@@ -117,14 +120,15 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len):
 
     df[ni] = df[ni].astype(int)
 
-    #experimental
+    # experimental
     dfls = [get_lincs_df(**dd) for dd in full_largs]
     lincs_list.extend(list(zip(full_largs, dfls)))
 
     args_lincs_list = lincs_list
 
+    # consider only the first report
     for args, dfl in args_lincs_list[0:1]:
-        # which reports cases align with current lincs?
+        # find model run reports that align with current lincs item
         ccs = ['pert_itime', 'cell_id', 'pert_idose', 'pert_type', 'is_touchstone']
         cnts = [6, 5, 4, 4, 2]
         acc = []
@@ -144,9 +148,10 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len):
         m4 = (dfl['pert_idose'] == '1 µL') | (dfl['pert_idose'] == '2 µL')
 
         dfc = dfl[m1 & m2 & m3 & m4]
-        print(args)
-        print(dfc['cell_id'].value_counts())
-        print(dfl.shape, dfc.shape)
+        if verbose:
+            print(args)
+            print(dfc['cell_id'].value_counts())
+            print(dfl.shape, dfc.shape)
         dfl_mean_std = dfc.groupby([up, dn, 'pert_type', 'cell_id',
                                     'pert_idose', 'pert_itime',
                                     'is_touchstone']).apply(lambda x: pd.Series([np.mean(x['cdf']), np.std(x['cdf'])],
@@ -156,17 +161,24 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len):
     # pick lincs df
     dfl = args_lincs_std_list[0][1].copy()
     dfl = dfl[o_columns + ['mean']].rename(columns={'mean': 'cdf_exp'})
+    if verbose:
+        print('dfl null cexp: {0}'.format(sum(dfl[cexp].isnull())))
 
     # pick pairs df
     dfid = ids_list[0][1]
 
-    dfexp = pd.merge(dfid.reset_index(), dfl, on=o_columns, how='left')
+    dfexp = pd.merge(dfl, dfid.reset_index(), on=o_columns, how='left')
+    if verbose:
+        print('dfexp null cexp: {0}'.format(sum(dfexp[cexp].isnull())))
 
     dft = pd.merge(dfexp, df, on=ni, how='left')
+    if verbose:
+        print('dft null cexp: {0}'.format(sum(dft[cexp].isnull())))
+
     return dft
 
 
-def stratify_df(df, column, size, frac, seed=17, verbose=False):
+def stratify_df(df, column, size, frac, seed=17):
     """
     take a subsample from df that has frac fraction of the rarest value
     """
@@ -189,6 +201,39 @@ def stratify_df(df, column, size, frac, seed=17, verbose=False):
     df_rare = df.loc[mask].iloc[rare_inds]
     df_rest = df.loc[~mask].iloc[rest_inds]
     dfr = pd.concat([df_rare, df_rest])
+    return dfr
+
+
+def smart_stratify_df(df, column, size=500, ratios=None, replacement=False, seed=17, verbose=False):
+    vc = df[column].value_counts()
+    if verbose:
+        print(vc)
+    if size > df.shape[0]:
+        print('requested sample size is greater than available sample:')
+
+    if isinstance(ratios, (list, tuple)) and len(ratios) == vc.shape[0]:
+        sizes_list = np.array(ratios) / np.sum(ratios)
+        sizes_list = [int(x * size) for x in sizes_list]
+    else:
+        f = 1. / vc.shape[0]
+        sizes_list = [int(f * size)] * vc.shape[0]
+    sizes_list[0] = size - np.sum(sizes_list[1:])
+    if verbose:
+        print('fracs: {0}'.format(sizes_list))
+    masks = [(df[column] == v) for v in vc.index]
+    replacements = [(x > y) or replacement for x, y in zip(sizes_list, vc)]
+    if any(replacements):
+        print('replacements sampling will be used')
+
+    if replacements:
+        print('replacements: {0}'.format(replacements))
+
+    np.random.seed(seed)
+    triplets = list(zip(sizes_list, vc, replacements))
+
+    inds = [np.random.choice(msize, n, r) for n, msize, r in triplets]
+    subdfs = [df.loc[m].iloc[ii] for m, ii in zip(masks, inds)]
+    dfr = pd.concat(subdfs)
     return dfr
 
 
@@ -284,23 +329,32 @@ def quantize_series(s1, thrs, verbose=False):
     return s_out
 
 
-def prepare_xy(df, covariate_columns, stratify=False, statify_size=5000,
-               stratify_frac=0.5, seed=17, verbose=False,
-               exp_column='cdf_exp', thresholds=[-1.e-8, 0.5, 1.0]):
+def define_distance(df, exp_column=cexp, distance_column='guess', quantized_column=qcexp,
+                    thresholds=[-1.e-8, 0.5, 1.0],
+                    verbose=False):
 
+    n_classes = len(thresholds) - 2
     if verbose:
         print(df[ps].value_counts())
 
-    s = quantize_series(df[exp_column], thresholds, verbose)
+    df[quantized_column] = quantize_series(df[exp_column], thresholds, verbose)
 
     if verbose:
-        print(s.value_counts())
+        print(df[quantized_column].value_counts())
 
-    gu = 'guess'
-
-    df[gu] = np.abs(s - df[ps]*(len(thresholds) - 2))
+    df[distance_column] = np.abs(df[quantized_column] - df[ps]*n_classes)
     if verbose:
-        print(df[gu].value_counts(), df[gu].mean())
+        print(df[distance_column].value_counts(), df[distance_column].mean())
+
+    return df
+
+
+def prepare_xy(df, covariate_columns, stratify=False, statify_size=5000,
+               stratify_frac=0.5, seed=17, verbose=False,
+               exp_column='cdf_exp', thresholds=[-1.e-8, 0.5, 1.0],
+               distance_column='guess'):
+
+    df = define_distance(df, exp_column, distance_column, thresholds, verbose)
 
     if verbose:
         for c in covariate_columns:
@@ -308,12 +362,12 @@ def prepare_xy(df, covariate_columns, stratify=False, statify_size=5000,
 
     # prepare stratified sample
     if stratify:
-        df2 = stratify_df(df, gu, statify_size, stratify_frac, seed)
+        df2 = stratify_df(df, distance_column, statify_size, stratify_frac, seed)
     else:
         df2 = df
 
     X = df2[covariate_columns].values
-    y = df2[gu].values
+    y = df2[distance_column].values
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=seed)
 
     return X_train, X_test, y_train, y_test
@@ -365,10 +419,11 @@ def rf_study(X_train, X_test, y_train, y_test, covariate_columns=[],
 
 
 def rf_study_multiclass(X_train, X_test, y_train, y_test, covariate_columns=[],
-                        seed=0, depth=None, fname=None, show=False, title_prefix=None):
+                        seed=0, depth=None, fname=None, show=False, title_prefix=None, n_estimators=20,
+                        return_model=False):
     n_states = len(set(y_test))
     report = {}
-    rf = RandomForestClassifier(max_depth=depth, random_state=seed)
+    rf = RandomForestClassifier(max_depth=depth, random_state=seed, n_estimators=n_estimators)
     rf = rf.fit(X_train, y_train)
     y_pred = rf.predict(X_test)
     report['corr_train_pred'] = np.corrcoef(y_pred, y_test)[0, 1]
@@ -410,7 +465,10 @@ def rf_study_multiclass(X_train, X_test, y_train, y_test, covariate_columns=[],
         plt.show()
     else:
         plt.close()
-    return report
+    if return_model:
+        return report, rf
+    else:
+        return report
 
 
 def plot_importances(importances, stds, covariate_columns, fname, title_prefix, show=False):
@@ -538,8 +596,129 @@ def lr_study(X_train, X_test, y_train, y_test, covariate_columns=[], seed=0, reg
 
 
 def std_over_samples(lengths, means, stds):
+    # https://stats.stackexchange.com/questions/43159/how-to-calculate-pooled-variance-of-two-groups-given-known-group-variances-mean
+    # https://stats.stackexchange.com/questions/30495/how-to-combine-subsets-consisting-of-mean-variance-confidence-and-number-of-s
     total_length = np.sum(lengths)
     total_mean = np.sum(list(map(lambda x: x[0]*x[1], zip(lengths, means))))/total_length
     total_num = np.sum(list(map(lambda x: x[0]*(x[1]**2 + x[2]**2), zip(lengths, means, stds))))
     r = (total_num/total_length - total_mean**2)**0.5
+    return r
+
+
+def invert_bayes(df_input, clf, feature_columns, verbose=False):
+    df = df_input.copy()
+    arr_probs = clf.predict_proba(df[feature_columns])
+    if verbose:
+        print('names of feature columns:', feature_columns)
+        print('probs shape: ', arr_probs.shape)
+    arr_ps = df[ps].values
+    p_min = np.float(5e-1/clf.n_estimators)
+    arr_probs[arr_probs == 0.0] = p_min
+    arr_probs2 = arr_probs/np.sum(arr_probs, axis=1).reshape(-1)[:, np.newaxis]
+
+    tensor_claims = np.stack([1 - arr_ps, arr_ps])
+    tensor_probs = np.stack([arr_probs2, arr_probs2[:, ::-1]])
+    if verbose:
+        print(tensor_claims.shape, tensor_probs.shape)
+    tt = np.multiply(tensor_claims.T, tensor_probs.T)
+    if verbose:
+        print(tt.shape)
+    tt = np.sum(tt, axis=2)
+    if verbose:
+        print(tt.shape)
+    for v, j in zip(tt, range(tt.shape[0])):
+        df['pe_{0}'.format(j)] = v
+    return df
+
+
+def transform_logp(x, barrier=20):
+    y = x.copy()
+    y[y > barrier] = barrier
+    y[y < -barrier] = -barrier
+    return y
+
+
+def aggregate_over_claims(df, barrier):
+    pes = ['pe_{0}'.format(j) for j in range(3)]
+    p_agg = df.groupby(ni).apply(lambda x: np.sum(np.log(x[pes]), axis=0))
+    p_agg2 = p_agg.apply(lambda x: x - sorted(x)[1], axis=1)
+    p_agg3 = p_agg2.apply(lambda x: np.exp(transform_logp(x, barrier)), axis=1)
+    p_agg4 = p_agg3.apply(lambda x: x/np.sum(x), axis=1)
+    p_agg4 = p_agg4.merge(pd.DataFrame(df.drop_duplicates(ni)[[ni, 'qcdf_exp']]),
+                          how='left', left_index=True, right_on=ni)
+    return p_agg4
+
+
+def kmeans_cluster(data, n_classes=2, seed=11, tol=1e-6, verbose=False, return_flags=True):
+    # data shape npoints x ndim
+    # init random state
+    rns = np.random.RandomState(seed)
+    mins = np.min(data, axis=0)
+    maxs = np.max(data, axis=0)
+    mus = [np.array([rns.uniform(x, y) for x, y in zip(mins, maxs)]) for k in range(n_classes)]
+    delta = 1.
+    while delta > tol:
+        # calculate distances
+        dists = [np.sum((data-mu)**2, axis=1)**0.5 for mu in mus]
+        # calculate closest distances
+        args = np.argmin(np.vstack(dists), axis=0)
+        # update mus
+        mus_new = [np.mean(data[args == k], axis=0) for k in range(n_classes)]
+        mus = mus_new
+    mus = sorted(mus, key=lambda y: y[0])
+    dists = [np.sum((data-mu)**2, axis=1)**0.5 for mu in mus]
+    # predicted classes
+    args = np.argmin(np.vstack(dists), axis=0)
+    if verbose:
+        print('sum:', np.sum(args))
+    stds = [np.std(data[args == k], axis=0) for k in range(n_classes)]
+
+    def replace_zeros(x):
+        x[x == 0] = 1.
+        return x
+    # replace zeros in stds (if all datapoints from a class are a constant)
+    stds = [replace_zeros(s) for s in stds]
+
+    if return_flags:
+        # tensor of closest mus
+        mu_tensor = np.dot(np.stack([1 - args, args]).T, np.stack(mus))
+        # tensor of closest stds
+        std_tensor = np.dot(np.stack([1 - args, args]).T, np.stack(stds))
+        # vector of relative
+        diffs = (data - mu_tensor)/std_tensor
+#         return args, diffs
+        return np.append(args.reshape((-1, 1)), diffs, axis=1)
+    else:
+        return mus, stds
+
+
+def replace_zeros(x):
+    x[x == 0] = 1.
+    return x
+
+
+def identify_intracluster_distances(data, n_classes=2, seed=11, tol=1e-6, verbose=False):
+    km = KMeans(n_classes, tol=tol, random_state=seed)
+    args = km.fit_predict(data)
+    mus = sorted(km.cluster_centers_, key=lambda y: y[0])
+    mu_order = np.argsort(list(map(lambda x: x[0], km.cluster_centers_)))
+    stds = [np.std(data[args == k], axis=0) for k in range(n_classes)]
+    # replace zeros in stds (if all datapoints from a class are a constant)
+    stds = [replace_zeros(s) for s in stds]
+    aligned_args = np.array([mu_order[a] for a in args])
+    # tensor of closest mus
+    local_mu = np.stack([km.cluster_centers_[j] for j in args])
+    local_stds = np.stack([stds[j] for j in args])
+    dists = (data - local_mu)/local_stds
+    acc = np.stack([np.repeat(n_classes, data.shape[0]), aligned_args], axis=1)
+    acc = np.append(acc, dists, axis=1)
+    return acc
+
+
+def cluster_optimally(data, nc_max=5):
+    nc = choose_nc(data, nc_max)
+    if nc > 0:
+        r = identify_intracluster_distances(data, nc)
+    else:
+        r = None
     return r
