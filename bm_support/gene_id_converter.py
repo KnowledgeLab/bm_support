@@ -6,6 +6,7 @@ from itertools import permutations
 types = ['hgnc_id', 'entrez_id', 'symbol']
 enforce_ints = ['entrez_id']
 
+
 class GeneIdConverter(object):
 
     def __init__(self, fpath, types_list, enforce_int):

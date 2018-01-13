@@ -15,7 +15,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.ensemble import RandomForestClassifier
 from bm_support.reporting import get_id_up_dn_df, get_lincs_df
-from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp
+from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, nw, wi
 from datahelpers.dftools import dict_to_array, accumulate_dicts
 from sklearn.cluster import KMeans
 from .gap_stat import choose_nc
@@ -72,24 +72,20 @@ def load_samples(origin, version, lo, hi, n_batches, cutoff_len):
     return dr
 
 
-def generate_samples(origin, version, lo, hi, n_batches, cutoff_len, verbose=False):
+def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
+                     data_columns=[ye, iden, ai, ar, ps], complete_agg=True, verbose=False):
     o_columns = [up, dn]
 
-    feauture_cols = [ai, ar]
-    data_columns = [ye, iden] + feauture_cols + [ps]
     data_cols = '_'.join(data_columns)
 
-    origin_cur = origin
     batchsize = n_batches
-    versions = [version]
 
-    cutoff_lens = [cutoff_len]
-    keys = ('version', 'cutoff_len', 'case')
-
+    keys = ('version', 'cutoff_len')
+    values = (version, cutoff_len)
     batches_path = expanduser('~/data/kl/batches')
 
     invariant_args = {
-        'origin': origin_cur,
+        'origin': origin,
         'datatype': data_cols,
         'batchsize': batchsize,
         'a': lo,
@@ -98,80 +94,40 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len, verbose=Fal
         'fpath_batches': batches_path
     }
 
-    largs = [{k: v for k, v in zip(keys, p)} for p in product(*(versions, cutoff_lens))]
-    full_largs = [{**invariant_args, **dd} for dd in largs]
-    if verbose:
-        print(full_largs[0])
+    larg = {k: v for k, v in zip(keys, values)}
+    print(larg)
+    full_arg = {**invariant_args, **larg}
+    print(full_arg)
+    df_stats = get_id_up_dn_df(**full_arg)
 
-    ids_list = []
-    lincs_list = []
-
-    dfs = [get_id_up_dn_df(**dd) for dd in full_largs]
-    ids_list.extend(list(zip(full_largs, dfs)))
-
-    datasets = [get_dataset(**dd) for dd in full_largs]
-
-    # pick literature df
-    ds = datasets[0]
-
-    dr = accumulate_dicts(ds)
+    # list of dicts of numpy arrays
+    dataset = get_dataset(**full_arg)
+    dr = accumulate_dicts(dataset)
     arr2 = dict_to_array(dr)
-    df = pd.DataFrame(arr2.T, columns=([ni] + data_columns))
-
-    df[ni] = df[ni].astype(int)
+    df_claims = pd.DataFrame(arr2.T, columns=([ni] + data_columns))
+    df_claims[ni] = df_claims[ni].astype(int)
 
     # experimental
-    dfls = [get_lincs_df(**dd) for dd in full_largs]
-    lincs_list.extend(list(zip(full_largs, dfls)))
+    df_exp = get_lincs_df(**full_arg)
+    # df_exp['cdf'] = df_exp['score'].apply(lambda x: norm.cdf(x))
+    m1 = (df_exp['pert_type'] == 'trt_oe')
+    m2 = (df_exp['pert_itime'] == '96 h')
+    m3 = (df_exp['is_touchstone'] == 1)
+    m4 = (df_exp['pert_idose'] == '1 µL') | (df_exp['pert_idose'] == '2 µL')
 
-    args_lincs_list = lincs_list
+    df_exp_cut = df_exp[m1 & m2 & m3 & m4]
+    if complete_agg:
+        agg_columns = [up, dn]
+    else:
+        agg_columns = [up, dn, 'pert_type', 'cell_id', 'pert_idose', 'pert_itime', 'is_touchstone']
+    dfe = df_exp_cut.groupby(agg_columns).apply(lambda x:
+                                                pd.Series([np.mean(x['score']), np.std(x['score'])],
+                                                          index=['mean', 'std'])).reset_index()
+    dfe[cexp] = dfe['mean'].apply(lambda x: norm.cdf(x))
 
-    # consider only the first report
-    for args, dfl in args_lincs_list[0:1]:
-        # find model run reports that align with current lincs item
-        ccs = ['pert_itime', 'cell_id', 'pert_idose', 'pert_type', 'is_touchstone']
-        cnts = [6, 5, 4, 4, 2]
-        acc = []
-        for c, i in zip(ccs, cnts):
-            vc = dfl[c].value_counts()
-            suffix = list(vc.iloc[:i].index)
-            acc.append(suffix)
-
-        dfl['cdf'] = dfl['score'].apply(lambda x: norm.cdf(x))
-
-    args_lincs_std_list = []
-    for args, dfl in args_lincs_list:
-        dfl['cdf'] = dfl['score'].apply(lambda x: norm.cdf(x))
-        m1 = (dfl['pert_type'] == 'trt_oe')
-        m2 = (dfl['pert_itime'] == '96 h')
-        m3 = (dfl['is_touchstone'] == 1)
-        m4 = (dfl['pert_idose'] == '1 µL') | (dfl['pert_idose'] == '2 µL')
-
-        dfc = dfl[m1 & m2 & m3 & m4]
-        if verbose:
-            print(args)
-            print(dfc['cell_id'].value_counts())
-            print(dfl.shape, dfc.shape)
-        dfl_mean_std = dfc.groupby([up, dn, 'pert_type', 'cell_id',
-                                    'pert_idose', 'pert_itime',
-                                    'is_touchstone']).apply(lambda x: pd.Series([np.mean(x['cdf']), np.std(x['cdf'])],
-                                                                                index=['mean', 'std'])).reset_index()
-        args_lincs_std_list.append((args, dfl_mean_std))
-
-    # pick lincs df
-    dfl = args_lincs_std_list[0][1].copy()
-    dfl = dfl[o_columns + ['mean']].rename(columns={'mean': 'cdf_exp'})
-    if verbose:
-        print('dfl null cexp: {0}'.format(sum(dfl[cexp].isnull())))
-
-    # pick pairs df
-    dfid = ids_list[0][1]
-
-    dfexp = pd.merge(dfl, dfid.reset_index(), on=o_columns, how='left')
-    if verbose:
-        print('dfexp null cexp: {0}'.format(sum(dfexp[cexp].isnull())))
-
-    dft = pd.merge(dfexp, df, on=ni, how='left')
+    dfe = dfe[o_columns + [cexp, 'std']]
+    dfe2 = pd.merge(dfe, df_stats.reset_index(), on=o_columns, how='left')
+    dft = pd.merge(dfe2, df_claims, on=ni, how='inner')
     if verbose:
         print('dft null cexp: {0}'.format(sum(dft[cexp].isnull())))
 
@@ -330,9 +286,10 @@ def quantize_series(s1, thrs, verbose=False):
 
 
 def define_distance(df, exp_column=cexp, distance_column='guess', quantized_column=qcexp,
-                    thresholds=[-1.e-8, 0.5, 1.0],
+                    thresholds=(-1.e-8, 0.5, 1.0),
                     verbose=False):
-
+    if verbose:
+        print(thresholds)
     n_classes = len(thresholds) - 2
     if verbose:
         print(df[ps].value_counts())
@@ -351,10 +308,11 @@ def define_distance(df, exp_column=cexp, distance_column='guess', quantized_colu
 
 def prepare_xy(df, covariate_columns, stratify=False, statify_size=5000,
                stratify_frac=0.5, seed=17, verbose=False,
-               exp_column='cdf_exp', thresholds=[-1.e-8, 0.5, 1.0],
+               exp_column='cdf_exp', qexp_column=qcexp,
+               thresholds=(-1.e-8, 0.5, 1.0),
                distance_column='guess'):
 
-    df = define_distance(df, exp_column, distance_column, thresholds, verbose)
+    df = define_distance(df, exp_column, distance_column, qexp_column, thresholds, verbose)
 
     if verbose:
         for c in covariate_columns:
@@ -700,7 +658,7 @@ def replace_zeros(x):
 def identify_intracluster_distances(data, n_classes=2, seed=11, tol=1e-6, verbose=False):
     km = KMeans(n_classes, tol=tol, random_state=seed)
     args = km.fit_predict(data)
-    mus = sorted(km.cluster_centers_, key=lambda y: y[0])
+    # mus = sorted(km.cluster_centers_, key=lambda y: y[0])
     mu_order = np.argsort(list(map(lambda x: x[0], km.cluster_centers_)))
     stds = [np.std(data[args == k], axis=0) for k in range(n_classes)]
     # replace zeros in stds (if all datapoints from a class are a constant)
@@ -715,10 +673,24 @@ def identify_intracluster_distances(data, n_classes=2, seed=11, tol=1e-6, verbos
     return acc
 
 
-def cluster_optimally(data, nc_max=5):
+def cluster_optimally_(data, nc_max=2, override_negative=False):
     nc = choose_nc(data, nc_max)
+    if override_negative and nc == -1:
+        nc = 2
     if nc > 0:
         r = identify_intracluster_distances(data, nc)
     else:
         r = None
     return r
+
+
+def cluster_optimally_pd(data, nc_max=2, min_size=5):
+    data_ = data.values
+    if data_.ndim == 1:
+        data_ = data_.reshape(-1, 1)
+    if data_.shape[0] <= min_size:
+        r = np.repeat(np.array([1, 0] + [0]*data_.shape[1])[:, None], data_.shape[0], axis=1).T
+    else:
+        r = cluster_optimally_(data_, nc_max, True)
+    columns = [nw, wi] + ['d{0}'.format(j) for j in range(data_.shape[1])]
+    return pd.DataFrame(r, index=data.index, columns=columns)

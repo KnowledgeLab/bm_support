@@ -31,6 +31,9 @@ def gap_stat(data, nc, nsamples=10, seed=17):
     """
 
     wk_r = calc_wk(data, nc=nc)
+    # protection from zeros
+    if wk_r == 0:
+        wk_r = 1e-10
     # generate uniform samples
     nsize = data.shape[0]*data.shape[1]
     mins = min(data, axis=0)
@@ -38,6 +41,8 @@ def gap_stat(data, nc, nsamples=10, seed=17):
     rns = RandomState(seed)
     random_samples = [rns.uniform(size=nsize).reshape(data.shape)*(maxs-mins) + mins for k in range(nsamples)]
     wks = list(map(lambda x: calc_wk(x, nc=nc), random_samples))
+    # protection from zeros
+    wks = array([wk if wk > 0 else 1e-20 for wk in wks])
     log_wks = log(wks)
     sk = std(log_wks)*sqrt(1. + 1./nsamples)
     gap = mean(log_wks) - log(wk_r)
@@ -46,14 +51,18 @@ def gap_stat(data, nc, nsamples=10, seed=17):
 
 def choose_nc(data, nc_max=3, verbose=False):
     if nc_max > 1:
-        gstats = [gap_stat(data, k) for k in arange(1, nc_max)]
-        ds = [x[0] - y[0] + y[1] for x, y in zip(gstats[:-1], gstats[1:])]
-        if any(array(ds) > 0):
-            nc_opt = argmax(array(ds) > 0) + 1
+        if len(data) > nc_max:
+            gstats = [gap_stat(data, k) for k in arange(1, nc_max+2)]
+            ds = [x[0] - y[0] + y[1] for x, y in zip(gstats[:-1], gstats[1:])]
+            if any(array(ds) > 0):
+                nc_opt = argmax(array(ds) > 5e-2) + 1
+            else:
+                nc_opt = -1
+                if verbose:
+                    print(ds)
+                    print('consider re-running choose_nc() with increased nc_max')
         else:
-            nc_opt = -1
-            if verbose:
-                print('consider re-running choose_nc() with increased nc_max')
+            nc_opt = 1
     else:
         raise ValueError('nc_max should be greater than 1, value {0} supplied instead'.format(nc_max))
     return nc_opt
