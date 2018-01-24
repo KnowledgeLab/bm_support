@@ -504,11 +504,12 @@ def plot_lr_coeffs_with_penalty(alphas, coeff_dict, covariate_names, fname=None,
 def lr_study(X_train, X_test, y_train, y_test, covariate_columns=[], seed=0, regularizer=1.0,
              nfolds=3, fname=None, show=False, title_prefix=None):
     report = {}
-    logreg = LogisticRegression(C=1./regularizer, tol=1e-6, penalty='l1', fit_intercept=False,
+    logreg = LogisticRegression(C=1./regularizer, tol=1e-6, penalty='l1', fit_intercept=True,
                                 random_state=seed, warm_start=True)
     logreg = logreg.fit(X_train, y_train)
 
     rep = dict(zip(covariate_columns, logreg.coef_[0]))
+    rep['intercept'] = logreg.intercept_[0]
     report['coeffs'] = rep
 
     y_pred = logreg.predict(X_test)
@@ -533,16 +534,17 @@ def lr_study(X_train, X_test, y_train, y_test, covariate_columns=[], seed=0, reg
 
     report['class_report'] = classification_report(y_test, y_pred)
 
-    fig, ax = plt.subplots(figsize=(5, 5))
-    ax.plot(fpr, tpr, label='Logistic Regression: area = {0:.3f}'.format(report['auroc']))
-    ax.plot([0, 1], [0, 1], 'r--')
-    ax.set_xlim([0.0, 1.05])
-    ax.set_ylim([0.0, 1.05])
-    ax.axis('equal')
-    ax.set_xlabel('False Positive Rate')
-    ax.set_ylabel('True Positive Rate')
-    ax.set_title('{0} Log Reg ROC'.format(title_prefix))
-    ax.legend(loc="lower right")
+    if fname or show:
+        fig, ax = plt.subplots(figsize=(5, 5))
+        ax.plot(fpr, tpr, label='Logistic Regression: area = {0:.3f}'.format(report['auroc']))
+        ax.plot([0, 1], [0, 1], 'r--')
+        ax.set_xlim([0.0, 1.05])
+        ax.set_ylim([0.0, 1.05])
+        ax.axis('equal')
+        ax.set_xlabel('False Positive Rate')
+        ax.set_ylabel('True Positive Rate')
+        ax.set_title('{0} Log Reg ROC'.format(title_prefix))
+        ax.legend(loc="lower right")
 
     if fname:
         fig.savefig(fname)
@@ -656,20 +658,37 @@ def replace_zeros(x):
 
 
 def identify_intracluster_distances(data, n_classes=2, seed=11, tol=1e-6, verbose=False):
-    km = KMeans(n_classes, tol=tol, random_state=seed)
-    args = km.fit_predict(data)
-    # mus = sorted(km.cluster_centers_, key=lambda y: y[0])
-    mu_order = np.argsort(list(map(lambda x: x[0], km.cluster_centers_)))
-    stds = [np.std(data[args == k], axis=0) for k in range(n_classes)]
-    # replace zeros in stds (if all datapoints from a class are a constant)
-    stds = [replace_zeros(s) for s in stds]
-    aligned_args = np.array([mu_order[a] for a in args])
-    # tensor of closest mus
-    local_mu = np.stack([km.cluster_centers_[j] for j in args])
-    local_stds = np.stack([stds[j] for j in args])
-    dists = (data - local_mu)/local_stds
-    acc = np.stack([np.repeat(n_classes, data.shape[0]), aligned_args], axis=1)
-    acc = np.append(acc, dists, axis=1)
+    if n_classes > 1:
+        km = KMeans(n_classes, tol=tol, random_state=seed)
+        args = km.fit_predict(data)
+        unis = np.unique(args)
+        if n_classes > len(unis):
+            print('Warning {0} classes predict {1} unique membres'.format(n_classes, len(np.unique(args))))
+        centers = np.concatenate([km.cluster_centers_[k] for k in unis])
+        if centers.ndim == 1:
+            centers = centers.reshape(-1, 1)
+        # print(centers, type(centers), centers.shape)
+        mu_order = np.argsort(list(map(lambda x: x[0], centers)))
+        mus = centers[mu_order]
+
+        aligned_args = np.array([mu_order[a] for a in args])
+
+        stds = [np.std(data[aligned_args == k], axis=0) for k in range(len(unis))]
+
+        # replace zeros in stds (if all datapoints from a class are a constant)
+        stds = [replace_zeros(s) for s in stds]
+
+        # tensor of closest mus
+        local_mu = np.stack([mus[j] for j in args])
+        local_stds = np.stack([stds[j] for j in args])
+        dists = np.true_divide(data-local_mu, local_stds, where=(local_stds != 0))
+        acc = np.stack([np.repeat(len(unis), data.shape[0]), aligned_args], axis=1)
+        acc = np.append(acc, dists, axis=1)
+    else:
+        std = data.std(axis=0)
+        data_rel = np.true_divide((data - data.mean(axis=0)), std, where=(std != 0))
+        r = np.repeat(np.array([1, 0])[:, None], data.shape[0], axis=1).T
+        acc = np.hstack([r, data_rel])
     return acc
 
 
@@ -686,11 +705,14 @@ def cluster_optimally_(data, nc_max=2, override_negative=False):
 
 def cluster_optimally_pd(data, nc_max=2, min_size=5):
     data_ = data.values
+
+    # make a matrix
     if data_.ndim == 1:
         data_ = data_.reshape(-1, 1)
-    if data_.shape[0] <= min_size:
-        r = np.repeat(np.array([1, 0] + [0]*data_.shape[1])[:, None], data_.shape[0], axis=1).T
+
+    if data_.shape[0] < min_size:
+        r = identify_intracluster_distances(data_, 1)
     else:
         r = cluster_optimally_(data_, nc_max, True)
-    columns = [nw, wi] + ['d{0}'.format(j) for j in range(data_.shape[1])]
+    columns = [nw, wi] + ['d{0}'.format(j) for j in range(r.shape[1]-2)]
     return pd.DataFrame(r, index=data.index, columns=columns)
