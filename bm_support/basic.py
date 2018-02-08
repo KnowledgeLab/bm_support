@@ -1,4 +1,3 @@
-import pandas as pd
 from scipy import stats
 import datahelpers.dftools as dfto
 import datahelpers.collapse as dc

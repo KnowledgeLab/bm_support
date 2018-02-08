@@ -6,6 +6,7 @@ import pickle
 import gzip
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
+from numpy import histogram, argmin, flatnonzero
 from scipy.stats import norm
 from sklearn.metrics import roc_auc_score, roc_curve, classification_report, confusion_matrix
 from sklearn.linear_model import LogisticRegression
@@ -704,6 +705,7 @@ def cluster_optimally_(data, nc_max=2, override_negative=False):
 
 
 def cluster_optimally_pd(data, nc_max=2, min_size=5):
+    # cluster optimally pandas
     data_ = data.values
 
     # make a matrix
@@ -716,3 +718,122 @@ def cluster_optimally_pd(data, nc_max=2, min_size=5):
         r = cluster_optimally_(data_, nc_max, True)
     columns = [nw, wi] + ['d{0}'.format(j) for j in range(r.shape[1]-2)]
     return pd.DataFrame(r, index=data.index, columns=columns)
+
+
+def groupby_normalize(data):
+    data_ = data.values
+    # make a matrix
+    if data_.ndim == 1:
+        data_ = data_.reshape(-1, 1)
+
+    std = data_.std(axis=0)
+    data_rel = np.true_divide((data_ - data_.mean(axis=0)), std, where=(std != 0))
+    columns = ['{0}'.format(j) for j in range(data_rel.shape[1])]
+    return pd.DataFrame(data_rel, index=data.index, columns=columns)
+
+
+# def optimal_2split(data, verbose=False):
+#     """
+#     data 1d numpy array
+#     """
+#     cnts, bbs = histogram(data)
+#     if verbose:
+#         print(cnts, bbs)
+#     diff = cnts[1:] - cnts[:-1]
+#     derivative_change = diff[1:]*diff[:-1]/np.abs(diff[1:]*diff[:-1])
+#     # sign change indices
+#     ii = flatnonzero(derivative_change == -1)
+#     arg_glo_min = argmin(cnts[1+ii])
+#     lbbs, rbbs = bbs[1+ii[arg_glo_min]], bbs[2+ii[arg_glo_min]]
+#     optimal_split = 0.5*(lbbs + rbbs)
+#     return optimal_split
+
+
+def optimal_2split(data, dicrete=True, equidistant=True, verbose=False):
+    """
+    data 1d numpy array
+    """
+    if dicrete and equidistant:
+        uniqs = np.unique(data)
+        uniqs = np.sort(uniqs)
+        delta_ = (uniqs[1:] - uniqs[:-1]).min()
+        rho_crit = 10
+        n0 = data.shape[0]
+        l = uniqs.max() - uniqs.min()
+        rho_cur = n0/(l/delta_)
+        delta = np.ceil(rho_crit/rho_cur)*delta_
+        bbs = np.arange(uniqs.min() - 0.5*delta, uniqs.max() + 0.5*delta + 1e-6*delta, delta)
+        # n_actual = (bbs[-1] - bbs[0])/delta
+        if verbose:
+            print(bbs)
+    else:
+        bbs = 10
+    cnts, bbs = histogram(data, bbs)
+    diff = cnts[1:] - cnts[:-1]
+    ddif = diff[1:] - diff[:-1]
+    if verbose:
+        print(cnts, bbs)
+        print(list(zip(range(len(cnts)), cnts)), bbs)
+        print('f prime:', diff)
+        print('f double prime:', ddif)
+    # either diff == 0, or
+    derivative_change = diff[1:]*diff[:-1]
+    # sign change indices
+    ii = flatnonzero((derivative_change < 0) & (ddif > 0))
+    jj = flatnonzero(diff == 0)
+    concats = np.concatenate([ii, jj])
+    if verbose:
+        print('candidate indices')
+        print(1+ii, 1+jj)
+        print(concats)
+        print('candidate cnts')
+        print(cnts[1+concats])
+    if concats.size > 0:
+        arg_glo_min = argmin(cnts[1+concats])
+        if arg_glo_min < len(ii):
+            lbbs, rbbs = bbs[1 + concats[arg_glo_min]], bbs[2 + concats[arg_glo_min]]
+            optimal_split = 0.5*(lbbs + rbbs)
+        else:
+            # two conseq. equal values, optinal split is between them
+            optimal_split = bbs[2 + concats[arg_glo_min]]
+        if verbose:
+            print(arg_glo_min, 1 + concats[arg_glo_min], cnts[1 + concats[arg_glo_min]], optimal_split)
+    else:
+        return np.nan
+    return optimal_split
+
+
+def optimal_2split_pd(data):
+    data_ = data.values
+    if data.unique().shape[0] > 1:
+        split = optimal_2split(data)
+    else:
+        split = np.nan
+    if np.isnan(split):
+        m = data_.mean(axis=0)
+        std = data_.std(axis=0)
+        data_rel = np.array(data_, dtype=float)
+        data_rel = data_rel - m
+        if (std != 0) & ~np.isnan(std):
+            data_rel /= std
+        data_nw = np.ones(shape=data_.shape)
+        data_wi = np.zeros(shape=data_.shape)
+    else:
+        ii1 = np.flatnonzero(data_ <= split)
+        ii2 = np.flatnonzero(data_ > split)
+        m1, m2 = data_[ii1].mean(), data_[ii2].mean()
+        std1, std2 = data_[ii1].std(), data_[ii2].std()
+        data_rel = np.array(data_, dtype=float)
+        data_rel[ii1] = data_[ii1] - m1
+        if (std1 != 0) & ~np.isnan(std1):
+            data_rel[ii1] /= std1
+        data_rel[ii2] = data_[ii2] - m2
+        if (std2 != 0) & ~np.isnan(std2):
+            data_rel[ii2] /= std2
+        data_nw = 2*np.ones(shape=data_.shape)
+        data_wi = np.zeros(shape=data_.shape)
+        data_wi[ii2] = 1.0
+    acc = np.vstack([data_nw, data_wi, data_rel])
+    columns = [nw, wi] + ['d0']
+    df_ = pd.DataFrame(acc.T, index=data.index, columns=columns)
+    return df_
