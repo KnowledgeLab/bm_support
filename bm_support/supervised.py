@@ -22,11 +22,15 @@ from sklearn.cluster import KMeans
 from .gap_stat import choose_nc
 
 
-def get_dataset(fpath_batches, origin, version, datatype, batchsize, cutoff_len, a, b, **kwargs):
-    with gzip.open(join(fpath_batches,
-                        'data_batches_{0}_v_{1}_c_{2}_m_{3}_n_{4}_a_{5}_b_{6}.pgz'.format(origin, version, datatype,
-                                                                                          batchsize, cutoff_len, a, b)
-                        )) as fp:
+def get_dataset(fpath_batches, origin, version, datatype, batchsize, cutoff_len, a, b,
+                hash_int=None, **kwargs):
+    if hash_int:
+        fname = 'data_batches_{0}_v_{1}_hash_{2}.pgz'.format(origin, version, hash_int)
+    else:
+        fname = 'data_batches_{0}_v_{1}_c_{2}_m_{3}_n_{4}_a_{5}_b_{6}.pgz'.format(origin, version, datatype,
+                                                                                  batchsize, cutoff_len, a, b)
+
+    with gzip.open(join(fpath_batches, fname)) as fp:
         dataset = pickle.load(fp)
         return dataset
 
@@ -74,7 +78,7 @@ def load_samples(origin, version, lo, hi, n_batches, cutoff_len):
 
 
 def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
-                     data_columns=[ye, iden, ai, ar, ps], complete_agg=True, verbose=False):
+                     data_columns=[ye, iden, ai, ar, ps], complete_agg=True, verbose=False, hash_int=None):
     o_columns = [up, dn]
 
     data_cols = '_'.join(data_columns)
@@ -92,7 +96,8 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
         'a': lo,
         'b': hi,
         'fpath': expanduser('~/data/kl/claims'),
-        'fpath_batches': batches_path
+        'fpath_batches': batches_path,
+        'hash_int': hash_int
     }
 
     larg = {k: v for k, v in zip(keys, values)}
@@ -105,6 +110,11 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
     dataset = get_dataset(**full_arg)
     dr = accumulate_dicts(dataset)
     arr2 = dict_to_array(dr)
+    if ni in data_columns:
+        ind = data_columns.index(ni)
+        data_columns.pop(ind)
+        arr2 = np.delete(arr2, ind, axis=0)
+    print(arr2.shape)
     df_claims = pd.DataFrame(arr2.T, columns=([ni] + data_columns))
     df_claims[ni] = df_claims[ni].astype(int)
 
@@ -354,7 +364,6 @@ def rf_study(X_train, X_test, y_train, y_test, covariate_columns=[],
 
     report['feature_importance'] = dict(zip(covariate_columns, importances))
     report['feature_importance_std'] = dict(zip(covariate_columns, stds))
-
     fpr, tpr, thresholds = roc_curve(y_test, positive_proba)
 
     fig, ax = plt.subplots(figsize=(5, 5))
