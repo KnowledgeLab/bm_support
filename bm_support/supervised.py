@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 from numpy import histogram, argmin, flatnonzero
 from scipy.stats import norm
-from sklearn.metrics import roc_auc_score, roc_curve, classification_report, confusion_matrix
+from sklearn.metrics import roc_auc_score, roc_curve, accuracy_score, precision_score, recall_score,\
+    f1_score, classification_report, confusion_matrix
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import label_binarize
 from sklearn import model_selection
@@ -16,8 +17,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.ensemble import RandomForestClassifier
 from bm_support.reporting import get_id_up_dn_df, get_lincs_df
-from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, nw, wi
-from datahelpers.dftools import dict_to_array, accumulate_dicts
+from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, nw, wi, dist, pm, ct
+from datahelpers.dftools import select_appropriate_datapoints, dict_to_array, accumulate_dicts, add_column_from_file
 from sklearn.cluster import KMeans
 from .gap_stat import choose_nc
 
@@ -171,6 +172,35 @@ def stratify_df(df, column, size, frac, seed=17):
     return dfr
 
 
+def simple_stratify(df, statify_column, seed=0, ratios=0.5):
+    """
+    based on multi-class column stratify_column
+    return stratified df
+    """
+    np.random.seed(seed)
+    vc = df[statify_column].value_counts()
+    masks = [(df[statify_column] == v) for v in vc.index]
+    sizes = list(vc)
+    if not isinstance(ratios, (list, tuple)):
+        if ratios:
+            leftover = 1.0 - ratios
+            ratios = [leftover/(vc.shape[0]-1)]*(vc.shape[0]-1) + [ratios]
+        else:
+            ratios = [1.0/vc.shape[0]]*vc.shape[0]
+    if len(ratios) == vc.shape[0]:
+        tentative_sizes = np.array([n/alpha for n, alpha in zip(sizes, ratios)])
+    else:
+        print('ratios len does is not equal to the number of classes ')
+    optimal_index = np.argmin(tentative_sizes)
+    size0 = tentative_sizes[optimal_index]
+    new_sizes = [int(x*size0) for x in ratios]
+    # size = np.sum(new_sizes)
+    indices = [np.random.choice(actual, new_size, replace=False) for actual, new_size in zip(sizes, new_sizes)]
+    subdfs = [df.loc[m].iloc[ii] for m, ii in zip(masks, indices)]
+    dfr = pd.concat(subdfs)
+    return dfr
+
+
 def smart_stratify_df(df, column, size=500, ratios=None, replacement=False, seed=17, verbose=False):
     vc = df[column].value_counts()
     if verbose:
@@ -297,7 +327,7 @@ def quantize_series(s1, thrs, verbose=False):
 
 
 def define_distance(df, exp_column=cexp, distance_column='guess', quantized_column=qcexp,
-                    thresholds=(-1.e-8, 0.5, 1.0),
+                    claim_column=ps, thresholds=(-1.e-8, 0.5, 1.0),
                     verbose=False):
     if verbose:
         print(thresholds)
@@ -310,7 +340,7 @@ def define_distance(df, exp_column=cexp, distance_column='guess', quantized_colu
     if verbose:
         print(df[quantized_column].value_counts())
 
-    df[distance_column] = np.abs(df[quantized_column] - df[ps]*n_classes)
+    df[distance_column] = np.abs(df[quantized_column] - df[claim_column]*n_classes)
     if verbose:
         print(df[distance_column].value_counts(), df[distance_column].mean())
 
@@ -319,11 +349,7 @@ def define_distance(df, exp_column=cexp, distance_column='guess', quantized_colu
 
 def prepare_xy(df, covariate_columns, stratify=False, statify_size=5000,
                stratify_frac=0.5, seed=17, verbose=False,
-               exp_column='cdf_exp', qexp_column=qcexp,
-               thresholds=(-1.e-8, 0.5, 1.0),
                distance_column='guess'):
-
-    df = define_distance(df, exp_column, distance_column, qexp_column, thresholds, verbose)
 
     if verbose:
         for c in covariate_columns:
@@ -512,37 +538,32 @@ def plot_lr_coeffs_with_penalty(alphas, coeff_dict, covariate_names, fname=None,
 
 
 def lr_study(X_train, X_test, y_train, y_test, covariate_columns=[], seed=0, regularizer=1.0,
-             nfolds=3, fname=None, show=False, title_prefix=None):
-    report = {}
-    logreg = LogisticRegression(C=1./regularizer, tol=1e-6, penalty='l1', fit_intercept=True,
+            fname=None, show=False, title_prefix=None):
+
+    report = {'reg': regularizer}
+    logreg = LogisticRegression(C=1. / regularizer, tol=1e-6, penalty='l1', fit_intercept=True,
                                 random_state=seed, warm_start=True)
     logreg = logreg.fit(X_train, y_train)
 
-    rep = dict(zip(covariate_columns, logreg.coef_[0]))
-    rep['intercept'] = logreg.intercept_[0]
-    report['coeffs'] = rep
+    coef_report = dict(zip(covariate_columns, logreg.coef_[0]))
+    coef_report['intercept'] = logreg.intercept_[0]
+    report['coeffs'] = coef_report
 
     y_pred = logreg.predict(X_test)
     report['corr_train_pred'] = np.corrcoef(y_pred, y_test)[0, 1]
 
-    report['test_accuracy'] = logreg.score(X_test, y_test)
-    positive_proba = logreg.predict_proba(X_test)[:, 1]
-    fpr, tpr, thresholds = roc_curve(y_test, positive_proba)
-    report['auroc'] = roc_auc_score(y_test, positive_proba)
-
-    kfold = model_selection.KFold(n_splits=nfolds, random_state=seed)
-    scoring = 'accuracy'
-
-    results = model_selection.cross_val_score(logreg, np.concatenate([X_train, X_test]),
-                                              np.concatenate([y_train, y_test]),
-                                              cv=kfold, scoring=scoring)
-
-    report['{0}_fold_cv_ave_accuracy'.format(nfolds)] = results.mean()
+    report['precision'] = precision_score(y_test, y_pred)
+    report['accuracy'] = accuracy_score(y_test, y_pred)
+    report['recall'] = recall_score(y_test, y_pred)
+    report['f1'] = f1_score(y_test, y_pred)
 
     conf_matrix = confusion_matrix(y_test, y_pred)
     report['confusion'] = conf_matrix
-
     report['class_report'] = classification_report(y_test, y_pred)
+
+    positive_proba = logreg.predict_proba(X_test)[:, 1]
+    fpr, tpr, thresholds = roc_curve(y_test, positive_proba)
+    report['auroc'] = roc_auc_score(y_test, positive_proba)
 
     if fname or show:
         fig, ax = plt.subplots(figsize=(5, 5))
@@ -563,6 +584,158 @@ def lr_study(X_train, X_test, y_train, y_test, covariate_columns=[], seed=0, reg
     else:
         plt.close()
     return report
+
+
+def lr_study_one_sample(X_train, X_test, y_train, y_test, covariate_columns=[], seed=0):
+
+    reg_coeffs = 1e1**np.arange(-2, 2, 0.1)
+    reports = []
+    for coeff in reg_coeffs:
+        report = lr_study(X_train, X_test, y_train, y_test, covariate_columns, seed, coeff)
+        reports.append(report)
+
+    optimal_report_index = pick_good_report(reports)
+
+    columns_extra = covariate_columns + ['intercept']
+
+    # array n_regularize x n_features
+    # for a given j, arr[j, m_feature] is zero if m_feature is not important
+    # the ranking of feature is due to them becoming non zero
+
+    arr = np.array([[r['coeffs'][c] for c in columns_extra] for r in reports])
+
+    # indices as which a given feature non negative, higher index,
+    # higher penalty ~ more important feature
+    nonzero_indices = np.argmax(arr == 0, axis=0)
+    ranking = np.argsort(nonzero_indices)[::-1]
+
+    optimal_report = reports[optimal_report_index]
+
+    optimal_report['feature_ranking'] = ranking
+    # optimal_report['']
+    return optimal_report
+
+
+def pick_good_report(reports):
+    j_acc = np.argmax([r['accuracy'] for r in reports])
+    j_rec = np.argmax([r['recall'] for r in reports])
+    j_prec = np.argmax([r['precision'] for r in reports])
+    j_f2 = np.argmax([r['f1'] for r in reports])
+    # first occurence of threshold non zero coeffs
+    j_optimal = min([j_acc, j_rec, j_prec, j_f2])
+    return j_optimal
+
+
+def run_n_lr_studies(df, feature_columns, y_column, n_throws=50, seed=0):
+    np.random.seed(seed)
+    seeds = sorted(np.random.choice(100, n_throws, False))
+
+    agg_best_reports = []
+    k = 0
+    for seed in seeds:
+        df_train, df_test = train_test_split(df, test_size=0.3,
+                                             random_state=seed, stratify=df[y_column])
+        dd = simple_stratify(df_train, y_column, seed, ratios=None)
+        X_train, y_train = dd[feature_columns], dd[y_column]
+        X_test, y_test = df_test[feature_columns], df_test[y_column]
+        r = lr_study_one_sample(X_train, X_test, y_train, y_test, feature_columns, seed)
+        r['seed'] = seed
+        r['corr_train'] = dd[feature_columns + [y_column]].corr().iloc[-1].iloc[:-1].values
+        r['corr_test'] = df_test[feature_columns + [y_column]].corr().iloc[-1].iloc[:-1].values
+        r['vc_train'] = y_train.value_counts().to_dict()
+        r['vc_test'] = y_test.value_counts().to_dict()
+        r['size_train'] = y_train.shape[0]
+        r['size_test'] = y_test.shape[0]
+        r['test_frac'] = r['size_test'] / (r['size_test'] + r['size_train'])
+        agg_best_reports.append(r)
+        k += 1
+    return agg_best_reports
+
+
+def run_lr_over_list_features(df, features_list, distance_column, n_throws=20, seed=0):
+    meta_report = {}
+    for feature_columns in features_list:
+        ccs_extra = feature_columns + ['intercept']
+        reports = run_n_lr_studies(df, feature_columns, distance_column, n_throws, seed)
+        meta_report[tuple(ccs_extra)] = reduce_report(reports)
+    return meta_report
+
+
+def reduce_report(report):
+    final_report = {}
+    r_sample = report[0]
+    kkeys = r_sample.keys()
+    for k in kkeys:
+        if isinstance(r_sample[k], (int, float)):
+            vector_c = [r[k] for r in report]
+            final_report.update({k: (np.mean(vector_c), np.std(vector_c))})
+        elif isinstance(r_sample[k], np.ndarray) and ('ranking' in k):
+            final_report[k] = (np.array([r['feature_ranking'] for r in report]).mean(axis=0),
+                               np.array([r['feature_ranking'] for r in report]).std(axis=0))
+        else:
+            final_report[k] = r_sample[k]
+    return final_report
+
+
+def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normalize_by_interaction=None,
+                     verbose=False):
+    # ncolumns = ['delta_year', 'len', ar]
+
+    masks = []
+
+    # mask only only the upper and the lower quartiles in cdf_exp
+    eps_cutoff = 0.1
+    upper_exp, lower_exp = 1 - eps_cutoff, eps_cutoff
+    exp_mask = ['cdf_exp', (upper_exp, lower_exp), lambda df_, th: (df_ >= th[0]) | (df_ <= th[1])]
+    masks.append(exp_mask)
+
+    # mask affiliation rating
+    # ar < 0 means affiliation rating was not present ???
+    # ar_mask = [ar, 0., lambda df_, th: (df_ >= th)]
+    # masks.append(ar_mask)
+
+    # mask article influence
+    # ai equal to the top of value_counts() means that it was imputed
+    # ai_mask = [ai, 0., lambda s, th: (s != s.value_counts().index[0])]
+    # masks.append(ai_mask)
+
+    # duplicate claims from the same journal are encoded as -1
+    # mask them out
+    ps_mask = [ps, 0., lambda s, th: (s >= th)]
+    masks.append(ps_mask)
+
+    df_selected = select_appropriate_datapoints(df, masks)
+    if verbose:
+        print(df_selected.shape)
+        print(df_selected[ps].value_counts())
+
+    # add citation count
+    fp = '/Users/belikov/data/literome/wos/pmid_wos_cite.csv.gz'
+    dft2_ = add_column_from_file(df_selected, fp, pm, ct)
+
+    # define distance between qcexp and ps
+    dft2 = define_distance(dft2_, cexp, dist, qcexp, ps)
+    if verbose:
+        print('value counts of distance:')
+        print(dft2[dist].value_counts())
+
+    if normalize:
+        if verbose:
+            minmax = ['{0} min: {1:.2f}; max {2:.2f}'.format(c, dft2[c].min(), dft2[c].max())
+                      for c in columns_normalize]
+            print('. '.join(minmax))
+        df2 = normalize_columns(dft2, columns_normalize)
+
+        for c in columns_normalize_by_interaction:
+            df2[c] = df2.groupby(ni).apply(lambda x: groupby_normalize(x[c]))
+
+        if verbose:
+            minmax = ['{0} min: {1:.2f}; max {2:.2f}'.format(c, df2[c].min(), df2[c].max())
+                      for c in columns_normalize]
+            print('. '.join(minmax))
+
+        dft2 = df2
+    return df2
 
 
 def std_over_samples(lengths, means, stds):
