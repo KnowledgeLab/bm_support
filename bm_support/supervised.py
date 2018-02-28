@@ -79,7 +79,8 @@ def load_samples(origin, version, lo, hi, n_batches, cutoff_len):
 
 
 def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
-                     data_columns=[ye, iden, ai, ar, ps], complete_agg=True, verbose=False, hash_int=None):
+                     data_columns=[ye, iden, ai, ar, ps], complete_agg=True, verbose=False, hash_int=None,
+                     load_batches=False):
     o_columns = [up, dn]
 
     data_cols = '_'.join(data_columns)
@@ -102,25 +103,42 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
     }
 
     larg = {k: v for k, v in zip(keys, values)}
-    print(larg)
     full_arg = {**invariant_args, **larg}
-    print(full_arg)
+    if verbose:
+        print('larg: ', larg)
+        print('full_arg: ', full_arg)
     df_stats = get_id_up_dn_df(**full_arg)
 
-    # list of dicts of numpy arrays
-    dataset = get_dataset(**full_arg)
-    dr = accumulate_dicts(dataset)
-    arr2 = dict_to_array(dr)
-    if ni in data_columns:
-        ind = data_columns.index(ni)
-        data_columns.pop(ind)
-        arr2 = np.delete(arr2, ind, axis=0)
-    print(arr2.shape)
-    df_claims = pd.DataFrame(arr2.T, columns=([ni] + data_columns))
-    df_claims[ni] = df_claims[ni].astype(int)
+    if load_batches:
+        # list of dicts of numpy arrays
+        dataset = get_dataset(**full_arg)
+        dr = accumulate_dicts(dataset)
+        arr2 = dict_to_array(dr)
+        if ni in data_columns:
+            ind = data_columns.index(ni)
+            data_columns.pop(ind)
+            arr2 = np.delete(arr2, ind, axis=0)
+
+        df_claims = pd.DataFrame(arr2.T, columns=([ni] + data_columns))
+        df_claims[ni] = df_claims[ni].astype(int)
+    else:
+        if hash_int:
+            fname = 'df_{0}_v_{1}_hash_{2}.pgz'.format(origin, version, hash_int)
+        else:
+            fname = 'df_{0}_v_{1}_c_{2}_m_{3}_n_{4}_a_{5}_b_{6}.pgz'.format(origin, version, data_columns,
+                                                                            batchsize, cutoff_len, lo, hi)
+        with gzip.open(join(batches_path, fname)) as fp:
+            df_claims = pickle.load(fp)
+    if verbose:
+        print('{0} dataframe size {1}'.format(origin, df_claims.shape[0]))
+        print('unique statements {0}'.format(len(df_claims[ni].unique())))
 
     # experimental
     df_exp = get_lincs_df(**full_arg)
+
+    if verbose:
+        print('df_exp rows: {0}'.format(df_exp.shape[0]))
+
     # df_exp['cdf'] = df_exp['score'].apply(lambda x: norm.cdf(x))
     m1 = (df_exp['pert_type'] == 'trt_oe')
     m2 = (df_exp['pert_itime'] == '96 h')
@@ -128,6 +146,9 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
     m4 = (df_exp['pert_idose'] == '1 µL') | (df_exp['pert_idose'] == '2 µL')
 
     df_exp_cut = df_exp[m1 & m2 & m3 & m4]
+    if verbose:
+        print('df_exp_cut rows: {0}'.format(df_exp_cut.shape[0]))
+
     if complete_agg:
         agg_columns = [up, dn]
     else:
@@ -135,13 +156,24 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
     dfe = df_exp_cut.groupby(agg_columns).apply(lambda x:
                                                 pd.Series([np.mean(x['score']), np.std(x['score'])],
                                                           index=['mean', 'std'])).reset_index()
-    dfe[cexp] = dfe['mean'].apply(lambda x: norm.cdf(x))
 
+    if verbose:
+        print('df_exp_cut_agg rows: {0}'.format(dfe.shape[0]))
+
+    dfe[cexp] = dfe['mean'].apply(lambda x: norm.cdf(x))
+    if verbose:
+        print('size of experimental df {0}'.format(dfe.shape))
     dfe = dfe[o_columns + [cexp, 'std']]
     dfe2 = pd.merge(dfe, df_stats.reset_index(), on=o_columns, how='left')
-    dft = pd.merge(dfe2, df_claims, on=ni, how='inner')
     if verbose:
-        print('dft null cexp: {0}'.format(sum(dft[cexp].isnull())))
+        print('experimental statements after agg and merge rows: {0}'.format(dfe2.shape[0]))
+    dft = pd.merge(dfe2, df_claims, on=ni, how='inner')
+
+    if verbose:
+        print('after merge to claims: {0}'.format(dft.shape[0]))
+
+    if verbose:
+        print('dft null values of cexp: {0}'.format(sum(dft[cexp].isnull())))
 
     return dft
 
@@ -326,24 +358,58 @@ def quantize_series(s1, thrs, verbose=False):
     return s_out
 
 
-def define_distance(df, exp_column=cexp, distance_column='guess', quantized_column=qcexp,
-                    claim_column=ps, thresholds=(-1.e-8, 0.5, 1.0),
-                    verbose=False):
-    if verbose:
-        print(thresholds)
-    n_classes = len(thresholds) - 2
-    if verbose:
-        print(df[ps].value_counts())
+def gcd(a, b):
+    if b == 0:
+        return a
+    remainder = a % b
+    return gcd(b, remainder)
 
-    df[quantized_column] = quantize_series(df[exp_column], thresholds, verbose)
 
+def lcm(a, b):
+    return a * b / gcd(a, b)
+
+
+def define_distance_(df, columns, verbose=False):
+    """
+    df contains columns a and b
+    with values 0, 1, .., k and 0, 1, .., m respectively
+    both are expanded to  0, 1 ... lcm(k, m)
+    the distance is
+    """
+    if len(columns) != 2:
+        raise ValueError('in define_distance() columns argument is not length two')
+    elif not (set(columns) < set(df.columns)):
+        raise ValueError('in define_distance() columns are not in df.columns')
+
+    a, b = columns
+    n_a = df[a].value_counts().shape[0] - 1
+    n_b = df[b].value_counts().shape[0] - 1
+    lcm_ab = lcm(n_a, n_b)
+    m_a = lcm_ab / n_a
+    m_b = lcm_ab / n_b
     if verbose:
-        print(df[quantized_column].value_counts())
+        print('class a scale: {0}; class b scale: {1}. lcm {2}'.format(n_a, n_b, lcm_ab))
+        print('m a {0}; m b {1}'.format(m_a, m_b))
 
-    df[distance_column] = np.abs(df[quantized_column] - df[claim_column]*n_classes)
+    s = np.abs(m_b * df[b] - m_a * df[a])
     if verbose:
-        print(df[distance_column].value_counts(), df[distance_column].mean())
+        print(s.value_counts(), s.mean())
+    return s
 
+
+def derive_distance_column(df, column_a_parameters=(cexp, qcexp, (-1.e-8, 0.5, 1.0)),
+                           column_b_parameters=ps,
+                           distance_column='guess', verbose=False):
+    cols = []
+    for par in (column_a_parameters, column_b_parameters):
+        if isinstance(par, tuple) and not isinstance(par, str):
+            c, qc, thrs = par
+            df[qc] = quantize_series(df[c], thrs, verbose)
+            cols.append(qc)
+        else:
+            cols.append(par)
+
+    df[distance_column] = define_distance_(df, cols, verbose)
     return df
 
 
@@ -374,7 +440,7 @@ def rf_study(X_train, X_test, y_train, y_test, covariate_columns=[],
     rf = RandomForestClassifier(max_depth=depth, random_state=seed)
     rf = rf.fit(X_train, y_train)
     y_pred = rf.predict(X_test)
-    report['corr_train_pred'] = np.corrcoef(y_pred, y_test)[0, 1]
+    report['corr_test_pred'] = np.corrcoef(y_pred, y_test)[0, 1]
     conf_matrix = confusion_matrix(y_test, y_pred)
     report['confusion'] = conf_matrix
 
@@ -653,11 +719,11 @@ def run_n_lr_studies(df, feature_columns, y_column, n_throws=50, seed=0):
 
 
 def run_lr_over_list_features(df, features_list, distance_column, n_throws=20, seed=0):
-    meta_report = {}
+    meta_report = []
     for feature_columns in features_list:
         ccs_extra = feature_columns + ['intercept']
         reports = run_n_lr_studies(df, feature_columns, distance_column, n_throws, seed)
-        meta_report[tuple(ccs_extra)] = reduce_report(reports)
+        meta_report.append((ccs_extra, reduce_report(reports)))
     return meta_report
 
 
@@ -677,14 +743,35 @@ def reduce_report(report):
     return final_report
 
 
+def parse_experiments_reports(reports):
+    output_dict = {}
+    index = []
+    for k, dd in reports:
+        name = '_'.join(k)
+        index.append(name)
+        for kk in dd.keys():
+            # hunt down all tuples
+            if isinstance(dd[kk], tuple) and (len(dd[kk]) == 2) and isinstance(dd[kk][0], float):
+                if kk in output_dict.keys():
+                    output_dict[kk].append(dd[kk][0])
+                else:
+                    output_dict[kk] = [dd[kk][0]]
+                if kk+'_std' in output_dict.keys():
+                    output_dict[kk+'_std'].append(dd[kk][1])
+                else:
+                    output_dict[kk+'_std'] = [dd[kk][1]]
+    report_df = pd.DataFrame(output_dict, index=index)
+    return report_df
+
+
 def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normalize_by_interaction=None,
-                     verbose=False):
+                     cutoff=0.25, verbose=False):
     # ncolumns = ['delta_year', 'len', ar]
 
     masks = []
 
     # mask only only the upper and the lower quartiles in cdf_exp
-    eps_cutoff = 0.1
+    eps_cutoff = cutoff
     upper_exp, lower_exp = 1 - eps_cutoff, eps_cutoff
     exp_mask = ['cdf_exp', (upper_exp, lower_exp), lambda df_, th: (df_ >= th[0]) | (df_ <= th[1])]
     masks.append(exp_mask)
@@ -714,7 +801,7 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
     dft2_ = add_column_from_file(df_selected, fp, pm, ct)
 
     # define distance between qcexp and ps
-    dft2 = define_distance(dft2_, cexp, dist, qcexp, ps)
+    dft2 = derive_distance_column(dft2_, (cexp, qcexp, (-1.e-8, 0.5, 1.0)), ps, dist)
     if verbose:
         print('value counts of distance:')
         print(dft2[dist].value_counts())
@@ -733,8 +820,8 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
             minmax = ['{0} min: {1:.2f}; max {2:.2f}'.format(c, df2[c].min(), df2[c].max())
                       for c in columns_normalize]
             print('. '.join(minmax))
-
-        dft2 = df2
+    else:
+        df2 = dft2
     return df2
 
 
@@ -827,7 +914,7 @@ def kmeans_cluster(data, n_classes=2, seed=11, tol=1e-6, verbose=False, return_f
         mu_tensor = np.dot(np.stack([1 - args, args]).T, np.stack(mus))
         # tensor of closest stds
         std_tensor = np.dot(np.stack([1 - args, args]).T, np.stack(stds))
-        # vector of relative
+        # vector of relative distances
         diffs = (data - mu_tensor)/std_tensor
 #         return args, diffs
         return np.append(args.reshape((-1, 1)), diffs, axis=1)
@@ -1019,3 +1106,89 @@ def optimal_2split_pd(data):
     columns = [nw, wi] + ['d0']
     df_ = pd.DataFrame(acc.T, index=data.index, columns=columns)
     return df_
+
+
+def get_covs(corr_df, key):
+    l1, l2 = 'level_0', 'level_1'
+    corr = corr_df[(corr_df[l1] == key) | (corr_df[l2] == key)]
+    mm = (corr['level_0'] < ct)
+    corr['covariate'] = corr[l1]
+    corr.loc[~mm, 'covariate'] = corr.loc[~mm, l2]
+    return_corr = corr[['covariate', 0]].sort_values(0)
+    return return_corr
+
+
+def yield_candidates(corrs, pi_columns, target_column=dist, critical_size=3, mode='both', verbose=False):
+    """
+
+    :param corrs:
+    :param pi_columns:
+    :param target_column:
+    :param critical_size:
+    :param mode: 'anti', 'target' or 'both'
+    :return:
+    """
+
+    candidates = list(set(corrs.columns) - set(pi_columns + [target_column]))
+    # print(cors.loc[candidates, dist].abs())
+
+    if mode == 'anti' or mode == 'both':
+        # anticorrelates with pi_columns: smaller better
+        anti_corr = corrs[candidates].apply(lambda x: np.sum((x[pi_columns] + 1.) ** 2))
+        top_anti_corrs = np.argsort(anti_corr)
+        candidates_anti_corr = anti_corr[top_anti_corrs].index
+        # print(anti_corr[top_anti_corrs])
+
+    if mode == 'target' or mode == 'both':
+        # non zero correlation with target_column : higher better
+        target_corr = corrs.loc[tuple(candidates), target_column].abs()
+        top_target_corrs = np.argsort(target_corr)
+        candidates_target_corr = target_corr[top_target_corrs].index
+
+    if mode == 'both':
+        # list a: |DABC| list b: |ABCD|
+        # in list a (anti_corr) the elements are ordered in descending preference
+        # in list b (target_corr) the elements are ordered in ascending preference
+        # intersect them to obtain D, D, DB, DABC
+
+        intersections = np.array([len(set(candidates_anti_corr[:k]) & set(candidates_target_corr[-k:]))
+                                  for k in range(len(candidates_anti_corr))])
+        critical_index = np.argmax(intersections >= critical_size)
+        candidates_batch = list(set(candidates_anti_corr[:critical_index])
+                                & set(candidates_target_corr[-critical_index:]))
+        if verbose:
+            print(target_corr[candidates_batch], anti_corr[candidates_batch])
+
+    elif mode == 'target':
+        candidates_batch = list(candidates_target_corr[-critical_size:])
+    elif mode == 'anti':
+        candidates_batch = list(candidates_anti_corr[:critical_size])
+    return candidates_batch
+
+
+def engine(df, all_cols, target_column, func, max_iterations=8, score_name='accuracy', critical_size=3, verbose=False):
+    current_columns = list(all_cols)
+    corrs = df[current_columns + [target_column]].corr()
+
+    current_features = []
+    max_iterations = min([max_iterations, len(all_cols)])
+    best_reports = []
+    if verbose:
+        print('max iter: {0}'.format(max_iterations))
+
+    for k in range(max_iterations):
+        mode = 'anti' if k > 0 else 'target'
+        candidates = yield_candidates(corrs, current_features, target_column, critical_size, mode)
+        if verbose:
+            print('iter: {0}, candidates {1}'.format(k, candidates))
+        experiments = [current_features + [c] for c in candidates]
+        rr = func(df, experiments, target_column)
+        best_candidate_index = np.argmax([r[1][score_name][0] for r in rr])
+        if verbose:
+            print('iter: {0}, {1} {2}, chose {3}'.format(k, score_name,
+                                                         rr[best_candidate_index][1][score_name][0],
+                                                         candidates[best_candidate_index]))
+
+        best_reports.append(rr[best_candidate_index])
+        current_features.append(candidates[best_candidate_index])
+    return best_reports
