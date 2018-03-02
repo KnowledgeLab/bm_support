@@ -138,6 +138,7 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
 
     if verbose:
         print('df_exp rows: {0}'.format(df_exp.shape[0]))
+        print(df_exp.head())
 
     # df_exp['cdf'] = df_exp['score'].apply(lambda x: norm.cdf(x))
     m1 = (df_exp['pert_type'] == 'trt_oe')
@@ -167,7 +168,19 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
     dfe2 = pd.merge(dfe, df_stats.reset_index(), on=o_columns, how='left')
     if verbose:
         print('experimental statements after agg and merge rows: {0}'.format(dfe2.shape[0]))
-    dft = pd.merge(dfe2, df_claims, on=ni, how='inner')
+
+    merge_on = [ni]
+    if not load_batches and hash_int and up in df_claims.columns and dn in df_claims.columns:
+        merge_on = o_columns
+
+    if (ni in dfe2.columns) and (ni in df_claims.columns):
+        columns = list(set(dfe2.columns) - set([ni]))
+    else:
+        columns = dfe2.columns
+
+    print(columns)
+
+    dft = df_claims.merge(dfe2[columns], on=merge_on, how='inner')
 
     if verbose:
         print('after merge to claims: {0}'.format(dft.shape[0]))
@@ -764,10 +777,7 @@ def parse_experiments_reports(reports):
     return report_df
 
 
-def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normalize_by_interaction=None,
-                     cutoff=0.25, verbose=False):
-    # ncolumns = ['delta_year', 'len', ar]
-
+def mask_out(df, cutoff=0.25, verbose=False):
     masks = []
 
     # mask only only the upper and the lower quartiles in cdf_exp
@@ -792,9 +802,18 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
     masks.append(ps_mask)
 
     df_selected = select_appropriate_datapoints(df, masks)
+
     if verbose:
         print(df_selected.shape)
-        print(df_selected[ps].value_counts())
+
+    return df_selected
+
+
+def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normalize_by_interaction=None,
+                     cutoff=0.25, verbose=False):
+    # ncolumns = ['delta_year', 'len', ar]
+
+    df_selected = mask_out(df, cutoff, verbose)
 
     # add citation count
     fp = '/Users/belikov/data/literome/wos/pmid_wos_cite.csv.gz'
@@ -814,7 +833,7 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
         df2 = normalize_columns(dft2, columns_normalize)
 
         for c in columns_normalize_by_interaction:
-            df2[c] = df2.groupby(ni).apply(lambda x: groupby_normalize(x[c]))
+            df2[c] = df2.groupby(ni, as_index=False, group_keys=False).apply(lambda x: groupby_normalize(x[c]))
 
         if verbose:
             minmax = ['{0} min: {1:.2f}; max {2:.2f}'.format(c, df2[c].min(), df2[c].max())
@@ -822,6 +841,10 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
             print('. '.join(minmax))
     else:
         df2 = dft2
+
+    if verbose:
+        print(df2.shape)
+
     return df2
 
 
@@ -933,7 +956,7 @@ def identify_intracluster_distances(data, n_classes=2, seed=11, tol=1e-6, verbos
         args = km.fit_predict(data)
         unis = np.unique(args)
         if n_classes > len(unis):
-            print('Warning {0} classes predict {1} unique membres'.format(n_classes, len(np.unique(args))))
+            print('Warning {0} classes predict {1} unique members'.format(n_classes, len(np.unique(args))))
         centers = np.concatenate([km.cluster_centers_[k] for k in unis])
         if centers.ndim == 1:
             centers = centers.reshape(-1, 1)
@@ -991,14 +1014,15 @@ def cluster_optimally_pd(data, nc_max=2, min_size=5):
 
 def groupby_normalize(data):
     data_ = data.values
-    # make a matrix
-    if data_.ndim == 1:
-        data_ = data_.reshape(-1, 1)
+    std = data_.std()
+    if np.abs(std) < 1e-12:
+        data_rel = data_ - data_.mean()
+    else:
+        data_rel = (data_ - data_.mean())/std
+    if np.isnan(std):
+        print(data_.shape[0], data.index, std)
 
-    std = data_.std(axis=0)
-    data_rel = np.true_divide((data_ - data_.mean(axis=0)), std, where=(std != 0))
-    columns = ['{0}'.format(j) for j in range(data_rel.shape[1])]
-    return pd.DataFrame(data_rel, index=data.index, columns=columns)
+    return pd.Series(data_rel, index=data.index)
 
 
 # def optimal_2split(data, verbose=False):

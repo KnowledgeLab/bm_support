@@ -5,18 +5,20 @@ from nltk.tokenize import RegexpTokenizer
 from nltk.corpus import stopwords
 import unidecode
 from pandas import DataFrame
+from sklearn.cluster import KMeans
 from os.path import expanduser
 
 # t1, t2 = tokenize_clean(s1, target_words), tokenize_clean(s2, target_words)
 
 
-def tokenize_clean(s, target_words):
+def tokenize_clean(s, target_words=None):
     s2 = unidecode.unidecode(s)
-    s2 = s2.lower()
+    s2 = s2.lower().strip('.')
     words = s2.split(',')
-    words2 = list(filter(lambda w: any([t in w for t in target_words]), words))
+    # if target_words:
+    #     words = list(filter(lambda w: any([t in w for t in target_words]), words))
     tokenizer = RegexpTokenizer(r'\w+')
-    phrases = [tokenizer.tokenize(w) for w in words2]
+    phrases = [tokenizer.tokenize(w) for w in words]
     phrases2 = [f7([w for w in s if w not in stopwords.words('english')]) for s in phrases]
     return phrases2
 
@@ -85,11 +87,14 @@ def compute_phrase_distance(a1, a2, synonyms=[], verbose=False):
 
 def clean_compute_metric(s1, s2, target_words, verbose=False):
     t1, t2 = tokenize_clean(s1, target_words), tokenize_clean(s2, target_words)
+    print(t1, t2)
     # the distance will be at least 1.0
     dist_agg = [1.0]
     for u1 in t1:
         for u2 in t2:
-            dist_agg.append(compute_phrase_distance(u1, u2, verbose))
+            d = compute_phrase_distance(u1, u2, verbose)
+            dist_agg.append(d)
+            print(u1, u2, d)
     return min(dist_agg)
 
 
@@ -157,3 +162,64 @@ def generate_fnames(tmp_path, j):
 def wrapper_disabmi(dfa, dfb, targets, fname, full_report=False):
     r = disambiguator_vec(dfa, dfb, targets, full_report)
     r.to_csv(fname, compression='gzip')
+
+
+def cluster_strings(ids, strings, targets, decision_thr=0.1, max_it=None, n_classes=2, tol=1e-6, seed=0,
+                    verbose=False):
+    id_cluster_dict = {}
+    k = 0
+    while ids.size > 1:
+        cur_id, ids = ids[0], ids[1:]
+        cur_str, strings = strings[0], strings[1:]
+        dists = np.array([clean_compute_metric(cur_str, a, targets) for a in strings])
+        n_c = n_classes if ids.size > 2 else 1
+        km = KMeans(n_c, tol=tol, random_state=seed)
+        args = km.fit_predict(dists.reshape(-1, 1))
+        unis = np.unique(args)
+        centers = np.concatenate([km.cluster_centers_[k] for k in unis])
+        proximal_class = np.argmin(centers)
+        # if verbose:
+        #     print(sorted(centers), len(strings), sum(args == proximal_class), sum(args != proximal_class))
+        if centers[proximal_class] < decision_thr:
+            if verbose:
+                print('{0} strings clustered'.format(sum(args == proximal_class) + 1))
+            proximal_indices = np.where(args == proximal_class)
+            distant_indices = np.where(args != proximal_class)
+            id_cluster_dict[k] = [cur_id] + list(ids[proximal_indices])
+            ids = ids[distant_indices]
+            strings = strings[distant_indices]
+        else:
+            id_cluster_dict[k] = [cur_id]
+        k += 1
+        if max_it and k > max_it:
+            break
+
+        # if verbose:
+        #     print(sum([len(x) for x in id_cluster_dict.values()]) + len(strings))
+    id_cluster_dict[k] = [cur_id]
+    return id_cluster_dict
+
+
+def dict_to_array(ddict):
+    # should work with list and numpy arrays (1D and 2D)
+    # only checked for lists
+    #TODO debug for arrays
+    """
+        ddict contains arrays of size n \times k_i
+        final array has size (n+1) \times \sum k_i
+    """
+    keys = list(ddict.keys())
+    if isinstance(ddict[keys[0]], list):
+        arrays_list = [np.array(ddict[k]) for k in keys]
+    else:
+        arrays_list = [ddict[k] for k in keys]
+    if  isinstance(ddict[keys[0]], np.ndarray) and len(ddict[keys[0]].shape) > 1:
+        arr = np.concatenate(arrays_list, axis=1)
+        keys_list = [[k]*ddict[k].shape[1] for k in keys]
+    else:
+        arr = np.concatenate(arrays_list).reshape(-1, 1)
+        keys_list = [[k]*len(ddict[k]) for k in keys]
+    keys_arr = np.concatenate(keys_list).reshape(-1, 1)
+    print(arr.shape, keys_arr.shape)
+    final_array = np.concatenate([keys_arr, arr], axis=1)
+    return final_array
