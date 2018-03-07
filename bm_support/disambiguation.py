@@ -6,6 +6,7 @@ from nltk.corpus import stopwords
 import unidecode
 from pandas import DataFrame
 from sklearn.cluster import KMeans
+import  Levenshtein as lev
 from os.path import expanduser
 
 # t1, t2 = tokenize_clean(s1, target_words), tokenize_clean(s2, target_words)
@@ -87,14 +88,14 @@ def compute_phrase_distance(a1, a2, synonyms=[], verbose=False):
 
 def clean_compute_metric(s1, s2, target_words, verbose=False):
     t1, t2 = tokenize_clean(s1, target_words), tokenize_clean(s2, target_words)
-    print(t1, t2)
+    # print(t1, t2)
     # the distance will be at least 1.0
     dist_agg = [1.0]
     for u1 in t1:
         for u2 in t2:
             d = compute_phrase_distance(u1, u2, verbose)
             dist_agg.append(d)
-            print(u1, u2, d)
+            # print(u1, u2, d)
     return min(dist_agg)
 
 
@@ -223,3 +224,67 @@ def dict_to_array(ddict):
     print(arr.shape, keys_arr.shape)
     final_array = np.concatenate([keys_arr, arr], axis=1)
     return final_array
+
+
+def split_string(s):
+    s2 = unidecode.unidecode(s).lower()
+    phrases = s2.split(',')
+    return phrases
+
+
+def tokenize_phrase(s):
+    tokenizer = RegexpTokenizer(r'\w+')
+    words = tokenizer.tokenize(s)
+    clean_words = [w for w in words if w not in stopwords.words('english')]
+    return clean_words
+
+
+def nlevenstein_root(s, s2, foo):
+    """
+    normed levenshtein metric
+    :param s:
+    :param s2:
+    :param foo:
+    :return:
+    """
+    if len(s) > len(s2):
+        s, s2 = s2, s
+    diff = len(s2) - len(s) + 1
+    m = min([foo(s, s2[k:(k+len(s))]) for k in range(diff)])
+    return m
+
+
+def ndistance(s1, s2):
+    return lev.distance(s1, s2)/min([len(s1), len(s2)])
+
+
+def metric_to_words(m, distance_func, decision_thr=0.1, verbose=False):
+    dim1, dim2 = m.shape
+    qw1 = ''.join([chr(j+ord('a')) for j in range(dim1)])
+    complement_alphabet = [chr(j + dim1 + ord('a')) for j in range(dim2)]
+    qw2 = []
+    mms = []
+
+    for r, j in zip(m.T, np.argmin(m, axis=0)):
+        if r[j] < decision_thr:
+            qw2.append(qw1[j])
+        else:
+            qw2.append(complement_alphabet.pop())
+        mms.append(r[j])
+    qw2 = ''.join(qw2)
+
+    words_discrepancy_norm = np.sum(np.min(m, axis=0)**2/m.shape[1])**0.5
+    # e.g. ndistance(qw1, qw2, method=2)
+    phrase_norm = distance_func(qw1, qw2)
+
+    return phrase_norm, words_discrepancy_norm
+
+
+def meta_distance(mw1, mw2, foo, sigma=0.5):
+    if isinstance(mw1, str) and isinstance(mw2, str):
+        r = foo(mw1, mw2)
+    else:
+        m = np.array([[meta_distance(w1, w2, foo) for w1 in mw1] for w2 in mw2])
+        da, db = metric_to_words(m, foo)
+        r = ((da**2 + db**2)/2.)**0.5
+    return r
