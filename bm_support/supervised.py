@@ -14,11 +14,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import label_binarize
 from sklearn import model_selection
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
 from sklearn.ensemble import RandomForestClassifier
 from bm_support.reporting import get_id_up_dn_df, get_lincs_df
-from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, nw, wi, dist, pm, ct
+from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, nw, wi, dist, pm, ct, affs, aus
 from datahelpers.dftools import select_appropriate_datapoints, dict_to_array, accumulate_dicts, add_column_from_file
+from .add_features import prepare_final_df
 from sklearn.cluster import KMeans
 from .gap_stat import choose_nc
 
@@ -279,12 +279,6 @@ def smart_stratify_df(df, column, size=500, ratios=None, replacement=False, seed
     return dfr
 
 
-def normalize_columns(df, columns):
-    df2 = df.copy()
-    sc = MinMaxScaler()
-    df2[columns] = sc.fit_transform(df[columns])
-    return df2
-
 
 def logreg_analysis(df, covariate_columns, stratify=False, statify_size=5000,
                     stratify_frac=0.5, regularizer=1.0, seed=17, fname=None, nfolds=3):
@@ -357,73 +351,6 @@ def logreg_analysis(df, covariate_columns, stratify=False, statify_size=5000,
     plt.legend(loc="lower right")
     fig.savefig(fname)
     plt.show()
-
-
-def quantize_series(s1, thrs, verbose=False):
-    s_out = s1.copy()
-    lambda_ = len(thrs) - 1
-    for a, b, ix in zip(thrs[:-1], thrs[1:], range(lambda_)):
-        mask = (a < s1) & (s1 <= b)
-        s_out[mask] = ix
-        if verbose:
-            print(a, b, ix, sum(mask))
-    # return s_out / (lambda_ - 1)
-    return s_out
-
-
-def gcd(a, b):
-    if b == 0:
-        return a
-    remainder = a % b
-    return gcd(b, remainder)
-
-
-def lcm(a, b):
-    return a * b / gcd(a, b)
-
-
-def define_distance_(df, columns, verbose=False):
-    """
-    df contains columns a and b
-    with values 0, 1, .., k and 0, 1, .., m respectively
-    both are expanded to  0, 1 ... lcm(k, m)
-    the distance is
-    """
-    if len(columns) != 2:
-        raise ValueError('in define_distance() columns argument is not length two')
-    elif not (set(columns) < set(df.columns)):
-        raise ValueError('in define_distance() columns are not in df.columns')
-
-    a, b = columns
-    n_a = df[a].value_counts().shape[0] - 1
-    n_b = df[b].value_counts().shape[0] - 1
-    lcm_ab = lcm(n_a, n_b)
-    m_a = lcm_ab / n_a
-    m_b = lcm_ab / n_b
-    if verbose:
-        print('class a scale: {0}; class b scale: {1}. lcm {2}'.format(n_a, n_b, lcm_ab))
-        print('m a {0}; m b {1}'.format(m_a, m_b))
-
-    s = np.abs(m_b * df[b] - m_a * df[a])
-    if verbose:
-        print(s.value_counts(), s.mean())
-    return s
-
-
-def derive_distance_column(df, column_a_parameters=(cexp, qcexp, (-1.e-8, 0.5, 1.0)),
-                           column_b_parameters=ps,
-                           distance_column='guess', verbose=False):
-    cols = []
-    for par in (column_a_parameters, column_b_parameters):
-        if isinstance(par, tuple) and not isinstance(par, str):
-            c, qc, thrs = par
-            df[qc] = quantize_series(df[c], thrs, verbose)
-            cols.append(qc)
-        else:
-            cols.append(par)
-
-    df[distance_column] = define_distance_(df, cols, verbose)
-    return df
 
 
 def prepare_xy(df, covariate_columns, stratify=False, statify_size=5000,
@@ -776,78 +703,6 @@ def parse_experiments_reports(reports):
     report_df = pd.DataFrame(output_dict, index=index)
     return report_df
 
-
-def mask_out(df, cutoff=0.25, verbose=False):
-    masks = []
-
-    # mask only only the upper and the lower quartiles in cdf_exp
-    eps_cutoff = cutoff
-    upper_exp, lower_exp = 1 - eps_cutoff, eps_cutoff
-    exp_mask = ['cdf_exp', (upper_exp, lower_exp), lambda df_, th: (df_ >= th[0]) | (df_ <= th[1])]
-    masks.append(exp_mask)
-
-    # mask affiliation rating
-    # ar < 0 means affiliation rating was not present ???
-    # ar_mask = [ar, 0., lambda df_, th: (df_ >= th)]
-    # masks.append(ar_mask)
-
-    # mask article influence
-    # ai equal to the top of value_counts() means that it was imputed
-    # ai_mask = [ai, 0., lambda s, th: (s != s.value_counts().index[0])]
-    # masks.append(ai_mask)
-
-    # duplicate claims from the same journal are encoded as -1
-    # mask them out
-    ps_mask = [ps, 0., lambda s, th: (s >= th)]
-    masks.append(ps_mask)
-
-    df_selected = select_appropriate_datapoints(df, masks)
-
-    if verbose:
-        print(df_selected.shape)
-
-    return df_selected
-
-
-def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normalize_by_interaction=None,
-                     cutoff=0.25, verbose=False):
-    # ncolumns = ['delta_year', 'len', ar]
-
-    df_selected = mask_out(df, cutoff, verbose)
-
-    # add citation count
-    fp = '/Users/belikov/data/literome/wos/pmid_wos_cite.csv.gz'
-    dft2_ = add_column_from_file(df_selected, fp, pm, ct)
-
-    # define distance between qcexp and ps
-    dft2 = derive_distance_column(dft2_, (cexp, qcexp, (-1.e-8, 0.5, 1.0)), ps, dist)
-    if verbose:
-        print('value counts of distance:')
-        print(dft2[dist].value_counts())
-
-    if normalize:
-        if verbose:
-            minmax = ['{0} min: {1:.2f}; max {2:.2f}'.format(c, dft2[c].min(), dft2[c].max())
-                      for c in columns_normalize]
-            print('. '.join(minmax))
-        df2 = normalize_columns(dft2, columns_normalize)
-
-        for c in columns_normalize_by_interaction:
-            df2[c] = df2.groupby(ni, as_index=False, group_keys=False).apply(lambda x: groupby_normalize(x[c]))
-
-        if verbose:
-            minmax = ['{0} min: {1:.2f}; max {2:.2f}'.format(c, df2[c].min(), df2[c].max())
-                      for c in columns_normalize]
-            print('. '.join(minmax))
-    else:
-        df2 = dft2
-
-    if verbose:
-        print(df2.shape)
-
-    return df2
-
-
 def std_over_samples(lengths, means, stds):
     # https://stats.stackexchange.com/questions/43159/how-to-calculate-pooled-variance-of-two-groups-given-known-group-variances-mean
     # https://stats.stackexchange.com/questions/30495/how-to-combine-subsets-consisting-of-mean-variance-confidence-and-number-of-s
@@ -1010,19 +865,6 @@ def cluster_optimally_pd(data, nc_max=2, min_size=5):
         r = cluster_optimally_(data_, nc_max, True)
     columns = [nw, wi] + ['d{0}'.format(j) for j in range(r.shape[1]-2)]
     return pd.DataFrame(r, index=data.index, columns=columns)
-
-
-def groupby_normalize(data):
-    data_ = data.values
-    std = data_.std()
-    if np.abs(std) < 1e-12:
-        data_rel = data_ - data_.mean()
-    else:
-        data_rel = (data_ - data_.mean())/std
-    if np.isnan(std):
-        print(data_.shape[0], data.index, std)
-
-    return pd.Series(data_rel, index=data.index)
 
 
 # def optimal_2split(data, verbose=False):
@@ -1216,3 +1058,46 @@ def engine(df, all_cols, target_column, func, max_iterations=8, score_name='accu
         best_reports.append(rr[best_candidate_index])
         current_features.append(candidates[best_candidate_index])
     return best_reports
+
+
+def logreg_driver(origin, version, batchsize, cutoff_len, a, b, hash_int, max_depth):
+
+    feauture_cols = [ai, ar]
+
+    windows = [1, 2]
+    cur_metric_columns = ['cpop', 'cden', 'cpoprc', 'cdenrc']
+    cur_metric_columns_exp = cur_metric_columns + [c+str(w) for w in windows for c in cur_metric_columns]
+    cur_metric_columns_exp_normed = [c + '_normed' for c in cur_metric_columns_exp]
+    data_columns = [ni, pm, ye] + feauture_cols + cur_metric_columns_exp + cur_metric_columns_exp_normed + [ps]
+    print(data_columns)
+
+    df = generate_samples(origin, version, a, b, batchsize, cutoff_len, data_columns=data_columns, hash_int=hash_int)
+
+    cols_norm = [ai, ar, ct] + cur_metric_columns_exp + cur_metric_columns_exp_normed +\
+                ['pre_' + affs, 'nhi_' + affs, 'pre_' + aus, 'nhi_' + aus, 'year_off', 'year_off2']
+    cols_norm_by_int = []
+
+    df2 = prepare_final_df(df, normalize=True, columns_normalize=cols_norm,
+                           columns_normalize_by_interaction=cols_norm_by_int, cutoff=0.1, verbose=False)
+
+    print('***')
+    print('correlations of normed columnds with dist:')
+    print(df2[cols_norm + [dist]].corr()[dist].sort_values())
+
+    print('***')
+    print('value counts of the target variable:')
+    print(df2[dist].value_counts())
+
+    # example run
+    # rr = run_lr_over_list_features(df2, [['cden', 'cden_normed']], dist)
+
+    output = engine(df2, cols_norm, dist, run_lr_over_list_features, max_iterations=max_depth,
+                    score_name='f1', verbose=True)
+
+    df_reports = parse_experiments_reports(output)
+    df_reports2 = df_reports.reset_index()[['accuracy', 'precision',
+                                            'recall', 'corr_train_pred',
+                                            'f1', 'auroc', 'index']].sort_values('f1', ascending=False)
+
+    fpath = expanduser('~/data/kl/reports/report_logreg_{0}_{1}_{2}.csv'.format(origin, version, hash_int))
+    df_reports2.to_csv(fpath)
