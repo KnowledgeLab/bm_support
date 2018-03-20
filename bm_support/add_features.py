@@ -45,12 +45,12 @@ def normalize_columns(df, columns):
     return df2
 
 
-def mask_out(df, cutoff=0.25, verbose=False):
+def mask_out(df, cutoff=0.25, n_states=2, verbose=False):
     masks = []
 
     # mask only only the upper and the lower quartiles in cdf_exp
-    eps_cutoff = cutoff
-    upper_exp, lower_exp = 1 - eps_cutoff, eps_cutoff
+    upper_exp, lower_exp = 1 - cutoff, cutoff
+
     exp_mask = ['cdf_exp', (upper_exp, lower_exp), lambda df_, th: (df_ >= th[0]) | (df_ <= th[1])]
     masks.append(exp_mask)
 
@@ -115,6 +115,7 @@ def define_distance_(df, columns, verbose=False):
     if verbose:
         print(s.value_counts(), s.mean())
     return s
+
 
 def derive_distance_column(df, column_a_parameters=(cexp, qcexp, (-1.e-8, 0.5, 1.0)),
                            column_b_parameters=ps,

@@ -279,7 +279,6 @@ def smart_stratify_df(df, column, size=500, ratios=None, replacement=False, seed
     return dfr
 
 
-
 def logreg_analysis(df, covariate_columns, stratify=False, statify_size=5000,
                     stratify_frac=0.5, regularizer=1.0, seed=17, fname=None, nfolds=3):
 
@@ -471,7 +470,7 @@ def rf_study_multiclass(X_train, X_test, y_train, y_test, covariate_columns=[],
         return report
 
 
-def plot_importances(importances, stds, covariate_columns, fname, title_prefix, show=False):
+def plot_importances(importances, stds, covariate_columns, fname, title_prefix, show=False, sort_them=False):
     """
     importances, stds, covariate_columns are all lists of the same length
     :param importances:
@@ -484,11 +483,14 @@ def plot_importances(importances, stds, covariate_columns, fname, title_prefix, 
     """
 
     if fname:
-        indices = np.argsort(importances)[::-1]
+        if sort_them:
+            indices = np.argsort(importances)[::-1]
+        else:
+            indices = range(importances.size)
         n = len(covariate_columns)
 
         imp_ccs = [covariate_columns[i] for i in indices]
-        fig = plt.figure()
+        fig = plt.figure(figsize=(n*3, 5))
         plt.title('{0} Random Forest feature importances'.format(title_prefix))
         plt.bar(range(n), importances[indices],
                 color='r', yerr=stds[indices], align='center', alpha=0.5)
@@ -632,7 +634,7 @@ def pick_good_report(reports):
     return j_optimal
 
 
-def run_n_lr_studies(df, feature_columns, y_column, n_throws=50, seed=0):
+def run_n_lr_studies(df, feature_columns, y_column, n_throws=50, seed=0, ratios=[1., 2.]):
     np.random.seed(seed)
     seeds = sorted(np.random.choice(100, n_throws, False))
 
@@ -641,7 +643,7 @@ def run_n_lr_studies(df, feature_columns, y_column, n_throws=50, seed=0):
     for seed in seeds:
         df_train, df_test = train_test_split(df, test_size=0.3,
                                              random_state=seed, stratify=df[y_column])
-        dd = simple_stratify(df_train, y_column, seed, ratios=None)
+        dd = simple_stratify(df_train, y_column, seed, ratios=ratios)
         X_train, y_train = dd[feature_columns], dd[y_column]
         X_test, y_test = df_test[feature_columns], df_test[y_column]
         r = lr_study_one_sample(X_train, X_test, y_train, y_test, feature_columns, seed)
@@ -1100,4 +1102,4 @@ def logreg_driver(origin, version, batchsize, cutoff_len, a, b, hash_int, max_de
                                             'f1', 'auroc', 'index']].sort_values('f1', ascending=False)
 
     fpath = expanduser('~/data/kl/reports/report_logreg_{0}_{1}_{2}.csv'.format(origin, version, hash_int))
-    df_reports2.to_csv(fpath)
+    df_reports2.to_csv(fpath, float_format='%.3f')
