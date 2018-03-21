@@ -37,7 +37,6 @@ def groupby_normalize(data):
     return pd.Series(data_rel, index=data.index)
 
 
-
 def normalize_columns(df, columns):
     df2 = df.copy()
     sc = MinMaxScaler()
@@ -45,14 +44,17 @@ def normalize_columns(df, columns):
     return df2
 
 
-def mask_out(df, cutoff=0.25, n_states=2, verbose=False):
+def mask_out(df, cutoff=None, extra_masks=None, verbose=False):
     masks = []
 
-    # mask only only the upper and the lower quartiles in cdf_exp
-    upper_exp, lower_exp = 1 - cutoff, cutoff
+    if extra_masks:
+        masks.extend(extra_masks)
 
-    exp_mask = ['cdf_exp', (upper_exp, lower_exp), lambda df_, th: (df_ >= th[0]) | (df_ <= th[1])]
-    masks.append(exp_mask)
+    # mask only only the upper and the lower quartiles in cdf_exp
+    if cutoff:
+        upper_exp, lower_exp = 1 - cutoff, cutoff
+        exp_mask = ['cdf_exp', (upper_exp, lower_exp), lambda df_, th: (df_ >= th[0]) | (df_ <= th[1])]
+        masks.append(exp_mask)
 
     # mask affiliation rating
     # ar < 0 means affiliation rating was not present ???
@@ -72,8 +74,7 @@ def mask_out(df, cutoff=0.25, n_states=2, verbose=False):
     df_selected = select_appropriate_datapoints(df, masks)
 
     if verbose:
-        print(df_selected.shape)
-
+        print('received: {0} rows, after masking out: {1} rows.'.format(df.shape[0], df_selected.shape[0]))
     return df_selected
 
 
@@ -134,32 +135,33 @@ def derive_distance_column(df, column_a_parameters=(cexp, qcexp, (-1.e-8, 0.5, 1
 
 
 def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normalize_by_interaction=None,
-                     cutoff=0.25, verbose=False):
-    # ncolumns = ['delta_year', 'len', ar]
-    if verbose:
-        print('masking out ')
-    df_selected = mask_out(df, cutoff, verbose)
+                     cutoff=None, quantize_intervals=(-1.e-8, 0.5, 1.0), suppress_affs=False,
+                     masks=None, verbose=False):
+    df_selected = mask_out(df, cutoff, masks, verbose)
 
     pmids = df_selected[pm].unique()
-    pm_clusters = cluster_affiliations(pmids)
+    if verbose:
+        print('defining authors\' features')
     pm_aus_map = cluster_authors(pmids)
-
-    affs_feature = df_selected.groupby(ni).apply(lambda x: calc_normed_hi(x, pm_clusters, (pm, ye)))
     aus_feature = df_selected.groupby(ni).apply(lambda x: calc_normed_hi(x, pm_aus_map, (pm, ye)))
-
-    affs_feature = affs_feature.rename(columns={0: pm, 1: 'pre_' + affs, 2: 'nhi_' + affs})
     aus_feature = aus_feature.rename(columns={0: pm, 1: 'pre_' + aus, 2: 'nhi_' + aus})
+    f_cols = ['pre_' + aus, 'nhi_' + aus]
 
-    agg_feature = affs_feature.merge(aus_feature[['pre_' + aus, 'nhi_' + aus]],
-                                     left_index=True, right_index=True)
+    if not suppress_affs:
+        if verbose:
+            print('defining affiliations\' features...')
+        pm_clusters = cluster_affiliations(pmids)
+        affs_feature = df_selected.groupby(ni).apply(lambda x: calc_normed_hi(x, pm_clusters, (pm, ye)))
+        affs_feature = affs_feature.rename(columns={0: pm, 1: 'pre_' + affs, 2: 'nhi_' + affs})
+        aus_feature = affs_feature.merge(aus_feature[['pre_' + aus, 'nhi_' + aus]],
+                                         left_index=True, right_index=True)
+        f_cols.extend(['pre_' + affs, 'nhi_' + affs])
 
-    df_selected = df_selected.merge(agg_feature[['pre_' + affs, 'nhi_' + affs,
-                                                 'pre_' + aus, 'nhi_' + aus]],
+    df_selected = df_selected.merge(aus_feature[f_cols],
                                     left_index=True, right_index=True)
 
     df_selected[ye + '_off'] = df_selected.groupby(ni, as_index=False,
                                                    group_keys=False).apply(lambda x: x[ye] - x[ye].min())
-
     df_selected[ye + '_off2'] = df_selected[ye + '_off']**2
 
     # add citation count
@@ -167,7 +169,7 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
     dft2_ = add_column_from_file(df_selected, fp, pm, ct)
 
     # define distance between qcexp and ps
-    dft2 = derive_distance_column(dft2_, (cexp, qcexp, (-1.e-8, 0.5, 1.0)), ps, dist)
+    dft2 = derive_distance_column(dft2_, (cexp, qcexp, quantize_intervals), ps, dist)
     if verbose:
         print('value counts of distance:')
         print(dft2[dist].value_counts())
@@ -177,22 +179,18 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
             minmax = ['{0} min: {1:.2f}; max {2:.2f}'.format(c, dft2[c].min(), dft2[c].max())
                       for c in columns_normalize]
             print('. '.join(minmax))
-        df2 = normalize_columns(dft2, columns_normalize)
+        if columns_normalize:
+            dft2 = normalize_columns(dft2, columns_normalize)
 
         for c in columns_normalize_by_interaction:
-            df2[c] = df2.groupby(ni, as_index=False, group_keys=False).apply(lambda x: groupby_normalize(x[c]))
+            dft2[c] = dft2.groupby(ni, as_index=False, group_keys=False).apply(lambda x: groupby_normalize(x[c]))
 
         if verbose:
-            minmax = ['{0} min: {1:.2f}; max {2:.2f}'.format(c, df2[c].min(), df2[c].max())
+            minmax = ['{0} min: {1:.2f}; max {2:.2f}'.format(c, dft2[c].min(), dft2[c].max())
                       for c in columns_normalize]
             print('. '.join(minmax))
-    else:
-        df2 = dft2
 
-    if verbose:
-        print(df2.shape)
-
-    return df2
+    return dft2
 
 
 def cluster_affiliations(pmids=[], verbose=False, debug=False):

@@ -5,6 +5,7 @@ import numpy as np
 import pickle
 import gzip
 import matplotlib.pyplot as plt
+import seaborn as sns
 import statsmodels.api as sm
 from numpy import histogram, argmin, flatnonzero
 from scipy.stats import norm
@@ -217,7 +218,7 @@ def stratify_df(df, column, size, frac, seed=17):
     return dfr
 
 
-def simple_stratify(df, statify_column, seed=0, ratios=0.5):
+def simple_stratify(df, statify_column, seed=0, ratios=None, verbose=False):
     """
     based on multi-class column stratify_column
     return stratified df
@@ -236,6 +237,8 @@ def simple_stratify(df, statify_column, seed=0, ratios=0.5):
         tentative_sizes = np.array([n/alpha for n, alpha in zip(sizes, ratios)])
     else:
         print('ratios len does is not equal to the number of classes ')
+    if verbose:
+        print('ratios in the training : {0}'.format(ratios))
     optimal_index = np.argmin(tentative_sizes)
     size0 = tentative_sizes[optimal_index]
     new_sizes = [int(x*size0) for x in ratios]
@@ -377,6 +380,8 @@ def rf_study(X_train, X_test, y_train, y_test, covariate_columns=[],
              seed=0, depth=None, fname=None, show=False, title_prefix=None):
     report = {}
     rf = RandomForestClassifier(max_depth=depth, random_state=seed)
+    n_states = len(set(y_test))
+
     rf = rf.fit(X_train, y_train)
     y_pred = rf.predict(X_test)
     report['corr_test_pred'] = np.corrcoef(y_pred, y_test)[0, 1]
@@ -385,20 +390,32 @@ def rf_study(X_train, X_test, y_train, y_test, covariate_columns=[],
 
     report['class_report'] = classification_report(y_test, y_pred)
 
-    positive_proba = rf.predict_proba(X_test)[:, 1]
-
-    auroc = roc_auc_score(y_test, positive_proba)
-
+    if n_states > 2:
+        positive_proba = rf.predict_proba(X_test)
+        y_test_binary = label_binarize(y_test, classes=np.arange(0.0, n_states))
+        auroc = [roc_auc_score(y_, proba_) for proba_, y_ in zip(positive_proba.T, y_test_binary.T)]
+    else:
+        positive_proba = rf.predict_proba(X_test)[:, 1]
+        auroc = roc_auc_score(y_test, positive_proba)
     report['auroc'] = auroc
+
     importances = rf.feature_importances_
     stds = np.std([tree.feature_importances_ for tree in rf.estimators_], axis=0)
 
     report['feature_importance'] = dict(zip(covariate_columns, importances))
     report['feature_importance_std'] = dict(zip(covariate_columns, stds))
-    fpr, tpr, thresholds = roc_curve(y_test, positive_proba)
 
     fig, ax = plt.subplots(figsize=(5, 5))
-    ax.plot(fpr, tpr, label='Random Forest: area = {0:.3f}'.format(report['auroc']))
+    if n_states > 2:
+        coords = [roc_curve(y_, proba_) for proba_, y_ in zip(positive_proba.T, y_test_binary.T)]
+        for cs, auc, k in zip(coords, auroc, range(n_states)):
+            fpr, tpr, thresholds = cs
+            distance = k / (n_states - 1)
+            ax.plot(fpr, tpr, label='Random Forest: dist {0} area = {1:.3f}'.format(distance, auc))
+    else:
+        fpr, tpr, thresholds = roc_curve(y_test, positive_proba)
+        ax.plot(fpr, tpr, label='Random Forest: area = {0:.3f}'.format(report['auroc']))
+
     ax.plot([0, 1], [0, 1], 'r--')
     ax.set_xlim([0.0, 1.05])
     ax.set_ylim([0.0, 1.05])
@@ -417,60 +434,8 @@ def rf_study(X_train, X_test, y_train, y_test, covariate_columns=[],
     return report
 
 
-def rf_study_multiclass(X_train, X_test, y_train, y_test, covariate_columns=[],
-                        seed=0, depth=None, fname=None, show=False, title_prefix=None, n_estimators=20,
-                        return_model=False):
-    n_states = len(set(y_test))
-    report = {}
-    rf = RandomForestClassifier(max_depth=depth, random_state=seed, n_estimators=n_estimators)
-    rf = rf.fit(X_train, y_train)
-    y_pred = rf.predict(X_test)
-    report['corr_train_pred'] = np.corrcoef(y_pred, y_test)[0, 1]
-    conf_matrix = confusion_matrix(y_test, y_pred)
-    report['confusion'] = conf_matrix
-
-    report['class_report'] = classification_report(y_test, y_pred)
-
-    positive_proba = rf.predict_proba(X_test)
-    y_test_binary = label_binarize(y_test, classes=np.arange(0.0, n_states))
-
-    aurocs = [roc_auc_score(y_, proba_) for proba_, y_ in zip(positive_proba.T, y_test_binary.T)]
-
-    report['auroc'] = aurocs
-    importances = rf.feature_importances_
-    stds = np.std([tree.feature_importances_ for tree in rf.estimators_], axis=0)
-    report['feature_importance'] = dict(zip(covariate_columns, importances))
-    report['feature_importance_std'] = dict(zip(covariate_columns, stds))
-
-    coords = [roc_curve(y_, proba_) for proba_, y_ in zip(positive_proba.T, y_test_binary.T)]
-
-    fig, ax = plt.subplots(figsize=(5, 5))
-    for cs, auc, k in zip(coords, aurocs, range(n_states)):
-        fpr, tpr, thresholds = cs
-        distance = k/(n_states - 1)
-        ax.plot(fpr, tpr, label='Random Forest: dist {0} area = {1:.3f}'.format(distance, auc))
-    ax.plot([0, 1], [0, 1], 'r--')
-    ax.set_xlim([0.0, 1.05])
-    ax.set_ylim([0.0, 1.05])
-    ax.axis('equal')
-    ax.set_xlabel('False Positive Rate')
-    ax.set_ylabel('True Positive Rate')
-    ax.set_title('{0} Random Forest ROC'.format(title_prefix))
-    ax.legend(loc='lower right')
-
-    if fname:
-        fig.savefig(fname)
-    if show:
-        plt.show()
-    else:
-        plt.close()
-    if return_model:
-        return report, rf
-    else:
-        return report
-
-
-def plot_importances(importances, stds, covariate_columns, fname, title_prefix, show=False, sort_them=False):
+def plot_importances(importances, stds, covariate_columns, fname, title_prefix, colors=None,
+                     show=False, sort_them=False):
     """
     importances, stds, covariate_columns are all lists of the same length
     :param importances:
@@ -488,12 +453,17 @@ def plot_importances(importances, stds, covariate_columns, fname, title_prefix, 
         else:
             indices = range(importances.size)
         n = len(covariate_columns)
-
+        if not colors:
+            colors='r'
         imp_ccs = [covariate_columns[i] for i in indices]
         fig = plt.figure(figsize=(n*3, 5))
+        sns.set_style("whitegrid")
         plt.title('{0} Random Forest feature importances'.format(title_prefix))
         plt.bar(range(n), importances[indices],
-                color='r', yerr=stds[indices], align='center', alpha=0.5)
+                color=colors, yerr=stds[indices], align='center', alpha=0.5)
+        # sns.barplot(list(range(n)), importances[indices],
+        #             color=colors, yerr=stds[indices], align='center', alpha=0.5)
+
         plt.xticks(range(n), imp_ccs)
         plt.xlim([-1, n])
         fig.savefig(fname)
