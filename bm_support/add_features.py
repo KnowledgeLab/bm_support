@@ -208,7 +208,7 @@ def retrieve_wos_aff_au_df(fpath='~/data/wos/wos_pmid/'):
              (f[-suffix_len:] == suffix)]
 
     kk = ['PM', 'TC', 'UT', 'AU', 'C1']
-    ll = [agg_file_info(fpath + f, kk) for f in files]
+    ll = [agg_file_info(join(fpath, f), kk) for f in files]
     lll = [x for sublist in ll for x in sublist]
 
     df = pd.DataFrame(lll, columns=kk)
