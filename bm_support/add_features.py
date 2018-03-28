@@ -200,12 +200,15 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
     return dft2
 
 
-def retrieve_wos_aff_au_df(fpath='~/data/wos/wos_pmid/'):
+def retrieve_wos_aff_au_df(fpath='~/data/wos/wos_pmid/', verbose=False):
     fpath = expanduser(fpath)
     suffix = 'txt'
     suffix_len = len(suffix)
     files = [f for f in listdir(fpath) if isfile(join(fpath, f)) and
              (f[-suffix_len:] == suffix)]
+
+    if verbose:
+        print(files)
 
     kk = ['PM', 'TC', 'UT', 'AU', 'C1']
     ll = [agg_file_info(join(fpath, f), kk) for f in files]
