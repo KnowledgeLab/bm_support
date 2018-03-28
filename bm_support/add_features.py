@@ -203,9 +203,11 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
 def retrieve_wos_aff_au_df(fpath='~/data/wos/wos_pmid/', verbose=False):
     fpath = expanduser(fpath)
     suffix = 'txt'
+    prefix = 'sav'
     suffix_len = len(suffix)
+    prefix_len = len(prefix)
     files = [f for f in listdir(fpath) if isfile(join(fpath, f)) and
-             (f[-suffix_len:] == suffix)]
+             (f[-suffix_len:] == suffix) and (f[:prefix_len] == prefix)]
 
     if verbose:
         print(files)
