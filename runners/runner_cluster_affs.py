@@ -5,7 +5,7 @@ import pickle
 from bm_support.add_features import retrieve_wos_aff_au_df, process_affs
 from bm_support.add_features import cluster_affiliations
 import pandas as pd
-from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, nw, wi, cpop, cden, pm, ct, dist, cexp, qcexp
+from datahelpers.constants import pm
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

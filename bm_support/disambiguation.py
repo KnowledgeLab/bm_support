@@ -5,10 +5,8 @@ from nltk.tokenize import RegexpTokenizer
 from nltk.corpus import stopwords
 import unidecode
 from pandas import DataFrame
-from sklearn.cluster import KMeans
 import re
 from numpy.random import RandomState
-from copy import deepcopy
 from functools import partial
 import pathos.multiprocessing as mp
 from copy import deepcopy
