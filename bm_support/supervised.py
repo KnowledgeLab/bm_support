@@ -223,30 +223,33 @@ def simple_stratify(df, statify_column, seed=0, ratios=None, verbose=False):
     based on multi-class column stratify_column
     return stratified df
     """
-    np.random.seed(seed)
-    vc = df[statify_column].value_counts()
-    masks = [(df[statify_column] == v) for v in vc.index]
-    sizes = list(vc)
-    if not isinstance(ratios, (list, tuple)):
-        if ratios:
-            leftover = 1.0 - ratios
-            ratios = [leftover/(vc.shape[0]-1)]*(vc.shape[0]-1) + [ratios]
-        else:
-            ratios = [1.0/vc.shape[0]]*vc.shape[0]
-    if len(ratios) == vc.shape[0]:
-        tentative_sizes = np.array([n/alpha for n, alpha in zip(sizes, ratios)])
+    if ratios == 'original':
+        return  df
     else:
-        print('ratios len does is not equal to the number of classes ')
-    if verbose:
-        print('ratios in the training : {0}'.format(ratios))
-    optimal_index = np.argmin(tentative_sizes)
-    size0 = tentative_sizes[optimal_index]
-    new_sizes = [int(x*size0) for x in ratios]
-    # size = np.sum(new_sizes)
-    indices = [np.random.choice(actual, new_size, replace=False) for actual, new_size in zip(sizes, new_sizes)]
-    subdfs = [df.loc[m].iloc[ii] for m, ii in zip(masks, indices)]
-    dfr = pd.concat(subdfs)
-    return dfr
+        np.random.seed(seed)
+        vc = df[statify_column].value_counts()
+        masks = [(df[statify_column] == v) for v in vc.index]
+        sizes = list(vc)
+        if not isinstance(ratios, (list, tuple)):
+            if ratios:
+                leftover = 1.0 - ratios
+                ratios = [leftover/(vc.shape[0]-1)]*(vc.shape[0]-1) + [ratios]
+            else:
+                ratios = [1.0/vc.shape[0]]*vc.shape[0]
+        if len(ratios) == vc.shape[0]:
+            tentative_sizes = np.array([n/alpha for n, alpha in zip(sizes, ratios)])
+        else:
+            print('ratios len does is not equal to the number of classes ')
+        if verbose:
+            print('ratios in the training : {0}'.format(ratios))
+        optimal_index = np.argmin(tentative_sizes)
+        size0 = tentative_sizes[optimal_index]
+        new_sizes = [int(x*size0) for x in ratios]
+        # size = np.sum(new_sizes)
+        indices = [np.random.choice(actual, new_size, replace=False) for actual, new_size in zip(sizes, new_sizes)]
+        subdfs = [df.loc[m].iloc[ii] for m, ii in zip(masks, indices)]
+        dfr = pd.concat(subdfs)
+        return dfr
 
 
 def smart_stratify_df(df, column, size=500, ratios=None, replacement=False, seed=17, verbose=False):
@@ -377,9 +380,12 @@ def prepare_xy(df, covariate_columns, stratify=False, statify_size=5000,
 
 
 def rf_study(X_train, X_test, y_train, y_test, covariate_columns=[],
-             seed=0, depth=None, fname=None, show=False, title_prefix=None):
+             seed=0, depth=None, fname=None, show=False, title_prefix=None, n_trees=13,
+             return_model=False, class_weight='balanced_subsample', mode_scores=None):
     report = {}
-    rf = RandomForestClassifier(max_depth=depth, random_state=seed)
+    rf = RandomForestClassifier(n_trees, max_depth=depth,
+                                random_state=seed,
+                                class_weight=class_weight)
     n_states = len(set(y_test))
 
     rf = rf.fit(X_train, y_train)
@@ -389,6 +395,11 @@ def rf_study(X_train, X_test, y_train, y_test, covariate_columns=[],
     report['confusion'] = conf_matrix
 
     report['class_report'] = classification_report(y_test, y_pred)
+
+    report['precision'] = precision_score(y_test, y_pred, average=mode_scores)
+    report['accuracy'] = accuracy_score(y_test, y_pred)
+    report['recall'] = recall_score(y_test, y_pred, average=mode_scores)
+    report['f1'] = f1_score(y_test, y_pred, average=mode_scores)
 
     if n_states > 2:
         positive_proba = rf.predict_proba(X_test)
@@ -431,7 +442,121 @@ def rf_study(X_train, X_test, y_train, y_test, covariate_columns=[],
         plt.show()
     else:
         plt.close()
-    return report
+
+    if return_model:
+        return report, rf
+    else:
+        return report
+
+
+def train_forest(dfw, feature_columns, y_column, seed, n_trees=10, mode_scores=None):
+    return_model = True
+    ratios = None
+    show_plots = False
+    title_prefix = None
+
+    df_train, df_test = train_test_split(dfw, test_size=0.3,
+                                         random_state=seed, stratify=dfw[y_column])
+    X_test, y_test = df_test[feature_columns], df_test[y_column]
+    X_train, y_train = df_train[feature_columns], df_train[y_column]
+
+    r, rf_clf = rf_study(X_train, X_test, y_train, y_test, feature_columns, seed,
+                         None, None, show_plots, title_prefix, n_trees, return_model,
+                         {0.: 1., 1.: 1.}, mode_scores)
+    return r, rf_clf
+
+
+def train_massif(dfw, feature_columns, y_column,
+                 seed, n_throws=10, n_trees=10, mode_scores=None, show_plots=False, fname=None, ratios=None):
+    title_prefix = None
+    return_model = True
+    massif = []
+
+    df_train, df_test = train_test_split(dfw, test_size=0.3,
+                                         random_state=seed, stratify=dfw[y_column])
+    X_test, y_test = df_test[feature_columns], df_test[y_column]
+
+    n_states = len(set(y_test))
+    seeds = sorted(np.random.choice(10000, n_throws, False))
+
+    for seed in seeds:
+        dd = simple_stratify(df_train, y_column, seed, ratios=ratios)
+        X_train, y_train = dd[feature_columns], dd[y_column]
+
+        r, rf_clf = rf_study(X_train, X_test, y_train, y_test, feature_columns, seed,
+                             None, None, False, title_prefix, n_trees, return_model)
+
+        massif.append(rf_clf)
+    probs = [clean_zeros(rfm.predict_proba(X_test), 1e-2)[np.newaxis, ...] for rfm in massif]
+    arr_probs = np.concatenate(probs, axis=0)
+    rprobs = np.sum(arr_probs, axis=0)
+    rprobs2 = rprobs / np.sum(rprobs, axis=1).reshape(-1)[:, np.newaxis]
+    y_pred2 = np.argmax(rprobs2, axis=1)
+    # rprobs3 = np.exp(np.sum(np.log(arr_probs), axis=0))
+    # y_pred3 = np.argmax(rprobs3, axis=1)
+    y_pred = y_pred2
+    report = {}
+    report['corr_test_pred'] = np.corrcoef(y_pred, y_test)[0, 1]
+    conf_matrix = confusion_matrix(y_test, y_pred)
+    report['confusion'] = conf_matrix
+
+    report['class_report'] = classification_report(y_test, y_pred)
+
+    report['precision'] = precision_score(y_test, y_pred, average=mode_scores)
+    report['accuracy'] = accuracy_score(y_test, y_pred)
+    report['recall'] = recall_score(y_test, y_pred, average=mode_scores)
+    report['f1'] = f1_score(y_test, y_pred, average=mode_scores)
+
+    if n_states > 2:
+        positive_proba = rprobs2
+        y_test_binary = label_binarize(y_test, classes=np.arange(0.0, n_states))
+        auroc = [roc_auc_score(y_, proba_) for proba_, y_ in zip(positive_proba.T, y_test_binary.T)]
+    else:
+        positive_proba = rprobs[:, 1]
+        auroc = roc_auc_score(y_test, positive_proba)
+
+    report['auroc'] = auroc
+
+    # importances = rf.feature_importances_
+    # stds = np.std([tree.feature_importances_ for tree in rf.estimators_], axis=0)
+
+    importances = np.array([rf.feature_importances_ for rf in massif])
+    stds = np.array([np.std([tree.feature_importances_ for tree in rf.estimators_], axis=0) for rf in massif])
+
+    report['feature_importance'] = {}
+    report['feature_importance_std'] = {}
+
+    for k, rvs, errors in zip(feature_columns, importances.T, stds.T):
+        ls = np.ones(len(rvs))
+        mean = np.mean(rvs)
+        error = std_over_samples(ls, rvs, errors)
+        report['feature_importance'][k] = mean
+        report['feature_importance_std'][k] = error
+    if show_plots:
+        fig, ax = plt.subplots(figsize=(5, 5))
+        if n_states > 2:
+            coords = [roc_curve(y_, proba_) for proba_, y_ in zip(positive_proba.T,
+                                                                  y_test_binary.T)]
+            for cs, auc, k in zip(coords, auroc, range(n_states)):
+                fpr, tpr, thresholds = cs
+                distance = k / (n_states - 1)
+                ax.plot(fpr, tpr, label='Random Forest: dist {0} '
+                                        'area = {1:.3f}'.format(distance, auc))
+        else:
+            fpr, tpr, thresholds = roc_curve(y_test, positive_proba)
+            ax.plot(fpr, tpr, label='Random Forest: area = {0:.3f}'.format(report['auroc']))
+
+        ax.plot([0, 1], [0, 1], 'r--')
+        ax.set_xlim([0.0, 1.05])
+        ax.set_ylim([0.0, 1.05])
+        ax.axis('equal')
+        ax.set_xlabel('False Positive Rate')
+        ax.set_ylabel('True Positive Rate')
+        ax.set_title('{0} Random Forest ROC'.format(title_prefix))
+        ax.legend(loc='lower right')
+    if fname:
+        fig.savefig(fname)
+    return report, massif, df_test
 
 
 def plot_importances(importances, stds, covariate_columns, fname, title_prefix, colors=None,
@@ -604,7 +729,7 @@ def pick_good_report(reports):
     return j_optimal
 
 
-def run_n_lr_studies(df, feature_columns, y_column, n_throws=50, seed=0, ratios=[1., 2.]):
+def run_n_lr_studies(df, feature_columns, y_column, n_throws=50, seed=0, ratios=(1., 2.)):
     np.random.seed(seed)
     seeds = sorted(np.random.choice(100, n_throws, False))
 
@@ -675,6 +800,7 @@ def parse_experiments_reports(reports):
     report_df = pd.DataFrame(output_dict, index=index)
     return report_df
 
+
 def std_over_samples(lengths, means, stds):
     # https://stats.stackexchange.com/questions/43159/how-to-calculate-pooled-variance-of-two-groups-given-known-group-variances-mean
     # https://stats.stackexchange.com/questions/30495/how-to-combine-subsets-consisting-of-mean-variance-confidence-and-number-of-s
@@ -685,21 +811,26 @@ def std_over_samples(lengths, means, stds):
     return r
 
 
-def invert_bayes(df_input, clf, feature_columns, verbose=False):
+def invert_bayes(df_input, clf, feature_columns, p_min=1e-2, verbose=False, debug=None):
+
     df = df_input.copy()
-    arr_probs = clf.predict_proba(df[feature_columns])
+    if isinstance(debug, np.ndarray):
+        arr_probs = debug
+    else:
+        arr_probs = clf.predict_proba(df[feature_columns])
     if verbose:
         print('names of feature columns:', feature_columns)
         print('probs shape: ', arr_probs.shape)
     arr_ps = df[ps].values
-    p_min = np.float(5e-1/clf.n_estimators)
-    arr_probs[arr_probs == 0.0] = p_min
-    arr_probs2 = arr_probs/np.sum(arr_probs, axis=1).reshape(-1)[:, np.newaxis]
+    # p_min = np.float(5e-1/clf.n_estimators)
+    arr_probs2 = clean_zeros(arr_probs, p_min)
+    # arr_probs[arr_probs == 0.0] = p_min
+    # arr_probs2 = arr_probs/np.sum(arr_probs, axis=1).reshape(-1)[:, np.newaxis]
 
     tensor_claims = np.stack([1 - arr_ps, arr_ps])
     tensor_probs = np.stack([arr_probs2, arr_probs2[:, ::-1]])
     if verbose:
-        print(tensor_claims.shape, tensor_probs.shape)
+        print(tensor_claims.T.shape, tensor_probs.T.shape)
     tt = np.multiply(tensor_claims.T, tensor_probs.T)
     if verbose:
         print(tt.shape)
@@ -838,6 +969,12 @@ def cluster_optimally_pd(data, nc_max=2, min_size=5):
     columns = [nw, wi] + ['d{0}'.format(j) for j in range(r.shape[1]-2)]
     return pd.DataFrame(r, index=data.index, columns=columns)
 
+
+def clean_zeros(arr, p_min):
+    arr2 = arr.copy()
+    arr2[arr2 == 0.0] = p_min
+    arr2 = arr2/np.sum(arr, axis=1).reshape(-1)[:, np.newaxis]
+    return arr2
 
 # def optimal_2split(data, verbose=False):
 #     """

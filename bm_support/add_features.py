@@ -10,6 +10,7 @@ from datahelpers.dftools import select_appropriate_datapoints, add_column_from_f
 import Levenshtein as lev
 from functools import partial
 from .disambiguation import ndistance, nlevenstein_root, cluster_objects
+from sklearn.model_selection import train_test_split
 from numpy import unique
 
 
@@ -140,9 +141,12 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
     df_selected = mask_out(df, cutoff, masks, verbose)
 
     pmids = df_selected[pm].unique()
+
+    df_wos = retrieve_wos_aff_au_df()
+
     if verbose:
         print('defining authors\' features')
-    pm_aus_map = cluster_authors(pmids)
+    pm_aus_map = cluster_authors(df_wos, pmids)
     aus_feature = df_selected.groupby(ni).apply(lambda x: calc_normed_hi(x, pm_aus_map, (pm, ye)))
     aus_feature = aus_feature.rename(columns={0: pm, 1: 'pre_' + aus, 2: 'nhi_' + aus})
     f_cols = ['pre_' + aus, 'nhi_' + aus]
@@ -150,7 +154,10 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
     if not suppress_affs:
         if verbose:
             print('defining affiliations\' features...')
-        pm_clusters = cluster_affiliations(pmids)
+
+        df_wos = retrieve_wos_aff_au_df()
+
+        pm_clusters = cluster_affiliations(df_wos, pmids)
         affs_feature = df_selected.groupby(ni).apply(lambda x: calc_normed_hi(x, pm_clusters, (pm, ye)))
         affs_feature = affs_feature.rename(columns={0: pm, 1: 'pre_' + affs, 2: 'nhi_' + affs})
         aus_feature = affs_feature.merge(aus_feature[['pre_' + aus, 'nhi_' + aus]],
@@ -193,8 +200,8 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
     return dft2
 
 
-def cluster_affiliations(pmids=[], verbose=False, debug=False):
-    fpath = expanduser('~/data/wos/wos_pmid/')
+def retrieve_wos_aff_au_df(fpath='~/data/wos/wos_pmid/'):
+    fpath = expanduser(fpath)
     suffix = 'txt'
     suffix_len = len(suffix)
     files = [f for f in listdir(fpath) if isfile(join(fpath, f)) and
@@ -208,21 +215,24 @@ def cluster_affiliations(pmids=[], verbose=False, debug=False):
     df = df.rename(columns={'PM': pm, 'TC': ct, 'UT': 'wos_id',
                             'AU': aus, 'C1': affs})
     df[pm] = df[pm].astype(int)
+    return df
 
-    if len(pmids) > 0:
-        df = df.loc[df[pm].isin(pmids)]
+
+def process_affs(df, verbose=False):
 
     # number of [] () inserts in affiliations
     if verbose:
-        print(sum(df[affs].apply(lambda x: '[' in x)))
+        print('number of affs with authors in square brackets [] :'
+              ' {0}'.format(sum(df[affs].apply(lambda x: '[' in x))))
     # we need to exclude [abc] and (abc), they contain authors in affiliation
-    df[affs] = df[affs].apply(lambda x: re.sub('[\(\[].*?[\)\]]', '', x))
+    # df[affs] = df[affs].apply(lambda x: re.sub('[\(\[].*?[\)\]]', '', x))
+    df[affs + '_clean'] = df[affs].apply(lambda x: re.sub('[\(\[].*?[\)\]]', '', x))
     # number of empty authors, empty affiliations
     if verbose:
-        print('number of empty affs: {0}', format(sum(df[affs].apply(lambda x: x == ''))))
-    df_working = df.loc[df[affs].apply(lambda x: x != '')]
+        print('number of empty affs: {0}'.format(sum(df[affs].apply(lambda x: x == ''))))
+    df_working = df.loc[df[affs + '_clean'].apply(lambda x: x != '')]
 
-    pm_aff_map = df_working[[pm, affs]].values
+    pm_aff_map = df_working[[pm, affs + '_clean']].values
 
     pm_aff_split = [(pm_, x.split('|')) for pm_, x in pm_aff_map]
 
@@ -240,11 +250,22 @@ def cluster_affiliations(pmids=[], verbose=False, debug=False):
     index_aff3 = [(j, x.split()) for j, x in index_aff2]
     a2i = dict([(aff, j) for j, aff in index_aff2])
 
-    ndist = partial(ndistance, **{'foo': lev.distance})
-    # ndist_root = partial(nlevenstein_root, **{'foo': ndist})
+    return index_aff3, pm_aff_phrases, a2i
 
-    i2c, phrase_cluster_dict = cluster_objects(index_aff3[:],
-                                               foo=ndist, decision_thr=0.25, simple_thr=0.25,
+
+def cluster_affiliations(df, pmids=[], n_processes=1, verbose=False, debug=False):
+
+    if len(pmids) > 0:
+        df = df.loc[df[pm].isin(pmids)]
+
+    index_affs, pm_aff_phrases, a2i = process_affs(df, verbose)
+
+    ndist = partial(ndistance, **{'foo': lev.distance})
+    ndist_root = partial(nlevenstein_root, **{'foo': ndist})
+
+    i2c, phrase_cluster_dict = cluster_objects(index_affs[:],
+                                               foo=ndist_root, foo_basic=ndist,
+                                               n_processes=n_processes, simple_thr=0.1,
                                                verbose=verbose, debug=True)
 
     pm_clusters = {}
@@ -257,21 +278,7 @@ def cluster_affiliations(pmids=[], verbose=False, debug=False):
         return pm_clusters
 
 
-def cluster_authors(pmids=[], verbose=False):
-    fpath = expanduser('~/data/wos/wos_pmid/')
-    suffix = 'txt'
-    suffix_len = len(suffix)
-    files = [f for f in listdir(fpath) if isfile(join(fpath, f)) and
-             (f[-suffix_len:] == suffix)]
-
-    kk = ['PM', 'TC', 'UT', 'AU', 'C1']
-    ll = [agg_file_info(fpath + f, kk) for f in files]
-    lll = [x for sublist in ll for x in sublist]
-
-    df = pd.DataFrame(lll, columns=kk)
-    df = df.rename(columns={'PM': pm, 'TC': ct, 'UT': 'wos_id',
-                            'AU': aus, 'C1': affs})
-    df[pm] = df[pm].astype(int)
+def cluster_authors(df, pmids=[], verbose=False):
 
     if len(pmids) > 0:
         df = df.loc[df[pm].isin(pmids)]
@@ -380,3 +387,27 @@ def calc_normed_hi(pd_incoming, pmids_clust_dict, columns):
                 nh_index = 0.
             result_accumulator.append([pmid, 0.0, nh_index])
     return pd.DataFrame(np.array(result_accumulator), index=pd_incoming.index)
+
+
+def train_test_split_key(df, test_size, seed, agg_ind, stratify_key_agg, skey, verbose=False):
+    pkey = stratify_key_agg
+    nkey = skey
+    df_key = df.drop_duplicates(agg_ind)
+    df_key_train, df_key_test = train_test_split(df_key, test_size=test_size,
+                                                 random_state=seed,
+                                                 stratify=df_key[pkey])
+    df_test = df.loc[df[agg_ind].isin(df_key_test[agg_ind].unique())]
+    df_train = df.loc[df[agg_ind].isin(df_key_train[agg_ind].unique())]
+
+    if verbose:
+        print('train vc:')
+        print(df_key_train[pkey].value_counts())
+        print('test vc:')
+        print(df_key_test[pkey].value_counts())
+        print('train vc:')
+        print(df_train[nkey].value_counts())
+        print('test vc:')
+        print(df_test[nkey].value_counts())
+        print('fraction. resulting : {0:.2f}, requested {1:.2f}'
+              .format(df_test.shape[0]/df.shape[0], test_size))
+    return df_train, df_test

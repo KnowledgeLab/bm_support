@@ -9,8 +9,10 @@ from sklearn.cluster import KMeans
 import re
 from numpy.random import RandomState
 from copy import deepcopy
-from string import punctuation
-import  Levenshtein as lev
+from functools import partial
+import pathos.multiprocessing as mp
+from copy import deepcopy
+
 
 
 def tokenize_clean(s, target_words=None):
@@ -237,7 +239,7 @@ def nlevenstein_root(s, s2, foo):
     :return:
     """
     if len(s) > len(s2):
-        s, s2 = s2, s
+        return nlevenstein_root(s2, s, foo)
     diff = len(s2) - len(s) + 1
     m = min([foo(s, s2[k:(k+len(s))]) for k in range(diff)])
     return m
@@ -265,12 +267,17 @@ def metric_to_words(m, foo, decision_thr=0.1, verbose=False):
     return phrase_norm, words_discrepancy_norm
 
 
-def meta_distance(mw1, mw2, foo, sigma=0.5):
+def meta_distance(mw1, mw2, foo, foo_basic=None, sigma=0.5):
+    # actually it is not symmetric (case when mw1 == mw2)
+    if len(mw1) > len(mw2):
+        return meta_distance(mw2, mw1, foo, foo_basic,sigma)
     if isinstance(mw1, str) and isinstance(mw2, str):
-        r = foo(mw1, mw2)
+        if foo_basic:
+            r = foo_basic(mw1, mw2)
+        else:
+            r = foo(mw1, mw2)
     else:
-        m = np.array([[meta_distance(w1, w2, foo) for w1 in mw1] for w2 in mw2])
-        # print(mw1, mw2, m)
+        m = np.array([[meta_distance(w1, w2, foo, foo_basic, sigma) for w1 in mw1] for w2 in mw2])
         da, db = metric_to_words(m, foo)
         r = ((da**2 + db**2)/2.)**0.5
     return r
@@ -320,41 +327,41 @@ def filter_targets(phrases_collection, targets=None, targets_back=None):
     return phrases_accum, garbage_accum
 
 
-def cluster_objects(objects, foo, decision_thr=0.1, simple_thr=0.3, max_it=None, n_classes=2, tol=1e-6, seed=0,
-                    verbose=False, debug=False):
+def cluster_objects(objects, foo, foo_basic=None, simple_thr=0.3, max_it=None,
+                    n_processes=1, verbose=False, debug=False):
+    # objects is a list of tuples [(id, phrase)],
+    # where id is an integer and phrase is a list of strings
     # debug True also returns id_cluster_dict with actual strings
-    #
+
     id_cluster_dict = {}
     k = 0
     objs = objects
-    while len(objs) > 1:
-        cur_obj, objs = objs[0], objs[1:]
-        dists = np.array([meta_distance(cur_obj[1], a, foo) for j, a in objs])
-        n_c = n_classes if len(objs) > 2 else 1
-        km = KMeans(n_c, tol=tol, random_state=seed)
-        args = km.fit_predict(dists.reshape(-1, 1))
-        unis = np.unique(args)
-        centers = np.concatenate([km.cluster_centers_[k] for k in unis])
-        proximal_class = np.argmin(centers)
-        if centers[proximal_class] < decision_thr:
-        # if dists[args == proximal_class].max() < decision_thr:
-            proximal_indices = np.where(args == proximal_class)[0]
-            str_rep = 'by kmeans'
-        else:
+    with mp.Pool(n_processes) as p:
+        while len(objs) > 1:
+            cur_obj, objs = objs[0], objs[1:]
+
+            objs_phrases = [x[1] for x in objs]
+
+            if len(objs) > 500:
+                    func = partial(meta_distance, mw2=cur_obj[1], foo=foo, foo_basic=foo_basic)
+                    dists = np.array(p.map(func, objs_phrases))
+            else:
+                dists = np.array([meta_distance(cur_obj[1], a, foo, foo_basic) for j, a in objs])
+
             proximal_indices = np.where(dists < simple_thr)[0]
             str_rep = 'by simple'
 
-        id_cluster_dict[k] = [cur_obj] + [objs[i] for i in proximal_indices]
-        objs = [objs[i] for i in range(len(objs)) if i not in proximal_indices]
+            id_cluster_dict[k] = [cur_obj] + [objs[i] for i in proximal_indices]
+            objs = [objs[i] for i in range(len(objs)) if i not in proximal_indices]
 
-        size_dict = sum([len(x) for x in id_cluster_dict.values()])
-        if verbose and len(proximal_indices) > 0:
-            print('{0}: {1} objects clustered. {2} objects left. Total number of items {3}.'
-                  .format(str_rep, len(proximal_indices) + 1, len(objs), len(objs) + size_dict))
+            size_dict = sum([len(x) for x in id_cluster_dict.values()])
+            if verbose and len(proximal_indices) > 0:
+                print('{0}: {1} objects clustered. {2} objects left. Total number of items {3}.'
+                      .format(str_rep, len(proximal_indices) + 1, len(objs), len(objs) + size_dict))
 
-        k += 1
-        if max_it and k > max_it:
-            break
+            k += 1
+            if max_it and k > max_it:
+                break
 
     id_cluster_dict[k] = [objs[0]]
 
