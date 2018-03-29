@@ -333,7 +333,7 @@ def cluster_objects(objects, foo, foo_basic=None, simple_thr=0.3, max_it=None,
 
     id_cluster_dict = {}
     k = 0
-    objs = objects
+    objs = sorted(objects, key=lambda x: len(x[1]), reverse=True)
     with mp.Pool(n_processes) as p:
         while len(objs) > 1:
             cur_obj, objs = objs[0], objs[1:]

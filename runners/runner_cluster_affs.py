@@ -39,7 +39,7 @@ if __name__ == "__main__":
     dfp = pd.read_csv(join(spath, pm_fname), compression='gzip', index_col=0)
     pmids = list(set(dfp[pm].unique()))
 
-    df_wos = retrieve_wos_aff_au_df(spath, True)
+    df_wos = retrieve_wos_aff_au_df(spath)
     index_affs, pm_aff_phrases, a2i = process_affs(df_wos, pmids)
 
     if args.test > 0:
