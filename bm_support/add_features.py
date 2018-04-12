@@ -12,6 +12,8 @@ from functools import partial
 from .disambiguation import ndistance, nlevenstein_root, cluster_objects
 from sklearn.model_selection import train_test_split
 from numpy import unique
+import gzip
+import pickle
 
 
 def gcd(a, b):
@@ -136,7 +138,8 @@ def derive_distance_column(df, column_a_parameters=(cexp, qcexp, (-1.e-8, 0.5, 1
 
 
 def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normalize_by_interaction=None,
-                     cutoff=None, quantize_intervals=(-1.e-8, 0.5, 1.0), suppress_affs=False,
+                     cutoff=None, quantize_intervals=(-1.e-8, 0.5, 1.0), aff_dict_fname=None,
+                     suppress_affs=False,
                      masks=None, verbose=False):
     df_selected = mask_out(df, cutoff, masks, verbose)
 
@@ -147,6 +150,8 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
     if verbose:
         print('defining authors\' features')
     pm_aus_map = cluster_authors(df_wos, pmids)
+    pm_aus_map = {k: list(set(v)) for k, v in pm_aus_map.items()}
+
     aus_feature = df_selected.groupby(ni).apply(lambda x: calc_normed_hi(x, pm_aus_map, (pm, ye)))
     aus_feature = aus_feature.rename(columns={0: pm, 1: 'pre_' + aus, 2: 'nhi_' + aus})
     f_cols = ['pre_' + aus, 'nhi_' + aus]
@@ -154,10 +159,15 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
     if not suppress_affs:
         if verbose:
             print('defining affiliations\' features...')
+        if aff_dict_fname:
+            with gzip.open(aff_dict_fname, 'rb') as fp:
+                pm_clusters = pickle.load(fp)
+            if verbose:
+                print('loaded pm_clusters, dict contains {0} pmids'.format(len(pm_clusters)))
+        else:
+            pm_clusters = cluster_affiliations(df_wos, pmids)
 
-        df_wos = retrieve_wos_aff_au_df()
-
-        pm_clusters = cluster_affiliations(df_wos, pmids)
+        pm_clusters = {k: list(set(v)) for k, v in pm_clusters.items()}
         affs_feature = df_selected.groupby(ni).apply(lambda x: calc_normed_hi(x, pm_clusters, (pm, ye)))
         affs_feature = affs_feature.rename(columns={0: pm, 1: 'pre_' + affs, 2: 'nhi_' + affs})
         aus_feature = affs_feature.merge(aus_feature[['pre_' + aus, 'nhi_' + aus]],
@@ -330,26 +340,39 @@ def update_dict_numerically(d1, d2, normalization=None):
             ret_dict[k] = n2*v/n
     return ret_dict
 
+
 # calculation of normalized herfindahl index
-def calc_normed_hi(pd_incoming, pmids_clust_dict, columns):
+def calc_normed_hi(pd_incoming, pmids_clust_dict, columns, verbose=False):
     # seq_array is (ids, years)
     id_column, agg_column = columns
     years = pd_incoming[agg_column]
     uniques, cnts = unique(years, return_counts=True)
-    dict_pmcid = {k: {} for k in uniques}
-    dict_year_pm = {k: [] for k in uniques}
+    dict_pmcid = {}
+    dict_year_pm = {}
+
+    if verbose:
+        print('u, c:', uniques, cnts)
 
     years2 = []
     for pmid, year in pd_incoming[[id_column, agg_column]].values:
         if pmid in pmids_clust_dict.keys():
-            dict_year_pm[year].append(pmid)
+            if year in dict_year_pm.keys():
+                dict_year_pm[year].append(pmid)
+            else:
+                dict_year_pm[year] = [pmid]
             arr_pmids = pmids_clust_dict[pmid]
             length = len(arr_pmids)
             d2 = dict(zip(arr_pmids, [1. / length] * length))
-            dict_pmcid[year] = update_dict_numerically(dict_pmcid[year], d2)
+            if year in dict_pmcid.keys():
+                dict_pmcid[year] = update_dict_numerically(dict_pmcid[year], d2)
+            else:
+                dict_pmcid[year] = d2
             years2.append(year)
 
     uniques2, cnts2 = unique(years2, return_counts=True)
+
+    if verbose:
+        print(uniques2, cnts2)
 
     for year, cnt in zip(uniques2, cnts2):
         dict_pmcid[year] = {k: v / cnt for k, v in dict_pmcid[year].items()}
@@ -364,7 +387,7 @@ def calc_normed_hi(pd_incoming, pmids_clust_dict, columns):
 
         hi = [(year, len(dict_pmcid_acc[year]),
                (np.array(list(dict_pmcid_acc[year].values())) ** 2).sum()) for year in uniques2]
-        nhi = {year: (x - 1. / n) / (1 - 1. / n) if n != 1 else 1. for year, n, x in hi}
+        nhi = {year: (x - 1. / n) / (1. - 1. / n) if n != 1 else 1. for year, n, x in hi}
 
         prev_years = dict(zip(uniques2, [-1] + list(uniques2[:-1])))
         for year, pmids in dict_year_pm.items():
