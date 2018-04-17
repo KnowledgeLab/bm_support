@@ -12,7 +12,6 @@ import pathos.multiprocessing as mp
 from copy import deepcopy
 
 
-
 def tokenize_clean(s, target_words=None):
     s2 = unidecode.unidecode(s)
     s2 = s2.lower().strip('.')
