@@ -1,7 +1,8 @@
 from numpy import array, sqrt, log, exp, pi, histogram, diag, abs, max
 from scipy.optimize import curve_fit
 from functools import partial
-# this package find thi
+# this package find optimal lognormal fit from q frequentist point of view
+# can be altered to fit any function
 
 
 def lnormal_off(x, mu, sigma, a, t0):
