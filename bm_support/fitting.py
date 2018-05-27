@@ -1,8 +1,15 @@
-from numpy import array, sqrt, log, exp, pi, histogram, diag, abs, max
+from numpy import array, sqrt, log, exp, pi, histogram, diag, abs, max, floor, ceil, min, arange, divide
 from scipy.optimize import curve_fit
+import matplotlib.pyplot as plt
 from functools import partial
 # this package find optimal lognormal fit from q frequentist point of view
 # can be altered to fit any function
+
+
+def lnormal(x, mu, sigma, a):
+    """pdf of lognormal distribution"""
+
+    return a*(exp(-(log(x) - mu)**2 / (2 * sigma**2)) / (x * sigma * sqrt(2 * pi)))
 
 
 def lnormal_off(x, mu, sigma, a, t0):
@@ -15,7 +22,9 @@ def lnormal_off(x, mu, sigma, a, t0):
     return a*(exp(-(log(x) - mu)**2 / (2 * sigma**2)) / (x * sigma * sqrt(2 * pi)))
 
 
-def fit_func(data, mode='pile', nbins=10, foo=lnormal_off, guess=(2., 1., 50, 0.5), return_error=False, verbose=False):
+def fit_func(data, mode='pile', nbins=10, foo=lnormal, guess=(2., 1., 50),
+             return_error=False, intelligent_guess=True, plot=False, error_max=3.,
+             verbose=False):
     """
 
     :param data:
@@ -23,38 +32,81 @@ def fit_func(data, mode='pile', nbins=10, foo=lnormal_off, guess=(2., 1., 50, 0.
     :param nbins:
     :param foo:
     :param guess:
+    :param return_error:
+    :param intelligent_guess:
+    :param plot:
+    :param error_max:
     :param verbose:
     :return:
     """
+    mean_points_per_bin = 20
     if mode == 'pile':
+        # nbins = min(nbins, )
+        if intelligent_guess:
+            min_data = floor(min(data))
+            max_data = ceil(max(data))
+            # have to to have at least k bins to fit for k parameters
+            max_delta = int((max_data - min_data)/len(guess))
+            delta = max([int((max_data - min_data)*mean_points_per_bin/len(data)), 1.])
+            delta = min([delta, max_delta])
+            nbins = arange(min_data, max_data+0.5*delta, delta) - 0.5*delta
+            # nbins = nbins - 0.5*delta
+            if verbose:
+                print('min: {0} max: {1} delta: {2}'.format(min_data, max_data, delta))
+                print('bbs: {0}'.format(nbins))
+
         y, bnds = histogram(data, bins=nbins, normed=False)
+        if verbose:
+            print('ys: {0}'.format(y))
+
         delta = bnds[1] - bnds[0]
-        x = bnds[1:] - 0.5 * delta
+        x = bnds[1:] - bnds[0] - 0.5 * delta
         y = y / delta
     elif mode == 'hist':
         x, y = data
+        delta = x[1] - x[0]
     else:
         return None
 
     guess_ = list(guess)
-    guess_[2] = sum(y)
-    popt, pcov = curve_fit(foo, x, y, p0=guess_)
-    perr = sqrt(diag(pcov))
+    if intelligent_guess:
+        guess_[2] = sum(y)
+    if verbose:
+        print('guess_: {0}'.format(guess_))
+
+    popt, pcov = curve_fit(foo, x, y, p0=guess_, method='lm')
     yf = foo(x, *popt)
-    terr = (sum((yf-y)**2)**0.5)/len(x)
+
+    mask = (yf > 1e-10)
+    if mask.all() and sum(mask) > 0:
+        if verbose:
+            print('delta: {1} {0}'.format(yf, len(data)))
+        if any(yf[mask] == 0):
+            print('WTH: yf zeros {0}'.format(yf[mask]))
+        if sum(mask) == 0:
+            print('WTH: sum_mask {0}'.format(mask))
+        tmp = divide(yf[mask] - y[mask], yf[mask], where=mask)
+        terr = sum(tmp**2)**0.5
+        terr = terr/sum(mask)
+    else:
+        return None
+
+    if plot:
+        fig, ax = plt.subplots()
+        xfill = arange(x[0], x[-1], 0.05*delta)
+        ax.scatter(x, y)
+        yf = foo(xfill, *popt)
+        ax.plot(xfill, yf, linestyle='dashed', label='Fitted')
+
     if verbose:
         print('error per dof: {0}'.format(terr))
-    errs = (perr / abs(popt))[:3]
-    if terr > 1.5:
-        print('error per dof too large: {0}'.format(terr))
-        print('relative errors too large: {0}'.format(errs))
-        if return_error:
-            return None, terr
-        else:
-            return None
+    if terr > error_max:
+        if verbose:
+            print('error per dof too large: {0}'.format(terr))
+    if return_error:
+        return list(popt) + [terr]
     else:
-        if return_error:
-            return popt[:3], terr
-        else:
-            return popt[:3]
+        return popt
+
+
 

@@ -5,7 +5,7 @@ from sklearn.preprocessing import MinMaxScaler
 from datahelpers.dftools import agg_file_info
 from os import listdir
 from os.path import isfile, join, expanduser
-from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, dist, pm, ct, affs, aus
+from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, dist, rdist, pm, ct, affs, aus
 from datahelpers.dftools import select_appropriate_datapoints, add_column_from_file
 import Levenshtein as lev
 from functools import partial
@@ -140,7 +140,20 @@ def derive_distance_column(df, column_a_parameters=(cexp, qcexp, (-1.e-8, 0.5, 1
 def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normalize_by_interaction=None,
                      cutoff=None, quantize_intervals=(-1.e-8, 0.5, 1.0), aff_dict_fname=None,
                      suppress_affs=False,
-                     masks=None, verbose=False):
+                     masks=None,
+                     add_cite_fits=False,
+                     min_len=-1,
+                     max_len=None,
+                     verbose=False):
+
+    mask_len_ = (df.groupby(ni).apply(lambda x: x.shape[0]) > min_len)
+    mask_len = df[ni].isin(mask_len_[mask_len_].index)
+    df = df[mask_len]
+    if max_len:
+        mask_len_ = (df.groupby(ni).apply(lambda x: x.shape[0]) < max_len)
+        mask_len = df[ni].isin(mask_len_[mask_len_].index)
+        df = df[mask_len]
+
     df_selected = mask_out(df, cutoff, masks, verbose)
 
     pmids = df_selected[pm].unique()
@@ -149,9 +162,12 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
 
     if verbose:
         print('defining authors\' features')
+    # {pmid : [i_A]} -  dict of lists of of authors
     pm_aus_map = cluster_authors(df_wos, pmids)
+    # clean {pmid : [i_A]} of possible duplicates
     pm_aus_map = {k: list(set(v)) for k, v in pm_aus_map.items()}
 
+    # for each new_index ni (interaction) calculate authors herfindahl index
     aus_feature = df_selected.groupby(ni).apply(lambda x: calc_normed_hi(x, pm_aus_map, (pm, ye)))
     aus_feature = aus_feature.rename(columns={0: pm, 1: 'pre_' + aus, 2: 'nhi_' + aus})
     f_cols = ['pre_' + aus, 'nhi_' + aus]
@@ -187,27 +203,57 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
 
     # define distance between qcexp and ps
     dft2 = derive_distance_column(dft2_, (cexp, qcexp, quantize_intervals), ps, dist)
+    dft2[rdist] = (dft2[cexp] - dft2[ps]).abs()
+
+    dft = dft2
     if verbose:
         print('value counts of distance:')
         print(dft2[dist].value_counts())
 
+    if add_cite_fits:
+        df_cites = pd.read_csv('/Users/belikov/data/wos/cites/wos_cite_result.csv.gz',
+                               compression='gzip', index_col=0)
+        dft3 = pd.merge(dft2, df_cites, on=pm, how='left')
+        for c in ['yearspan_flag', 'len_flag', 'succfit_flag', 'mu', 'sigma', 'A', 'err', 'int_3']:
+            nan_mask = dft3[c].isnull()
+            report_nas = sum(nan_mask)
+            print('{0} of {1} entries were not identified in wos db ({2:.1f}%)'.format(report_nas, c,
+                                                                                       100*report_nas/dft3.shape[0]))
+            dft3.loc[nan_mask, c] = -1.0
+        report_nas = sum(dft3['sigma'].isnull())
+
+        mask = (dft3['A'] > 0)
+        dft3['int_3_log'] = -1.0
+        dft3['A_log'] = -1.0
+        dft3['int_3_log_sigma'] = -1.0
+        dft3['A_log_sigma'] = -1.0
+
+        dft3.loc[mask, 'int_3_log'] = np.log(dft3.loc[mask, 'int_3'] + 1)
+        dft3.loc[mask, 'A_log'] = np.log(dft3.loc[mask, 'A'] + 1)
+        dft3.loc[mask, 'int_3_log_sigma'] = (dft3.loc[mask, 'int_3_log'] - dft3.loc[mask, 'int_3_log'].mean()) ** 2
+        dft3.loc[mask, 'A_log_sigma'] = (dft3.loc[mask, 'A_log'] - dft3.loc[mask, 'A_log'].mean()) ** 2
+        dft = dft3
+        if verbose:
+            print('{0} entries were not identified in wos db  ({1:.1f}%)'.format(report_nas,
+                                                                                 100*report_nas/dft3.shape[0]))
+
     if normalize:
         if verbose:
-            minmax = ['{0} min: {1:.2f}; max {2:.2f}'.format(c, dft2[c].min(), dft2[c].max())
+            minmax = ['{0} min: {1:.2f}; max {2:.2f}'.format(c, dft[c].min(), dft[c].max())
                       for c in columns_normalize]
             print('. '.join(minmax))
         if columns_normalize:
-            dft2 = normalize_columns(dft2, columns_normalize)
+            dft = normalize_columns(dft, columns_normalize)
 
         for c in columns_normalize_by_interaction:
-            dft2[c] = dft2.groupby(ni, as_index=False, group_keys=False).apply(lambda x: groupby_normalize(x[c]))
+            dft[c] = dft.groupby(ni, as_index=False, group_keys=False).apply(lambda x: groupby_normalize(x[c]))
 
         if verbose:
-            minmax = ['{0} min: {1:.2f}; max {2:.2f}'.format(c, dft2[c].min(), dft2[c].max())
+            minmax = ['{0} min: {1:.2f}; max {2:.2f}'.format(c, dft[c].min(), dft[c].max())
                       for c in columns_normalize]
             print('. '.join(minmax))
 
-    return dft2
+    return dft
 
 
 def retrieve_wos_aff_au_df(fpath='~/data/wos/wos_pmid/', verbose=False):
@@ -294,7 +340,13 @@ def cluster_affiliations(df, pmids=[], n_processes=1, verbose=False, debug=False
 
 
 def cluster_authors(df, pmids=[], verbose=False):
+    """
 
+    :param df:
+    :param pmids:
+    :param verbose:
+    :return: dict {pmid: [i_A]}, where [i_A] is a list of author ids
+    """
     if len(pmids) > 0:
         df = df.loc[df[pm].isin(pmids)]
 
@@ -343,7 +395,7 @@ def update_dict_numerically(d1, d2, normalization=None):
 
 # calculation of normalized herfindahl index
 def calc_normed_hi(pd_incoming, pmids_clust_dict, columns, verbose=False):
-    # seq_array is (ids, years)
+    # use agg_column to bin (discretize) index calculation
     id_column, agg_column = columns
     years = pd_incoming[agg_column]
     uniques, cnts = unique(years, return_counts=True)
@@ -355,29 +407,38 @@ def calc_normed_hi(pd_incoming, pmids_clust_dict, columns, verbose=False):
 
     years2 = []
     for pmid, year in pd_incoming[[id_column, agg_column]].values:
+        # for pmid present in clust dict
         if pmid in pmids_clust_dict.keys():
+            # create {year: [pmid]} dict
             if year in dict_year_pm.keys():
                 dict_year_pm[year].append(pmid)
             else:
                 dict_year_pm[year] = [pmid]
+            # array on units in pmid
             arr_pmids = pmids_clust_dict[pmid]
+            # number of units per pmid
             length = len(arr_pmids)
+            # each unit contributes as 1/number
             d2 = dict(zip(arr_pmids, [1. / length] * length))
+            # accumulate {year: {id_k: frac_k}} dict
             if year in dict_pmcid.keys():
                 dict_pmcid[year] = update_dict_numerically(dict_pmcid[year], d2)
             else:
                 dict_pmcid[year] = d2
             years2.append(year)
 
+    # update the stats of pmid occurences (wrt to present in clust_dict)
     uniques2, cnts2 = unique(years2, return_counts=True)
 
     if verbose:
         print(uniques2, cnts2)
 
+    # normalize index by the number of items in each bin
     for year, cnt in zip(uniques2, cnts2):
         dict_pmcid[year] = {k: v / cnt for k, v in dict_pmcid[year].items()}
     cumsums2 = np.cumsum(cnts2)
 
+    # accumulate the index; sum over preceding years
     dict_pmcid_acc = {}
     personal_frac = {}
     if uniques2.size > 0:
@@ -387,12 +448,16 @@ def calc_normed_hi(pd_incoming, pmids_clust_dict, columns, verbose=False):
 
         hi = [(year, len(dict_pmcid_acc[year]),
                (np.array(list(dict_pmcid_acc[year].values())) ** 2).sum()) for year in uniques2]
+        # normalize index to be between 0 and 1
+        # nhi {year : index}
         nhi = {year: (x - 1. / n) / (1. - 1. / n) if n != 1 else 1. for year, n, x in hi}
 
         prev_years = dict(zip(uniques2, [-1] + list(uniques2[:-1])))
+        # create an array [pmid, personal_index, nhi_index]
         for year, pmids in dict_year_pm.items():
             for pmid in pmids:
                 if prev_years[year] > 0:
+                    # sum of accumulated proportions for cid, that are related to current pmid
                     fracs = [dict_pmcid_acc[prev_years[year]][cid] for cid in pmids_clust_dict[pmid]
                              if cid in dict_pmcid_acc[prev_years[year]].keys()]
                     personal_frac[pmid] = (np.sum(fracs), nhi[prev_years[year]])

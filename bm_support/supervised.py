@@ -467,8 +467,8 @@ def train_forest(dfw, feature_columns, y_column, seed, n_trees=10, mode_scores=N
 
 
 def train_massif(dfw, feature_columns, y_column,
-                 seed, n_throws=10, n_trees=10, mode_scores=None, show_plots=False, fname=None, ratios=None):
-    title_prefix = None
+                 seed, n_throws=10, n_trees=10, mode_scores=None, show_plots=False, fname=None,
+                 ratios=None, title_prefix=None):
     return_model = True
     massif = []
 
