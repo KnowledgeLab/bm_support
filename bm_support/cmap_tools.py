@@ -34,7 +34,7 @@ def hack_unbinarize_list(str_list, to_int=False):
 
 
 def get_zscore_vector(chunk, sig_df, gctx_fname,
-                      mean_agg_columns=(pt, 'pert_type', 'pert_idose', 'pert_itime'),
+                      mean_agg_columns=(pt, 'pert_idose'),
                       verbose=False):
     # get binarized perts
     # bin_chunk = hack_binarize_list(chunk)
