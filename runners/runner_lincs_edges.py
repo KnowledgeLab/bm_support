@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import bm_support.cmap_tools as cte
 from bm_support.cmap_tools import pt
+
 import gzip
 import pickle
 # from cmapPy.pandasGEXpress.parse import parse
@@ -62,7 +63,8 @@ for chunk in chunks[:]:
     len_proc = len(edges_list)
     len_proc = df_agg.shape[0]
     frac = 100*len_proc/len(pts_working)
-    print('Number of edges: {0}. Job: {1:.2f}% done'.format(len_proc, frac))
+    if verbosity:
+        print('Number of edges: {0}. Job: {1:.2f}% done'.format(len_proc, frac))
 
 # with gzip.open(expanduser('~/data/lincs/graph/edges_all.pgz'), 'wb') as fp:
 #     pickle.dump(edges_list, fp)

@@ -80,7 +80,7 @@ def load_samples(origin, version, lo, hi, n_batches, cutoff_len):
 
 
 def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
-                     data_columns=[ye, iden, ai, ar, ps], complete_agg=True, verbose=False, hash_int=None,
+                     data_columns=(ye, iden, ai, ar, ps), complete_agg=True, verbose=False, hash_int=None,
                      load_batches=False):
     o_columns = [up, dn]
 
@@ -175,7 +175,7 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
         merge_on = o_columns
 
     if (ni in dfe2.columns) and (ni in df_claims.columns):
-        columns = list(set(dfe2.columns) - set([ni]))
+        columns = list(set(dfe2.columns) - {ni})
     else:
         columns = dfe2.columns
 
@@ -183,6 +183,31 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
 
     dft = df_claims.merge(dfe2[columns], on=merge_on, how='inner')
 
+    types_comm = ['lincs', 'gw11', 'lit8']
+    fpath_comm = expanduser('~/data/kl/comms/')
+    from datahelpers.community_tools import get_community_fnames_cnames
+    up_dns = dft.drop_duplicates([up, dn])[[up, dn]]
+
+    for ty in types_comm:
+        fnames, cnames = get_community_fnames_cnames(ty)
+        print(len(fnames), fnames, cnames)
+        for fn, cn in zip(fnames, cnames):
+            dfc = pd.read_csv(join(fpath_comm, fn),
+                              compression='gzip', index_col=0)
+            vc = dfc.groupby('comm_id').apply(lambda x: x.shape[0])
+            dfc2 = dfc.merge(pd.DataFrame(vc), left_on='comm_id', right_index=True).rename(columns={0: 'csize'})
+            dfc2_up = dfc2.rename(columns=dict([(c, cn + '_' + c + '_up') for c in dfc2.columns]))
+            dfc2_dn = dfc2.rename(columns=dict([(c, cn + '_' + c + '_dn') for c in dfc2.columns]))
+            up_dns = up_dns.merge(dfc2_up, how='left', left_on='up', right_index=True)
+            up_dns = up_dns.merge(dfc2_dn, how='left', left_on='dn', right_index=True)
+            up_dns[cn + '_same_comm'] = (up_dns[cn + '_comm_id_up'] == up_dns[cn + '_comm_id_dn'])
+            up_dns[cn + '_eff_comm_size'] = (up_dns[cn + '_csize_up'] * up_dns[cn + '_csize_dn']) ** 0.5
+            del up_dns[cn + '_comm_id_up']
+            del up_dns[cn + '_comm_id_dn']
+            del up_dns[cn + '_csize_up']
+            del up_dns[cn + '_csize_dn']
+
+    dft = dft.merge(up_dns, on=[up, dn], how='left')
     if verbose:
         print('after merge to claims: {0}'.format(dft.shape[0]))
 
