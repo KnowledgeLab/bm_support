@@ -62,10 +62,10 @@ def get_up_dn_report(fpath_reps, fpath,
     return df_merged
 
 
-def get_lincs_df(fpath, origin, version, cutoff_len, a, b, **kwargs):
+def get_lincs_df(fpath, origin, version, cutoff_len, a, b, type='', **kwargs):
     # load lincs data
-    df = read_csv(join(fpath, 'lincs_{0}_v_{1}_n_{2}_a_{3}_b_{4}.csv.gz'.format(origin, version,
-                                                                                cutoff_len, a, b)),
+    df = read_csv(join(fpath, 'lincs{5}_{0}_v_{1}_n_{2}_a_{3}_b_{4}.csv.gz'.format(origin, version,
+                                                                                   cutoff_len, a, b, type)),
                   compression='gzip')
     return df
 

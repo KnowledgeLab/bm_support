@@ -1,5 +1,7 @@
 import gzip
 import json
+from numpy import array
+from pandas import DataFrame
 from itertools import permutations
 
 
@@ -49,8 +51,15 @@ class GeneIdConverter(object):
     def keys(self):
         return self.convs[(self.u, self.v)].keys()
 
+    def to_pd_df(self):
+        arr = array([(u, v) for u, v in self.convs[(self.u, self.v)].items()])
+        return DataFrame(arr, columns=(self.u, self.v))
+
     def values(self):
         return self.convs[(self.u, self.v)].values()
+
+    def update(self, update_dict):
+        self.convs[(self.u, self.v)].update(update_dict)
 
     def __getitem__(self, key):
         return self.convs[(self.u, self.v)][key]

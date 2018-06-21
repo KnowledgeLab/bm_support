@@ -80,8 +80,8 @@ def load_samples(origin, version, lo, hi, n_batches, cutoff_len):
 
 
 def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
-                     data_columns=(ye, iden, ai, ar, ps), complete_agg=True, verbose=False, hash_int=None,
-                     load_batches=False):
+                     data_columns=(ye, iden, ai, ar, ps), complete_agg=True, hash_int=None,
+                     load_batches=False, lincs_type='', verbose=False):
     o_columns = [up, dn]
 
     data_cols = '_'.join(data_columns)
@@ -100,7 +100,8 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
         'b': hi,
         'fpath': expanduser('~/data/kl/claims'),
         'fpath_batches': batches_path,
-        'hash_int': hash_int
+        'hash_int': hash_int,
+        'type': lincs_type
     }
 
     larg = {k: v for k, v in zip(keys, values)}
