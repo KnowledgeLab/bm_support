@@ -558,6 +558,8 @@ def train_massif(dfw, feature_columns, y_column,
         error = std_over_samples(ls, rvs, errors)
         report['feature_importance'][k] = mean
         report['feature_importance_std'][k] = error
+
+    sns.set_style("whitegrid")
     if show_plots:
         fig, ax = plt.subplots(figsize=(5, 5))
         if n_states > 2:
@@ -580,6 +582,7 @@ def train_massif(dfw, feature_columns, y_column,
         ax.set_ylabel('True Positive Rate')
         ax.set_title('{0} Random Forest ROC'.format(title_prefix))
         ax.legend(loc='lower right')
+
     if fname:
         fig.savefig(fname)
     return report, massif, df_test
