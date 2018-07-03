@@ -1,4 +1,3 @@
-# run under cmap tools install env // warning cmap is under python 2
 import pandas as pd
 import argparse
 import numpy as np
@@ -7,7 +6,8 @@ import bm_support.cmap_tools as cte
 from bm_support.cmap_tools import pt
 from cmapPy.pandasGEXpress.parse import parse
 from datahelpers.constants import up, dn
-from bm_support.gene_id_converter import GeneIdConverter
+from bm_support.gene_id_converter import GeneIdConverter, enforce_ints
+from bm_support.gene_id_converter import types as gctypes
 
 from os.path import join
 from os.path import expanduser
@@ -39,17 +39,22 @@ parser.add_argument('-t', '--test',
                     help='test mode: number of pairs to look at')
 
 parser.add_argument('-c', '--chunk-size',
-                    default='5000', type=int,
-                    help='buffer by number of genes query')
+                    default=200, type=int,
+                    help='chunk size of genes query')
+
+parser.add_argument('-u', '--subversion',
+                    default=3, type=int,
+                    help='subversion of protein id maps')
 
 args = parser.parse_args()
-
+print(args)
 origin = args.datasource
 a, b = args.partition_sequence
 n = args.maxsize_sequence
 version = args.version
 chunk_size = args.chunk_size
 test_size = args.test
+subversion = args.subversion
 
 sig_info_df = pd.read_csv(join(cte.data_path, cte.sig_fname), sep='\t', compression='gzip')
 sig_info_df.rename(columns={'pert_iname': pt}, inplace=True)
@@ -63,8 +68,21 @@ gene_df = pd.read_csv(expanduser(fname_gene), sep='\t')
 gene_df.rename(columns={'pr_gene_symbol': pt}, inplace=True)
 
 # protein (name) : entrez_id
-gene_df_map = dict(gene_df[['pt', 'pr_gene_id']].values)
-inv_gene_df_map = dict(gene_df[['pr_gene_id', 'pt']].values)
+# gene_df_map_ = dict(gene_df[['pt', 'pr_gene_id']].values)
+# inv_gene_df_map_ = dict(gene_df[['pr_gene_id', 'pt']].values)
+gc = GeneIdConverter(expanduser('~/data/chebi/hgnc_complete_set.json.gz'), gctypes, enforce_ints)
+gc.choose_converter('entrez_id', 'symbol')
+gc.update_with_broad_symbols()
+gc.change_case('symbol')
+
+gene_df_map = gc.convs[('symbol', 'entrez_id')].copy()
+inv_gene_df_map = gc.convs[('entrez_id', 'symbol')].copy()
+
+# print(list(gene_df_map.items())[:5])
+# print(list(gene_df_map_.items())[:5])
+#
+# gene_df_map = gene_df_map_
+# inv_gene_df_map = inv_gene_df_map_
 
 pairs = [(x[0], x[1]) for x in df_pairs[['up', 'dn']].values]
 pairs_df = pd.DataFrame(pairs, columns=[up, dn])
@@ -99,6 +117,11 @@ ups_procd = 0
 
 for chunk in chunks[:]:
     mask = sig_df.pt.isin(chunk)
+    if verbosity:
+        print('partial view of chunk: {0}'.format(chunk[:5]))
+    if verbosity:
+        print('sum sig mask: {0}'.format(sum(mask)))
+
     bin_sigs = cte.hack_binarize_list(sig_df.loc[mask, 'sig_id'])
     level5_gctoo = parse(join(cte.data_path, cte.level5_fname), cid=bin_sigs)
 
@@ -129,6 +152,6 @@ for chunk in chunks[:]:
 
 # if test_size < 0:
 df_agg.to_csv(expanduser('~/data/kl/claims/'
-                         'lincs2_{0}_v_{1}_n_{2}_'
-                         'a_{3}_b_{4}.csv.gz'.format(origin, version, n, a, b)),
+                         'lincs_{0}_v_{1}_n_{2}_'
+                         'a_{3}_b_{4}_sv_{5}.csv.gz'.format(origin, version, n, a, b, subversion)),
               compression='gzip', index=False)

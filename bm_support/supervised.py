@@ -488,7 +488,7 @@ def train_forest(dfw, feature_columns, y_column, seed, n_trees=10, mode_scores=N
 
     r, rf_clf = rf_study(X_train, X_test, y_train, y_test, feature_columns, seed,
                          None, None, show_plots, title_prefix, n_trees, return_model,
-                         {0.: 1., 1.: 1.}, mode_scores)
+                         mode_scores)
     return r, rf_clf
 
 

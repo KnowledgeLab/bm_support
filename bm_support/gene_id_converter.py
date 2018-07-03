@@ -87,6 +87,16 @@ class GeneIdConverter(object):
     def keys(self):
         return self.convs[(self.u, self.v)].keys()
 
+    def change_case(self, key, mode='upper'):
+        # there is not check if key field is str
+        transform_foo = lambda x: x.upper() if mode == 'upper' else x.lower()
+        if key in self.types_list:
+            extra_keys = [k for k in self.types_list if k != key]
+            for ek in extra_keys:
+                self.convs[(key, ek)] = {transform_foo(k): v for k, v in self.convs[(key, ek)].items()}
+                self.convs[(ek, key)] = {k: transform_foo(v) for k, v in self.convs[(ek, key)].items()}
+
+
     def to_pd_df(self):
         arr = array([(u, v) for u, v in self.convs[(self.u, self.v)].items()])
         return DataFrame(arr, columns=(self.u, self.v))
@@ -97,12 +107,12 @@ class GeneIdConverter(object):
     def update(self, update_dict):
         self.convs[(self.u, self.v)].update(update_dict)
 
-    def view(self, u=None, v=None, k=5):
+    def view(self, k=5, u=None, v=None):
         if not u:
             u = self.u
         if not v:
             v = self.v
-        return [x for x in self.convs[(u, v)].items()][:k]
+        return list(self.convs[(u, v)].items())[:k]
 
     def __getitem__(self, key):
         return self.convs[(self.u, self.v)][key]
