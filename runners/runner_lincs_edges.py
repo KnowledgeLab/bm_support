@@ -3,28 +3,32 @@ import pandas as pd
 import numpy as np
 import bm_support.cmap_tools as cte
 from bm_support.cmap_tools import pt
+from bm_support.gene_id_converter import GeneIdConverter, enforce_ints
+from bm_support.gene_id_converter import types as gctypes
+
 
 fname_sig = join(cte.data_path, cte.sig_fname)
 sig_info_df = pd.read_csv(fname_sig, sep='\t', compression='gzip')
 
-fname_gene = '~/data/lincs/GSE92742_Broad_LINCS_gene_info.txt.gz'
-gene_df = pd.read_csv(expanduser(fname_gene), sep='\t')
+gc = GeneIdConverter(expanduser('~/data/chebi/hgnc_complete_set.json.gz'), gctypes, enforce_ints)
+gc.choose_converter('entrez_id', 'symbol')
+gc.update_with_broad_symbols()
+gc.change_case('symbol')
 
-genes_gene_df = list(gene_df.pr_gene_id.unique())
+gene_df_map = gc.convs[('symbol', 'entrez_id')].copy()
+
+genes_gene_df = list(gc.convs[('symbol', 'entrez_id')].keys())
 genes_sig_df = list(sig_info_df.pert_iname.unique())
 
 # pt is get_title in gene_df or pert_iname
-gene_df.rename(columns={'pr_gene_symbol': pt}, inplace=True)
+# gene_df.rename(columns={'pr_gene_symbol': pt}, inplace=True)
 sig_info_df.rename(columns={'pert_iname': pt}, inplace=True)
-gene_df[pt] = gene_df[pt].apply(lambda x: x.lower())
-sig_info_df[pt] = sig_info_df[pt].apply(lambda x: x.lower())
+# sig_info_df[pt] = sig_info_df[pt].apply(lambda x: x.lower())
 
-gene_df_map = dict(gene_df[['pt', 'pr_gene_id']].values)
-
-pts = list(set(gene_df.pt) & set(sig_info_df.pt))
+pts = list(set(genes_gene_df) & set(sig_info_df.pt))
 
 sig_info_df2 = sig_info_df.loc[sig_info_df.pt.isin(pts)].copy()
-gene_df2 = gene_df.loc[gene_df.pt.isin(pts)].copy()
+# gene_df2 = gene_df.loc[gene_df.pt.isin(pts)].copy()
 
 m1 = (sig_info_df2['pert_type'] == 'trt_oe')
 m2 = (sig_info_df2['pert_itime'].apply(lambda x: float(x.split(' ')[0]) >= 6.))
@@ -58,11 +62,9 @@ for chunk in chunks[:]:
     # len_proc = len(edges_list)
     len_proc = df_agg.shape[0]
     frac = 100*len_proc/len(pts_working)
-    if verbosity:
-        print('Number of edges: {0}. Job: {1:.2f}% done'.format(len_proc, frac))
+    # if verbosity:
+    print('Number of edges: {0}. Job: {1:.2f}% done'.format(len_proc, frac))
 
-# with gzip.open(expanduser('~/data/lincs/graph/edges_all.pgz'), 'wb') as fp:
-#     pickle.dump(edges_list, fp)
 
 store = pd.HDFStore(expanduser('~/data/lincs/graph/adj_mat_all_pert_types.h5'))
 store.put('df', df_agg)

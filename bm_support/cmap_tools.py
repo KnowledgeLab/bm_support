@@ -43,7 +43,7 @@ def get_zscore_vector(chunk, sig_df, gctx_fname,
     mask = sig_df.pt.isin(chunk)
 
     if verbose:
-        print('For {0} pertubagens : number of experiments is {1}'.format(len(chunk), sum(mask)))
+        print('For {0} perturbagens : number of experiments is {1}'.format(len(chunk), sum(mask)))
     bin_sigs = hack_binarize_list(sig_df.loc[mask, 'sig_id'])
     level5_gctoo = parse(gctx_fname, cid=bin_sigs)
     dfr = level5_gctoo.data_df

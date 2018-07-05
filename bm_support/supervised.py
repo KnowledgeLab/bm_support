@@ -20,6 +20,7 @@ from bm_support.reporting import get_id_up_dn_df, get_lincs_df
 from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, nw, wi, dist, pm, ct, affs, aus
 from datahelpers.dftools import select_appropriate_datapoints, dict_to_array, accumulate_dicts, add_column_from_file
 from .add_features import prepare_final_df
+from datahelpers.community_tools import get_community_fnames_cnames
 from sklearn.cluster import KMeans
 from .gap_stat import choose_nc
 
@@ -186,7 +187,6 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
 
     types_comm = ['lincs', 'gw11', 'lit8']
     fpath_comm = expanduser('~/data/kl/comms/')
-    from datahelpers.community_tools import get_community_fnames_cnames
     up_dns = dft.drop_duplicates([up, dn])[[up, dn]]
 
     for ty in types_comm:
