@@ -52,10 +52,9 @@ def get_zscore_vector(chunk, sig_df, gctx_fname,
         print('Shape[0] of level5 df is {0}'.format(dfr.shape[0]))
     dfr = dfr.rename(columns=dict(zip(dfr.columns, hack_unbinarize_list(dfr.columns))),
                      index=dict(zip(dfr.index, hack_unbinarize_list(dfr.index, True))))
-
-    # dfw = pd.merge(dfr.T, sig_info_df3, left_index=True, right_on='sig_id', how='inner')
+###
     dfw = pd.merge(dfr.T, sig_df, left_index=True, right_on='sig_id', how='inner')
-
+###
     # take mean for a given pertubagen, pert_type, time and dose (across cellline) by default
     if all([(x in dfw.columns) for x in mean_agg_columns]):
         expression_cols = list(set(dfw.columns) - {'sig_id', 'pert_id', 'is_touchstone'})

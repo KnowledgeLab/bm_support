@@ -16,19 +16,17 @@ gc.update_with_broad_symbols()
 gc.change_case('symbol')
 
 gene_df_map = gc.convs[('symbol', 'entrez_id')].copy()
+inv_gene_df_map = gc.convs[('entrez_id', 'symbol')].copy()
 
 genes_gene_df = list(gc.convs[('symbol', 'entrez_id')].keys())
 genes_sig_df = list(sig_info_df.pert_iname.unique())
 
-# pt is get_title in gene_df or pert_iname
-# gene_df.rename(columns={'pr_gene_symbol': pt}, inplace=True)
 sig_info_df.rename(columns={'pert_iname': pt}, inplace=True)
-# sig_info_df[pt] = sig_info_df[pt].apply(lambda x: x.lower())
 
-pts = list(set(genes_gene_df) & set(sig_info_df.pt))
+pts = list(gene_df_map.keys())
+# pts = list(set(genes_gene_df) & set(sig_info_df.pt))
 
-sig_info_df2 = sig_info_df.loc[sig_info_df.pt.isin(pts)].copy()
-# gene_df2 = gene_df.loc[gene_df.pt.isin(pts)].copy()
+sig_info_df2 = sig_info_df.loc[sig_info_df[pt].isin(pts)].copy()
 
 m1 = (sig_info_df2['pert_type'] == 'trt_oe')
 m2 = (sig_info_df2['pert_itime'].apply(lambda x: float(x.split(' ')[0]) >= 6.))
@@ -47,6 +45,9 @@ pts_working = list(sig_info_df3.pt.unique())
 
 chunk_size = 100
 chunks = [pts_working[k:k+chunk_size] for k in np.arange(0, len(pts_working), chunk_size)]
+
+total_len = sum([len(x) for x in chunks])
+print('Compare pts len vs len of chunks: ', len(pts_working), total_len)
 
 edges_list = []
 verbosity = False

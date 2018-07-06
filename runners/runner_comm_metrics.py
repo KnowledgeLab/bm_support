@@ -1,4 +1,4 @@
-from datahelpers.community_tools import split_communities_cluster, calculate_comms
+from datahelpers.community_tools import calculate_comms
 from itertools import product
 
 df_type = 'lit'

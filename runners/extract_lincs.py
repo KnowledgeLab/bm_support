@@ -55,6 +55,7 @@ version = args.version
 chunk_size = args.chunk_size
 test_size = args.test
 subversion = args.subversion
+verbosity = True
 
 sig_info_df = pd.read_csv(join(cte.data_path, cte.sig_fname), sep='\t', compression='gzip')
 sig_info_df.rename(columns={'pert_iname': pt}, inplace=True)
@@ -68,8 +69,6 @@ gene_df = pd.read_csv(expanduser(fname_gene), sep='\t')
 gene_df.rename(columns={'pr_gene_symbol': pt}, inplace=True)
 
 # protein (name) : entrez_id
-# gene_df_map_ = dict(gene_df[['pt', 'pr_gene_id']].values)
-# inv_gene_df_map_ = dict(gene_df[['pr_gene_id', 'pt']].values)
 gc = GeneIdConverter(expanduser('~/data/chebi/hgnc_complete_set.json.gz'), gctypes, enforce_ints)
 gc.choose_converter('entrez_id', 'symbol')
 gc.update_with_broad_symbols()
@@ -78,17 +77,28 @@ gc.change_case('symbol')
 gene_df_map = gc.convs[('symbol', 'entrez_id')].copy()
 inv_gene_df_map = gc.convs[('entrez_id', 'symbol')].copy()
 
-# print(list(gene_df_map.items())[:5])
-# print(list(gene_df_map_.items())[:5])
-#
-# gene_df_map = gene_df_map_
-# inv_gene_df_map = inv_gene_df_map_
-
 pairs = [(x[0], x[1]) for x in df_pairs[['up', 'dn']].values]
 pairs_df = pd.DataFrame(pairs, columns=[up, dn])
 
+ups_set = set([x[0] for x in pairs])
+pids_working = list(set(inv_gene_df_map.keys()) & ups_set)
+
 ups = list(set([x[0] for x in pairs]))
 pts = [inv_gene_df_map[x] for x in ups if x in inv_gene_df_map.keys()]
+
+if verbosity:
+    print('len pts: {0}; unique: {1} '.format(len(pts), len(set(pts))))
+    print(sig_info_df.loc[sig_info_df.pt.isin(pts), pt].unique().shape)
+
+
+sig_info_df2 = sig_info_df.loc[sig_info_df.pt.isin(pts)].copy()
+sig_df = sig_info_df2.loc[:].copy()
+sig_df_map = dict(sig_df[['sig_id', pt]].values)
+
+pts_working = list(sig_info_df2[pt].unique())
+pts_working2 = list(set([gc[x] for x in pids_working]) & set(pts_working))
+
+pts = pts_working2
 
 if not pts:
     raise ValueError('the intersection of databases is trivial!')
@@ -97,26 +107,23 @@ if test_size > 0:
     pts = pts[:test_size]
 
 chunks = [pts[k:k+chunk_size] for k in np.arange(0, len(pts), chunk_size)]
-
-sig_info_df2 = sig_info_df.loc[sig_info_df.pt.isin(pts)].copy()
-sig_df = sig_info_df2.loc[:].copy()
-sig_df_map = dict(sig_df[['sig_id', pt]].values)
+total_len = sum([len(x) for x in chunks])
+print('Compare pts len vs len of chunks: ', len(pts), total_len)
 
 time_prev = time.time()
+gene_df_map_df = pd.DataFrame(list(gene_df_map.items()), columns=[pt, up])
 
 dfs = []
 
-verbosity = True
 df_agg = pd.DataFrame()
 
 if verbosity:
-    print('len pts: {0}'.format(len(pts)))
     print('chn size: {0}'.format(chunk_size))
 
 ups_procd = 0
 
-for chunk in chunks[:]:
-    mask = sig_df.pt.isin(chunk)
+for chunk in chunks[:2]:
+    mask = sig_df[pt].isin(chunk)
     if verbosity:
         print('partial view of chunk: {0}'.format(chunk[:5]))
     if verbosity:
@@ -126,31 +133,27 @@ for chunk in chunks[:]:
     level5_gctoo = parse(join(cte.data_path, cte.level5_fname), cid=bin_sigs)
 
     dfr = level5_gctoo.data_df
-
-    # if verbosity:
-    #     print('dfr size: {0}'.format(dfr.shape))
-
     dfr = dfr.rename(columns=dict(zip(dfr.columns, cte.hack_unbinarize_list(dfr.columns))),
                      index=dict(zip(dfr.index, cte.hack_unbinarize_list(dfr.index, True))))
 
-    dfr2 = dfr.unstack().reset_index().rename(columns={'cid': 'sig_id', 0: 'score'})
-    dfr2[up] = dfr2['sig_id'].apply(lambda x: gene_df_map[sig_df_map[x]])
-    dfr2 = dfr2.rename(columns={'rid': dn})
-    dfr2_cut = pd.merge(dfr2, pairs_df, how='inner', on=[up, dn])
-    dfr3 = dfr2_cut.merge(sig_df, on='sig_id', how='left')
+    dfr2 = dfr.unstack().reset_index().rename(columns={'cid': 'sig_id', 0: 'score', 'rid': dn})
+    dfw = pd.merge(dfr2, sig_df, on='sig_id', how='inner')
+    dfw2 = pd.merge(dfw, gene_df_map_df, on=pt, how='inner')
+    dfr3 = pd.merge(dfw2, pairs_df, how='inner', on=[up, dn])
+
     set_cols = set(dfr3.columns) - {up, dn, 'score'}
+    ordered_cols = list(set_cols) + [up, dn, 'score']
     time_cur = time.time()
     delta_time_sec = time_cur - time_prev
 
     time_prev = time_cur
-    df_agg = pd.concat([df_agg, dfr3[list(set_cols) + [up, dn, 'score']]])
+    df_agg = pd.concat([df_agg, dfr3[ordered_cols]])
     ups_procd += len(chunk)
     frac = 100*ups_procd/len(pts)
     if verbosity:
         print('Job: {0:.2f}% done. {1} {2}'.format(frac, ups_procd, len(df_agg[up].unique())))
         print('Iteration took {0:.1f} sec'.format(delta_time_sec))
 
-# if test_size < 0:
 df_agg.to_csv(expanduser('~/data/kl/claims/'
                          'lincs_{0}_v_{1}_n_{2}_'
                          'a_{3}_b_{4}_sv_{5}.csv.gz'.format(origin, version, n, a, b, subversion)),
