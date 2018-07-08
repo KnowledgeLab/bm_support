@@ -41,7 +41,7 @@ print('number of perts cut by m1 and m2 and m3 and m4: {0}'.format(sig_info_df2.
                                                                    pt].unique().shape[0]))
 
 sig_info_df3 = sig_info_df2.loc[:].copy()
-pts_working = list(sig_info_df3.pt.unique())
+pts_working = list(sig_info_df3[pt].unique())
 
 chunk_size = 100
 chunks = [pts_working[k:k+chunk_size] for k in np.arange(0, len(pts_working), chunk_size)]
@@ -54,7 +54,7 @@ verbosity = False
 # verbosity = True
 df_agg = pd.DataFrame()
 
-for chunk in chunks[:]:
+for chunk in chunks[:2]:
     dfr = cte.get_zscore_vector(chunk, sig_info_df3, join(cte.data_path, cte.level5_fname), verbose=verbosity)
     dfr.rename(index=gene_df_map, inplace=True)
     df_agg = pd.concat([df_agg, dfr])
@@ -67,5 +67,5 @@ for chunk in chunks[:]:
     print('Number of edges: {0}. Job: {1:.2f}% done'.format(len_proc, frac))
 
 
-store = pd.HDFStore(expanduser('~/data/lincs/graph/adj_mat_all_pert_types.h5'))
-store.put('df', df_agg)
+# store = pd.HDFStore(expanduser('~/data/lincs/graph/adj_mat_all_pert_types.h5'))
+# store.put('df', df_agg)

@@ -19,7 +19,7 @@ data_path = expanduser('~/data/lincs')
 level5_fname = 'GSE92742_Broad_LINCS_Level5_COMPZ.MODZ_n476251x12328.gctx'
 sig_fname = 'GSE92742_Broad_LINCS_sig_info.txt.gz'
 
-pairs = [(4193, 7157), (4792, 4790), (4790, 7124)]
+# pairs = [(4193, 7157), (4792, 4790), (4790, 7124)]
 
 
 def hack_binarize_list(str_list):
@@ -34,13 +34,13 @@ def hack_unbinarize_list(str_list, to_int=False):
 
 
 def get_zscore_vector(chunk, sig_df, gctx_fname,
-                      mean_agg_columns=(pt, 'pert_idose'),
+                      agg_columns_max=(pt, 'pert_itime', 'pert_idose', 'pert_type'),
                       verbose=False):
     # get binarized perts
     # bin_chunk = hack_binarize_list(chunk)
 
     # get all sig_ids for these perts
-    mask = sig_df.pt.isin(chunk)
+    mask = sig_df[pt].isin(chunk)
 
     if verbose:
         print('For {0} perturbagens : number of experiments is {1}'.format(len(chunk), sum(mask)))
@@ -52,20 +52,19 @@ def get_zscore_vector(chunk, sig_df, gctx_fname,
         print('Shape[0] of level5 df is {0}'.format(dfr.shape[0]))
     dfr = dfr.rename(columns=dict(zip(dfr.columns, hack_unbinarize_list(dfr.columns))),
                      index=dict(zip(dfr.index, hack_unbinarize_list(dfr.index, True))))
-###
     dfw = pd.merge(dfr.T, sig_df, left_index=True, right_on='sig_id', how='inner')
-###
+
     # take mean for a given pertubagen, pert_type, time and dose (across cellline) by default
-    if all([(x in dfw.columns) for x in mean_agg_columns]):
+    if all([(x in dfw.columns) for x in agg_columns_max]):
         expression_cols = list(set(dfw.columns) - {'sig_id', 'pert_id', 'is_touchstone'})
-        dfw2 = dfw[expression_cols].groupby(mean_agg_columns).apply(lambda x: x.mean())
+        dfw2 = dfw[expression_cols].groupby(agg_columns_max).apply(lambda x: x.mean(axis=0))
     else:
         raise ValueError('mean_agg_columns are incompatible with df')
 
     # groupby by first level index (should be pt) and take max
     dfw3 = dfw2.groupby(level=0).apply(lambda x:
                                        pd.Series(x.values[argmax(abs(x.values), axis=0),
-                                                          ogrid[:x.shape[1]]]))
+                                                          ogrid[:x.shape[1]]], index=dfw2.columns))
     if verbose:
         print('Shape[1] of output df is {0} [should be the same as level5 df]'.format(dfw3.shape[1]))
 

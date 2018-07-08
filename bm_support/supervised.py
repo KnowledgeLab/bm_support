@@ -189,12 +189,17 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
     fpath_comm = expanduser('~/data/kl/comms/')
     up_dns = dft.drop_duplicates([up, dn])[[up, dn]]
 
+    all_ids = set(dft[up].unique()) | set(dft[dn].unique())
+
     for ty in types_comm:
         fnames, cnames = get_community_fnames_cnames(ty)
         print(len(fnames), fnames, cnames)
         for fn, cn in zip(fnames, cnames):
             dfc = pd.read_csv(join(fpath_comm, fn),
                               compression='gzip', index_col=0)
+            comm_ids = set(dfc.index)
+            print('{0} {1}. |ids_merge| : {2}. |ids_comm| {3}. |ids_merge - ids_comm| {4}.'.format(fn, cn, len(all_ids),
+                  len(comm_ids), len(all_ids - comm_ids)))
             vc = dfc.groupby('comm_id').apply(lambda x: x.shape[0])
             dfc2 = dfc.merge(pd.DataFrame(vc), left_on='comm_id', right_index=True).rename(columns={0: 'csize'})
             dfc2_up = dfc2.rename(columns=dict([(c, cn + '_' + c + '_up') for c in dfc2.columns]))

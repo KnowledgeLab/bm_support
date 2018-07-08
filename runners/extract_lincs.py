@@ -137,7 +137,9 @@ for chunk in chunks[:2]:
                      index=dict(zip(dfr.index, cte.hack_unbinarize_list(dfr.index, True))))
 
     dfr2 = dfr.unstack().reset_index().rename(columns={'cid': 'sig_id', 0: 'score', 'rid': dn})
+
     dfw = pd.merge(dfr2, sig_df, on='sig_id', how='inner')
+    del dfr2
     dfw2 = pd.merge(dfw, gene_df_map_df, on=pt, how='inner')
     dfr3 = pd.merge(dfw2, pairs_df, how='inner', on=[up, dn])
 
@@ -154,7 +156,7 @@ for chunk in chunks[:2]:
         print('Job: {0:.2f}% done. {1} {2}'.format(frac, ups_procd, len(df_agg[up].unique())))
         print('Iteration took {0:.1f} sec'.format(delta_time_sec))
 
-df_agg.to_csv(expanduser('~/data/kl/claims/'
-                         'lincs_{0}_v_{1}_n_{2}_'
-                         'a_{3}_b_{4}_sv_{5}.csv.gz'.format(origin, version, n, a, b, subversion)),
-              compression='gzip', index=False)
+# df_agg.to_csv(expanduser('~/data/kl/claims/'
+#                          'lincs_{0}_v_{1}_n_{2}_'
+#                          'a_{3}_b_{4}_sv_{5}.csv.gz'.format(origin, version, n, a, b, subversion)),
+#               compression='gzip', index=False)
