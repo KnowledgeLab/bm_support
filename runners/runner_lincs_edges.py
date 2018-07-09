@@ -54,18 +54,14 @@ verbosity = False
 # verbosity = True
 df_agg = pd.DataFrame()
 
-for chunk in chunks[:2]:
+for chunk in chunks[:]:
     dfr = cte.get_zscore_vector(chunk, sig_info_df3, join(cte.data_path, cte.level5_fname), verbose=verbosity)
     dfr.rename(index=gene_df_map, inplace=True)
     df_agg = pd.concat([df_agg, dfr])
-    # rr = cte.convert_adj_to_edges_list(dfr, verbose=verbosity)
-    # edges_list.extend(rr)
-    # len_proc = len(edges_list)
     len_proc = df_agg.shape[0]
     frac = 100*len_proc/len(pts_working)
     # if verbosity:
     print('Number of edges: {0}. Job: {1:.2f}% done'.format(len_proc, frac))
 
-
-# store = pd.HDFStore(expanduser('~/data/lincs/graph/adj_mat_all_pert_types.h5'))
-# store.put('df', df_agg)
+store = pd.HDFStore(expanduser('~/data/lincs/graph/adj_mat_all_pert_types.h5'))
+store.put('df', df_agg)

@@ -122,7 +122,7 @@ if verbosity:
 
 ups_procd = 0
 
-for chunk in chunks[:2]:
+for chunk in chunks[:]:
     mask = sig_df[pt].isin(chunk)
     if verbosity:
         print('partial view of chunk: {0}'.format(chunk[:5]))
@@ -156,7 +156,7 @@ for chunk in chunks[:2]:
         print('Job: {0:.2f}% done. {1} {2}'.format(frac, ups_procd, len(df_agg[up].unique())))
         print('Iteration took {0:.1f} sec'.format(delta_time_sec))
 
-# df_agg.to_csv(expanduser('~/data/kl/claims/'
-#                          'lincs_{0}_v_{1}_n_{2}_'
-#                          'a_{3}_b_{4}_sv_{5}.csv.gz'.format(origin, version, n, a, b, subversion)),
-#               compression='gzip', index=False)
+df_agg.to_csv(expanduser('~/data/kl/claims/'
+                         'lincs_{0}_v_{1}_n_{2}_'
+                         'a_{3}_b_{4}_sv_{5}.csv.gz'.format(origin, version, n, a, b, subversion)),
+              compression='gzip', index=False)

@@ -25,8 +25,15 @@ targs2 = list(filter(lambda x: not (x['directed'] and x['method'] == 'multilevel
 pprint(targs2)
 targs2 = list(filter(lambda x: not (not x['directed'] and x['weighted'] and x['method'] == 'infomap'),
                      targs2))
-pprint(targs2)
+# targs2 = list(filter(lambda x: not x['weighted'] and x['method'] == 'multilevel',
+#                      targs2))
+# targs2 = list(filter(lambda x: x['method'] == 'multilevel',
+#                      targs2))
 
+for t in targs2:
+    t.update({'verbose': True, 'origin': 'lincs'})
+
+pprint(targs2)
 for args in targs2:
     dt = calculate_comms(**args)
     pprint(args)

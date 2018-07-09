@@ -24,6 +24,8 @@ targs = [{**z, **l, **inv_args} for l, z in product(largs, zargs)]
 targs2 = list(filter(lambda x: not (x['directed'] is True and x['method'] == 'multilevel'), targs))
 targs3 = [{**x, **y, **inv_args} for x, y in product(fnames, targs2)]
 
+#TODO add origin to arguments
+
 print(targs3)
 
 for args in targs3:
