@@ -185,7 +185,7 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
 
     dft = df_claims.merge(dfe2[columns], on=merge_on, how='inner')
 
-    types_comm = ['lincs', 'gw11', 'lit8']
+    types_comm = ['lincs', 'litgw']
     fpath_comm = expanduser('~/data/kl/comms/')
     up_dns = dft.drop_duplicates([up, dn])[[up, dn]]
 
