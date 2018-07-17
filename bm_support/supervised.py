@@ -126,12 +126,18 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
         df_claims[ni] = df_claims[ni].astype(int)
     else:
         if hash_int:
-            fname = 'df_{0}_v_{1}_hash_{2}.pgz'.format(origin, version, hash_int)
+            fname = 'df_{0}_v_{1}_hash_{2}.h5'.format(origin, version, hash_int)
+            # fname = 'df_{0}_v_{1}_hash_{2}.pgz'.format(origin, version, hash_int)
         else:
             fname = 'df_{0}_v_{1}_c_{2}_m_{3}_n_{4}_a_{5}_b_{6}.pgz'.format(origin, version, data_columns,
                                                                             batchsize, cutoff_len, lo, hi)
-        with gzip.open(join(batches_path, fname)) as fp:
-            df_claims = pickle.load(fp)
+        if fname[-3:] == 'pgz':
+            with gzip.open(join(batches_path, fname)) as fp:
+                df_claims = pickle.load(fp)
+        elif fname[-2:] == 'h5':
+            df_claims = pd.read_hdf(expanduser(join(batches_path, fname)))
+
+    # print(df_claims.columns)
     if verbose:
         print('{0} dataframe size {1}'.format(origin, df_claims.shape[0]))
         print('unique statements {0}'.format(len(df_claims[ni].unique())))
