@@ -211,7 +211,7 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
         print(dft2[dist].value_counts())
 
     if add_cite_fits:
-        df_cites = pd.read_csv('/Users/belikov/data/wos/cites/wos_cite_result.csv.gz',
+        df_cites = pd.read_csv(expanduser('~/data/wos/cites/wos_cite_result.csv.gz'),
                                compression='gzip', index_col=0)
         dft3 = pd.merge(dft2, df_cites, on=pm, how='left')
         for c in ['yearspan_flag', 'len_flag', 'succfit_flag', 'mu', 'sigma', 'A', 'err', 'int_3']:
