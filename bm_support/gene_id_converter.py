@@ -4,8 +4,6 @@ from numpy import array
 from pandas import DataFrame, read_csv
 from os.path import expanduser
 from itertools import permutations
-from bm_support.cmap_tools import pt
-
 
 types = ['hgnc_id', 'entrez_id', 'symbol']
 enforce_ints = ['entrez_id']
@@ -95,7 +93,6 @@ class GeneIdConverter(object):
             for ek in extra_keys:
                 self.convs[(key, ek)] = {transform_foo(k): v for k, v in self.convs[(key, ek)].items()}
                 self.convs[(ek, key)] = {k: transform_foo(v) for k, v in self.convs[(ek, key)].items()}
-
 
     def to_pd_df(self):
         arr = array([(u, v) for u, v in self.convs[(self.u, self.v)].items()])

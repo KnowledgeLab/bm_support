@@ -191,7 +191,9 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
 
     dft = df_claims.merge(dfe2[columns], on=merge_on, how='inner')
 
+    # add static communities
     types_comm = ['lincs', 'litgw']
+    # storage_types = ['csv.gz', 'h5']
     fpath_comm = expanduser('~/data/kl/comms/')
     up_dns = dft.drop_duplicates([up, dn])[[up, dn]]
 
@@ -220,6 +222,38 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
             del up_dns[cn + '_csize_dn']
 
     dft = dft.merge(up_dns, on=[up, dn], how='left')
+
+    # add dynamic communities
+    ty = 'litgw'
+
+    fnames, cnames = get_community_fnames_cnames(ty, 'h5')
+    up_dns_ye = dft.drop_duplicates([up, dn, ye])[[up, dn, ye]].sort_values([up, dn, ye])
+    up_dns_ye_acc = dft.drop_duplicates([up, dn, ye])[[up, dn, ye]].sort_values([up, dn, ye])
+
+    for ff, cn in list(zip(fnames, cnames)):
+        print(ff)
+        store = pd.HDFStore(expanduser(join(fpath_comm, ff)))
+        keys = sorted(store.keys())
+        dfa = []
+        print(keys)
+        for k in keys[:]:
+            y = int(k[-4:])
+            dfc = store.get(k)
+            vc = dfc.groupby('comm_id').apply(lambda x: x.shape[0])
+            dfc2 = dfc.merge(pd.DataFrame(vc), left_on='comm_id', right_index=True).rename(columns={0: 'csize'})
+            dfc2_up = dfc2.rename(columns=dict([(c, cn + '_' + c + '_up') for c in dfc2.columns]))
+            dfc2_dn = dfc2.rename(columns=dict([(c, cn + '_' + c + '_dn') for c in dfc2.columns]))
+            ud_cur = up_dns_ye.loc[up_dns_ye[ye] == y].sort_values([up, dn, ye])
+            ud_cur = ud_cur.merge(dfc2_up, how='left', left_on='up', right_index=True)
+            ud_cur = ud_cur.merge(dfc2_dn, how='left', left_on='dn', right_index=True)
+            ud_cur[cn + '_same_comm'] = (ud_cur[cn + '_comm_id_up'] == ud_cur[cn + '_comm_id_dn'])
+            ud_cur[cn + '_eff_comm_size'] = (ud_cur[cn + '_csize_up'] * ud_cur[cn + '_csize_dn']) ** 0.5
+            keep_cols = [c for c in ud_cur.columns if '_id_' not in c]
+            dfa.append(ud_cur[keep_cols])
+        up_dns_ye_acc = up_dns_ye_acc.merge(pd.concat(dfa), on=[up, dn, ye], how='left')
+        store.close()
+
+    dft = dft.merge(up_dns_ye_acc, on=[up, dn, ye], how='left')
     if verbose:
         print('after merge to claims: {0}'.format(dft.shape[0]))
 
