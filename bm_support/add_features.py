@@ -482,41 +482,6 @@ def calc_normed_hi(pd_incoming, pmids_clust_dict, columns, verbose=False):
     return pd.DataFrame(np.array(result_accumulator), index=pd_incoming.index)
 
 
-def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
-                          window=2, frac_important=0.1, mode='square',
-                          type='cross'):
-
-    if mode == 'square':
-        def foo(x): return x**2
-    elif mode == 'linear':
-        def foo(x): return x
-    ixs = sorted(data[window_col].unique())
-    r_agg = []
-    ind_agg = []
-    for ix in ixs:
-        mask = (data[window_col] <= ix) & (data[window_col] > ix - window)
-        cur_pmids = data.loc[mask, pm].unique()
-        cur_wosids = [pm_wid_dict[k] for k in cur_pmids if k in pm_wid_dict.keys()]
-        cur_cites = {k: bipart_edges_dict[k] for k in cur_wosids}
-        if cur_cites:
-            flat_citations = [x for sublist in cur_cites.values() for x in sublist]
-            set_unique_citations = set(flat_citations)
-            # n_citations = sum([len(x) for x in cur_cites.values()])
-            mean_citations_per_paper = np.mean([len(x) for x in cur_cites.values()])
-            n_unique_citations = len(set_unique_citations)
-            vc = pd.Series(flat_citations).value_counts()
-            if mean_citations_per_paper != mean_citations_per_paper:
-                print(ix, mean_citations_per_paper, [len(x) for x in cur_cites.values()], cur_cites, cur_pmids)
-            n_top = int(np.ceil(frac_important * mean_citations_per_paper))
-            volume = n_top * foo(len(cur_wosids))
-            alpha = sum(foo(vc.head(n_top))) / volume
-        else:
-            n_unique_citations = 0
-            alpha = np.nan
-        ind_agg.append(ix)
-        r_agg.append((alpha, len(cur_cites), n_unique_citations))
-    return pd.DataFrame(r_agg, index=ind_agg, columns=['alpha', 'n_papers', 'n_cited'])
-
 
 def train_test_split_key(df, test_size, seed, agg_ind, stratify_key_agg, skey, verbose=False):
     pkey = stratify_key_agg
