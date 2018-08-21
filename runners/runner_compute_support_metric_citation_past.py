@@ -1,6 +1,6 @@
 import pandas as pd
 from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, nw, wi, dist, pm
-from bm_support.add_features import compute_support_index
+from bm_support.bigraph_support import compute_support_index
 from os.path import expanduser
 
 df = pd.read_csv(expanduser('~/data/wos/cites/wos_citations.csv.gz'), compression='gzip', index_col=0)

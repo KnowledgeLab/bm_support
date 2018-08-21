@@ -1,8 +1,9 @@
 import pickle
 import gzip
 import pandas as pd
+from numpy import nan
 from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, nw, wi, dist, pm
-from bm_support.add_features import compute_support_index
+from bm_support.bigraph_support import compute_support_index
 from os.path import expanduser
 
 
@@ -20,7 +21,7 @@ dfy = pd.read_csv(expanduser('~/data/wos/pmids/updnyearpmid_all.csv.gz'), index_
 
 df_pm_wid['wos_id_stripped'] = df_pm_wid['wos_id'].apply(lambda x: x[4:])
 
-df_pm_wid['wos_id_int'] = df_pm_wid['wos_id_stripped'].apply(lambda x: w2i[x] if x in w2i.keys() else np.nan)
+df_pm_wid['wos_id_int'] = df_pm_wid['wos_id_stripped'].apply(lambda x: w2i[x] if x in w2i.keys() else nan)
 df_pm_wid = df_pm_wid[~df_pm_wid['wos_id_int'].isnull()]
 df_pm_wid['wos_id_int'] = df_pm_wid['wos_id_int'].astype(int)
 pm_wid_dict = dict(df_pm_wid[[pm, 'wos_id_int']].values)
