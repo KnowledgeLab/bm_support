@@ -45,6 +45,53 @@ def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
     return dfr
 
 
+def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
+                           window=2, mode='all'):
+    """
+
+    :param data:
+            DataFrame of format:
+                columns=[pm, window_col]
+
+    :param bipart_edges_dict:
+            {id_n: [id_k]}
+    :param pm_wid_dict:
+            {pm: id}
+    :param window_col:
+            column on which to window // partition into groups
+    :param window:
+            numerical value of the window
+    :param frac_important:
+            fraction of the important papers
+    :param transform: 'linear' or 'square', applied to degree of vertex set V
+    :param mode: 'cross' for support index for the intersection of U and V
+    :return:
+    """
+
+    ixs = sorted(data[window_col].unique())
+
+    r_agg = []
+    for ix in ixs:
+        mask = (data[window_col] <= ix) & (data[window_col] > ix - window)
+        cur_pmids = data.loc[mask, pm].unique()
+        cur_pmids_present = [k for k in cur_pmids if k in pm_wid_dict.keys()]
+        cur_wosids = [pm_wid_dict[k] for k in cur_pmids_present]
+        if cur_wosids:
+            if mode == 'cross':
+                cur_cites = [[y for y in bipart_edges_dict[k] if y in cur_wosids] for k in cur_wosids]
+            else:
+                cur_cites = [bipart_edges_dict[k] for k in cur_wosids]
+            alphas = compute_affinity(cur_cites)
+            if alphas:
+                r_agg.append(list(zip([ix]*len(alphas), cur_pmids_present, alphas)))
+    if r_agg:
+        rdata = np.concatenate(r_agg)
+        dfr = pd.DataFrame(rdata, columns=[window_col, pm, 'aff_ind'])
+    else:
+        dfr = pd.DataFrame(columns=[window_col, pm, 'aff_ind'])
+    return dfr
+
+
 def compute_vdegrees(data):
     """
     compute the support index for a bigraph,
@@ -115,6 +162,9 @@ def compute_affinity(data):
     affinities = []
     for item in data:
         affinity_unnormed = sum([v_degrees[v2i[k]] - 1 for k in item])
-        affinity = affinity_unnormed/(n_edges - len(item))
+        if n_edges == len(item):
+            affinity = 0
+        else:
+            affinity = affinity_unnormed/(n_edges - len(item))
         affinities.append(affinity)
     return affinities
