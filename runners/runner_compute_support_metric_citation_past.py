@@ -4,9 +4,10 @@ from bm_support.bigraph_support import compute_support_index, compute_affinity_i
 from os.path import expanduser
 
 fraction_imporant_v_vertices = 0.2
+window_size = 1
 
 n_test = None
-# n_test = 2000
+n_test = 2000
 
 df = pd.read_csv(expanduser('~/data/wos/cites/wos_citations.csv.gz'), compression='gzip', index_col=0)
 df_pm_wid = pd.read_csv(expanduser('~/data/wos/cites/wosids.csv.gz'), index_col=0)
@@ -35,14 +36,17 @@ if n_test:
     dfy = dfy.head(n_test)
 
 dfr = dfy.groupby([up, dn]).apply(lambda x: compute_support_index(x, cites_dict,
-                                                                  pm_wid_dict, ye, 1, fraction_imporant_v_vertices))
+                                                                  pm_wid_dict, ye, window_size,
+                                                                  fraction_imporant_v_vertices))
 dfr = dfr.reset_index()
 print(dfr.head())
-dfr.to_csv(expanduser('~/data/wos/cites/support_metric_past.csv.gz'), compression='gzip')
+if not n_test:
+    dfr.to_csv(expanduser('~/data/wos/cites/support_metric_past.csv.gz'), compression='gzip')
 
 # concl. dfr should be merged on [up, dn, ye]
 
-dfr2 = dfy.groupby([up, dn]).apply(lambda x: compute_affinity_index(x, cites_dict, pm_wid_dict, ye))
+dfr2 = dfy.groupby([up, dn]).apply(lambda x: compute_affinity_index(x, cites_dict, pm_wid_dict,
+                                                                    ye, window_size))
 dfr2 = dfr2.reset_index()
 
 dfr2 = dfr2.drop(['level_2'], axis=1)
@@ -53,5 +57,6 @@ dfr2[ye] = dfr2[ye].astype(int)
 print(dfr2.head())
 
 print('affinity df shape {0}; number of non zeros {1}'.format(dfr2.shape, sum(dfr2['aff_ind'] != 0)))
-dfr2.to_csv(expanduser('~/data/wos/cites/affinity_metric_past.csv.gz'), compression='gzip')
+if not n_test:
+    dfr2.to_csv(expanduser('~/data/wos/cites/affinity_metric_past.csv.gz'), compression='gzip')
 # concl. dfr should be merged on [up, dn, pm]

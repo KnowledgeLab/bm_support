@@ -4,7 +4,8 @@ from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp,
 
 
 def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
-                          window=2, frac_important=0.1, transform='square', mode='all'):
+                          window=2, frac_important=0.1,
+                          transform='square', mode='all', use_wosids=True):
     """
 
     :param data:
@@ -32,21 +33,28 @@ def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
     for ix in ixs:
         mask = (data[window_col] <= ix) & (data[window_col] > ix - window)
         cur_pmids = data.loc[mask, pm].unique()
-        cur_wosids = [pm_wid_dict[k] for k in cur_pmids if k in pm_wid_dict.keys()]
+        if use_wosids:
+            cur_wosids = [pm_wid_dict[k] for k in cur_pmids if k in pm_wid_dict.keys()]
+        else:
+            cur_wosids = cur_pmids
         if mode == 'all':
             cur_cites = [bipart_edges_dict[k] for k in cur_wosids]
         elif mode == 'cross':
             cur_cites = [[y for y in bipart_edges_dict[k] if y in cur_wosids] for k in cur_wosids]
-        alpha, n_unique_citations = compute_support(cur_cites, frac_important, transform)
+
+        # ll = len([x for sublist in cur_cites for x in sublist])
+        # print(len(cur_cites), ll, len(cur_wosids), skip_wosids)
+        # print(cur_wosids, cur_cites)
+        alpha, n_unique_citations, n_edges = compute_support(cur_cites, frac_important, transform)
         ind_agg.append(ix)
-        r_agg.append((alpha, len(cur_cites), n_unique_citations))
-    dfr = pd.DataFrame(r_agg, index=ind_agg, columns=['alpha', 'n_papers', 'n_cited'])
+        r_agg.append((alpha, len(cur_cites), n_unique_citations, n_edges))
+    dfr = pd.DataFrame(r_agg, index=ind_agg, columns=['alpha', 'size_level_a', 'size_level_b', 'n_edges'])
     dfr = dfr.rename_axis(window_col, axis='index')
     return dfr
 
 
 def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
-                           window=2, mode='all'):
+                           window=2, mode='all', use_wosids=True):
     """
 
     :param data:
@@ -73,10 +81,14 @@ def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
     r_agg = []
     for ix in ixs:
         mask = (data[window_col] <= ix) & (data[window_col] > ix - window)
-        cur_pmids = data.loc[mask, pm].unique()
-        cur_pmids_present = [k for k in cur_pmids if k in pm_wid_dict.keys()]
-        cur_wosids = [pm_wid_dict[k] for k in cur_pmids_present]
-        if cur_wosids:
+        cur_pmids = list(data.loc[mask, pm].unique())
+        if use_wosids:
+            cur_pmids_present = [k for k in cur_pmids if k in pm_wid_dict.keys()]
+            cur_wosids = [pm_wid_dict[k] for k in cur_pmids_present]
+        else:
+            cur_wosids = cur_pmids
+            cur_pmids_present = cur_pmids
+        if cur_pmids_present:
             if mode == 'cross':
                 cur_cites = [[y for y in bipart_edges_dict[k] if y in cur_wosids] for k in cur_wosids]
             else:
@@ -132,7 +144,7 @@ def compute_support(data, frac_important=0.2, mode='square'):
 
     uniques, counts, _ = compute_vdegrees(data)
     if len(uniques) == 0 or len(data) == 1:
-        return 0, len(uniques)
+        return 0, len(uniques), sum(counts)
     power_v = len(uniques)
     mean_degree_v = np.mean([len(x) for x in data])
 
@@ -141,7 +153,7 @@ def compute_support(data, frac_important=0.2, mode='square'):
     counts_sorted = sorted(counts)[::-1][:n_top]
     alpha = sum([foo(z) for z in counts_sorted]) / volume
 
-    return alpha, power_v
+    return alpha, power_v, sum(counts)
 
 
 def compute_affinity(data):
