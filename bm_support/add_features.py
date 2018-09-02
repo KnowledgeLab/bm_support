@@ -482,26 +482,34 @@ def calc_normed_hi(pd_incoming, pmids_clust_dict, columns, verbose=False):
     return pd.DataFrame(np.array(result_accumulator), index=pd_incoming.index)
 
 
-
-def train_test_split_key(df, test_size, seed, agg_ind, stratify_key_agg, skey, verbose=False):
+def train_test_split_key(df, test_size, seed, agg_ind=None, stratify_key_agg=None, skey=None, verbose=False):
     pkey = stratify_key_agg
     nkey = skey
-    df_key = df.drop_duplicates(agg_ind)
-    df_key_train, df_key_test = train_test_split(df_key, test_size=test_size,
-                                                 random_state=seed,
-                                                 stratify=df_key[pkey])
+    if agg_ind:
+        df_key = df.drop_duplicates(agg_ind)
+    if pkey:
+        df_key_train, df_key_test = train_test_split(df_key, test_size=test_size,
+                                                     random_state=seed,
+                                                     stratify=df_key[pkey])
+    else:
+        df_key_train, df_key_test = train_test_split(df_key, test_size=test_size,
+                                                     random_state=seed)
+
     df_test = df.loc[df[agg_ind].isin(df_key_test[agg_ind].unique())]
     df_train = df.loc[df[agg_ind].isin(df_key_train[agg_ind].unique())]
 
     if verbose:
-        print('train vc:')
-        print(df_key_train[pkey].value_counts())
-        print('test vc:')
-        print(df_key_test[pkey].value_counts())
-        print('train vc:')
-        print(df_train[nkey].value_counts())
-        print('test vc:')
-        print(df_test[nkey].value_counts())
-        print('fraction. resulting : {0:.2f}, requested {1:.2f}'
-              .format(df_test.shape[0]/df.shape[0], test_size))
+        if pkey:
+            print('train vc:')
+            print(df_key_train[pkey].value_counts())
+            print('test vc:')
+            print(df_key_test[pkey].value_counts())
+        if nkey:
+            print('train vc:')
+            print(df_train[nkey].value_counts())
+            print('test vc:')
+            print(df_test[nkey].value_counts())
+            print('fraction. resulting : {0:.2f}, requested {1:.2f}'
+                  .format(df_test.shape[0]/df.shape[0], test_size))
+
     return df_train, df_test

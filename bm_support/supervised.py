@@ -295,7 +295,7 @@ def simple_stratify(df, statify_column, seed=0, ratios=None, verbose=False):
     return stratified df
     """
     if ratios == 'original':
-        return  df
+        return df
     else:
         np.random.seed(seed)
         vc = df[statify_column].value_counts()

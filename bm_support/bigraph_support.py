@@ -4,7 +4,7 @@ from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp,
 
 
 def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
-                          window=2, frac_important=0.1,
+                          window=None, frac_important=0.1,
                           transform='square', mode='all', use_wosids=True):
     """
 
@@ -31,7 +31,10 @@ def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
     r_agg = []
     ind_agg = []
     for ix in ixs:
-        mask = (data[window_col] <= ix) & (data[window_col] > ix - window)
+        if window:
+            mask = (data[window_col] <= ix) & (data[window_col] > ix - window)
+        else:
+            mask = (data[window_col] <= ix)
         cur_pmids = data.loc[mask, pm].unique()
         if use_wosids:
             cur_wosids = [pm_wid_dict[k] for k in cur_pmids if k in pm_wid_dict.keys()]
@@ -48,13 +51,20 @@ def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
         alpha, n_unique_citations, n_edges = compute_support(cur_cites, frac_important, transform)
         ind_agg.append(ix)
         r_agg.append((alpha, len(cur_cites), n_unique_citations, n_edges))
-    dfr = pd.DataFrame(r_agg, index=ind_agg, columns=['alpha', 'size_level_a', 'size_level_b', 'n_edges'])
+
+    if window:
+        suff = '{0}'.format(window)
+    else:
+        suff = ''
+    cols = ['alpha', 'size_level_a', 'size_level_b', 'n_edges']
+    ren_cols = {k: '{0}{1}'.format(k, suff) for k in cols}
+    dfr = pd.DataFrame(r_agg, index=ind_agg, columns=ren_cols)
     dfr = dfr.rename_axis(window_col, axis='index')
     return dfr
 
 
 def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
-                           window=2, mode='all', use_wosids=True):
+                           window=None, mode='all', use_wosids=True):
     """
 
     :param data:
@@ -80,7 +90,10 @@ def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
 
     r_agg = []
     for ix in ixs:
-        mask = (data[window_col] <= ix) & (data[window_col] > ix - window)
+        if window:
+            mask = (data[window_col] <= ix) & (data[window_col] > ix - window)
+        else:
+            mask = (data[window_col] <= ix)
         cur_pmids = list(data.loc[mask, pm].unique())
         if use_wosids:
             cur_pmids_present = [k for k in cur_pmids if k in pm_wid_dict.keys()]
@@ -96,11 +109,17 @@ def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
             alphas = compute_affinity(cur_cites)
             if alphas:
                 r_agg.append(list(zip([ix]*len(alphas), cur_pmids_present, alphas)))
+
+    if window:
+        csuff = 'aff_ind{0}'.format(window)
+    else:
+        csuff = 'aff_ind'
+
     if r_agg:
         rdata = np.concatenate(r_agg)
-        dfr = pd.DataFrame(rdata, columns=[window_col, pm, 'aff_ind'])
+        dfr = pd.DataFrame(rdata, columns=[window_col, pm, csuff])
     else:
-        dfr = pd.DataFrame(columns=[window_col, pm, 'aff_ind'])
+        dfr = pd.DataFrame(columns=[window_col, pm, csuff])
     return dfr
 
 
