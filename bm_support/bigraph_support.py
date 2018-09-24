@@ -57,7 +57,9 @@ def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
     else:
         suff = ''
     cols = ['alpha', 'size_level_a', 'size_level_b', 'n_edges']
-    ren_cols = {k: '{0}{1}'.format(k, suff) for k in cols}
+    # ren_cols = {k: '{0}{1}'.format(k, suff) for k in cols}
+    ren_cols = ['{0}{1}'.format(k, suff) for k in cols]
+    # print(ren_cols)
     dfr = pd.DataFrame(r_agg, index=ind_agg, columns=ren_cols)
     dfr = dfr.rename_axis(window_col, axis='index')
     return dfr
@@ -66,7 +68,7 @@ def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
 def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
                            window=None, mode='all', use_wosids=True):
     """
-
+    #TODO this function has to be double checked, the filters might behave unpredictably
     :param data:
             DataFrame of format:
                 columns=[pm, window_col]
@@ -79,22 +81,19 @@ def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
             column on which to window // partition into groups
     :param window:
             numerical value of the window
-    :param frac_important:
-            fraction of the important papers
-    :param transform: 'linear' or 'square', applied to degree of vertex set V
     :param mode: 'cross' for support index for the intersection of U and V
     :return:
     """
 
     ixs = sorted(data[window_col].unique())
-
     r_agg = []
     for ix in ixs:
+        mask = (data[window_col] <= ix)
         if window:
-            mask = (data[window_col] <= ix) & (data[window_col] > ix - window)
-        else:
-            mask = (data[window_col] <= ix)
+            mask &= (data[window_col] > ix - window)
+
         cur_pmids = list(data.loc[mask, pm].unique())
+        pmids_ix = [pmx for pmx in data.loc[data[window_col] == ix, pm].unique() if pmx in pm_wid_dict.keys()]
         if use_wosids:
             cur_pmids_present = [k for k in cur_pmids if k in pm_wid_dict.keys()]
             cur_wosids = [pm_wid_dict[k] for k in cur_pmids_present]
@@ -107,19 +106,21 @@ def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
             else:
                 cur_cites = [bipart_edges_dict[k] for k in cur_wosids]
             alphas = compute_affinity(cur_cites)
-            if alphas:
-                r_agg.append(list(zip([ix]*len(alphas), cur_pmids_present, alphas)))
+            alphas_dict = dict(zip(cur_pmids_present, alphas))
+            output = [(ix, p, alphas_dict[p]) for p in pmids_ix]
+            if output:
+                r_agg.append(output)
 
     if window:
-        csuff = 'aff_ind{0}'.format(window)
+        col_suffixed = 'aff_ind{0}'.format(window)
     else:
-        csuff = 'aff_ind'
+        col_suffixed = 'aff_ind'
 
     if r_agg:
         rdata = np.concatenate(r_agg)
-        dfr = pd.DataFrame(rdata, columns=[window_col, pm, csuff])
+        dfr = pd.DataFrame(rdata, columns=[window_col, pm, col_suffixed])
     else:
-        dfr = pd.DataFrame(columns=[window_col, pm, csuff])
+        dfr = pd.DataFrame(columns=[window_col, pm, col_suffixed])
     return dfr
 
 
@@ -181,9 +182,6 @@ def compute_affinity(data):
     as a matter of definition, for bigraphs with |U| < 2 and |V| == 0, alpha = 0
     :param data: list of lists, representing edges of a bipartite graph (U, V, E)
         the index of the list represents a vertex from set U, while a vertex from set V can be an object
-    :param frac_important:
-            fraction of the important papers
-    :param mode:
     :return: (support_index, power of set V)
     """
     uniques, counts, v2i = compute_vdegrees(data)
@@ -193,9 +191,10 @@ def compute_affinity(data):
     affinities = []
     for item in data:
         affinity_unnormed = sum([v_degrees[v2i[k]] - 1 for k in item])
-        if n_edges == len(item):
+        if len(data) == 1 or len(item) == 0:
+            # or n_edges == len(item)?
             affinity = 0
         else:
-            affinity = affinity_unnormed/(n_edges - len(item))
+            affinity = affinity_unnormed/(len(item) * (len(data) - 1))
         affinities.append(affinity)
     return affinities

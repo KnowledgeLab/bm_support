@@ -76,15 +76,16 @@ for ws in window_sizes:
 
 df_agg_supp = pd.concat(df_agg_supp)
 
-# if not n_test:
-df_agg_supp.to_csv(expanduser('~/data/wos/cites/support_metric_future_.csv.gz'),
-                             compression='gzip')
-
-# concl. dfr should be merged on [up, dn, ye]
+if not n_test:
+    df_agg_supp.to_csv(expanduser('~/data/wos/cites/support_metric_future.csv.gz'), compression='gzip')
+else:
+    print(df_agg_supp.shape)
+    print(df_agg_supp.head())
 
 df_agg_aff = pd.concat(df_agg_aff)
 
-# if not n_test:
-df_agg_aff.to_csv(expanduser('~/data/wos/cites/affinity_metric_future_.csv.gz'), compression='gzip')
-
-# concl. dfr should be merged on [up, dn, pm]
+if not n_test:
+    df_agg_aff.to_csv(expanduser('~/data/wos/cites/affinity_metric_past.csv.gz'), compression='gzip')
+else:
+    print(df_agg_aff.shape)
+    print(df_agg_aff.head())
