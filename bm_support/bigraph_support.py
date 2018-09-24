@@ -45,9 +45,6 @@ def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
         elif mode == 'cross':
             cur_cites = [[y for y in bipart_edges_dict[k] if y in cur_wosids] for k in cur_wosids]
 
-        # ll = len([x for sublist in cur_cites for x in sublist])
-        # print(len(cur_cites), ll, len(cur_wosids), skip_wosids)
-        # print(cur_wosids, cur_cites)
         alpha, n_unique_citations, n_edges = compute_support(cur_cites, frac_important, transform)
         ind_agg.append(ix)
         r_agg.append((alpha, len(cur_cites), n_unique_citations, n_edges))
@@ -57,18 +54,17 @@ def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
     else:
         suff = ''
     cols = ['suppind', 'size_level_a', 'size_level_b', 'n_edges']
-    # ren_cols = {k: '{0}{1}'.format(k, suff) for k in cols}
     ren_cols = ['{0}{1}'.format(k, suff) for k in cols]
-    # print(ren_cols)
     dfr = pd.DataFrame(r_agg, index=ind_agg, columns=ren_cols)
     dfr = dfr.rename_axis(window_col, axis='index')
     return dfr
 
 
+# TODO this function has to be double checked, the filters might behave unpredictably
+
 def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
                            window=None, mode='all', use_wosids=True):
     """
-    #TODO this function has to be double checked, the filters might behave unpredictably
     :param data:
             DataFrame of format:
                 columns=[pm, window_col]
@@ -93,7 +89,10 @@ def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
             mask &= (data[window_col] > ix - window)
 
         cur_pmids = list(data.loc[mask, pm].unique())
-        pmids_ix = [pmx for pmx in data.loc[data[window_col] == ix, pm].unique() if pmx in pm_wid_dict.keys()]
+        pmids_ix = [pmx for pmx in data.loc[data[window_col] == ix, pm].unique()]
+        if use_wosids:
+            pmids_ix = [pmx for pmx in pmids_ix if pmx in pm_wid_dict.keys()]
+
         if use_wosids:
             cur_pmids_present = [k for k in cur_pmids if k in pm_wid_dict.keys()]
             cur_wosids = [pm_wid_dict[k] for k in cur_pmids_present]

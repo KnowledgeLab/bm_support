@@ -10,7 +10,7 @@ fraction_imporant_v_vertices = 0.2
 window_sizes = [None, 1, 2, 3]
 
 n_test = None
-n_test = 1000
+# n_test = 1000
 
 fname2 = expanduser('~/data/wos/cites/cites_cs_v2.pgz')
 with gzip.open(fname2, 'rb') as fp:
@@ -41,51 +41,60 @@ if n_test:
 df_agg_supp = []
 df_agg_aff = []
 
-for ws in window_sizes:
+for window_size in window_sizes:
 
     dfr = dfy.groupby([up, dn]).apply(lambda x: compute_support_index(x, cites_dict,
-                                                                      pm_wid_dict, ye, ws,
+                                                                      pm_wid_dict, ye, window_size,
                                                                       fraction_imporant_v_vertices))
 
     dfr = dfr.reset_index()
-    print(dfr.head())
 
-    if ws:
-        suff = '{0}'.format(ws)
+    if window_size:
+        suff = '{0}'.format(window_size)
     else:
         suff = ''
-    dfr = dfr.reset_index()
-    #rename columns with suffix
+    dfr = dfr.set_index([up, dn, ye])
+    print(dfr.head())
+
     df_agg_supp.append(dfr)
 
     dfr2 = dfy.groupby([up, dn]).apply(lambda x: compute_affinity_index(x, cites_dict, pm_wid_dict,
-                                                                        ye, ws))
+                                                                        ye, window_size))
     dfr2 = dfr2.reset_index()
 
     dfr2 = dfr2.drop(['level_2'], axis=1)
 
     dfr2[pm] = dfr2[pm].astype(int)
     dfr2[ye] = dfr2[ye].astype(int)
+    dfr2 = dfr2.set_index([up, dn, ye, pm]).sort_index()
 
-    #rename dfr2 columns with suffix
     df_agg_aff.append(dfr2)
-
     print(dfr2.head())
 
-    print('affinity df shape {0}; number of non zeros {1}'.format(dfr2.shape, sum(dfr2['aff_ind'] != 0)))
 
-df_agg_supp = pd.concat(df_agg_supp)
+for y, d, d2 in zip(window_sizes, df_agg_supp, df_agg_aff):
+    print(y, d.shape, d2.shape)
+
+df_agg_supp2 = pd.concat(df_agg_supp, axis=1)
+print('supp concat shape: ', df_agg_supp2.shape)
+
+df_agg_aff2 = pd.concat(df_agg_aff, axis=1)
+print('aff concat shape: ', df_agg_supp2.shape)
+
+print('Fractions of indices that are non zero:')
+
+for c in [col for col in df_agg_supp2 if 'ind' in col]:
+    print('{0} : {1:.2f} %'.format(c, 100*sum(df_agg_supp2[c] != 0)/df_agg_supp2.shape[0]))
+
+for c in df_agg_aff2.columns:
+    print('{0} : {1:.2f} %'.format(c, 100*sum(df_agg_aff2[c] != 0)/df_agg_aff2.shape[0]))
 
 if not n_test:
-    df_agg_supp.to_csv(expanduser('~/data/wos/cites/support_metric_future.csv.gz'), compression='gzip')
+    df_agg_supp2.to_csv(expanduser('~/data/wos/cites/support_metric_future.csv.gz'), compression='gzip')
 else:
-    print(df_agg_supp.shape)
-    print(df_agg_supp.head())
-
-df_agg_aff = pd.concat(df_agg_aff)
+    print(df_agg_supp2.head())
 
 if not n_test:
-    df_agg_aff.to_csv(expanduser('~/data/wos/cites/affinity_metric_past.csv.gz'), compression='gzip')
+    df_agg_aff2.to_csv(expanduser('~/data/wos/cites/affinity_metric_future.csv.gz'), compression='gzip')
 else:
-    print(df_agg_aff.shape)
-    print(df_agg_aff.head())
+    print(df_agg_aff2.head())
