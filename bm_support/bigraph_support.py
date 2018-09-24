@@ -56,7 +56,7 @@ def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
         suff = '{0}'.format(window)
     else:
         suff = ''
-    cols = ['alpha', 'size_level_a', 'size_level_b', 'n_edges']
+    cols = ['suppind', 'size_level_a', 'size_level_b', 'n_edges']
     # ren_cols = {k: '{0}{1}'.format(k, suff) for k in cols}
     ren_cols = ['{0}{1}'.format(k, suff) for k in cols]
     # print(ren_cols)
@@ -112,9 +112,9 @@ def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
                 r_agg.append(output)
 
     if window:
-        col_suffixed = 'aff_ind{0}'.format(window)
+        col_suffixed = 'affind{0}'.format(window)
     else:
-        col_suffixed = 'aff_ind'
+        col_suffixed = 'affind'
 
     if r_agg:
         rdata = np.concatenate(r_agg)
