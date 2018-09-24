@@ -127,7 +127,6 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
     else:
         if hash_int:
             fname = 'df_{0}_v_{1}_hash_{2}.h5'.format(origin, version, hash_int)
-            # fname = 'df_{0}_v_{1}_hash_{2}.pgz'.format(origin, version, hash_int)
         else:
             fname = 'df_{0}_v_{1}_c_{2}_m_{3}_n_{4}_a_{5}_b_{6}.pgz'.format(origin, version, data_columns,
                                                                             batchsize, cutoff_len, lo, hi)
@@ -137,7 +136,6 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
         elif fname[-2:] == 'h5':
             df_claims = pd.read_hdf(expanduser(join(batches_path, fname)))
 
-    # print(df_claims.columns)
     if verbose:
         print('{0} dataframe size {1}'.format(origin, df_claims.shape[0]))
         print('unique statements {0}'.format(len(df_claims[ni].unique())))
@@ -192,6 +190,7 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
     dft = df_claims.merge(dfe2[columns], on=merge_on, how='inner')
 
     # add static communities
+
     types_comm = ['lincs', 'litgw']
     # storage_types = ['csv.gz', 'h5']
     fpath_comm = expanduser('~/data/kl/comms/')
@@ -254,6 +253,27 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
         store.close()
 
     dft = dft.merge(up_dns_ye_acc, on=[up, dn, ye], how='left')
+
+
+    # add co-citation (future and past), coauthorship and co-affiliation metrics
+    metric_sources = ['authors', 'affiliations', 'future', 'past']
+    metric_types = ['support', 'affinity']
+
+    for mt in metric_types:
+        for ms in metric_sources:
+            if mt == 'affinity':
+                merge_cols = [up, dn, ye, pm]
+            elif mt == 'support':
+                merge_cols = [up, dn, ye]
+            else:
+                raise ValueError('unsupported metric type')
+            df_att = pd.read_csv(expanduser('~/data/wos/cites/{0}_metric_{1}.csv.gz'.format(mt, ms)))
+            print(df_att.shape)
+            rename_dict = {c: '{0}_{1}'.format(ms, c) for c in df_att.columns if 'ind' in c}
+            support_cols = [c for c in df_att.columns if 'ind' in c] + merge_cols
+            print(support_cols)
+            dft = dft.merge(df_att[support_cols].rename(columns=rename_dict), on=merge_cols, how='left')
+
     if verbose:
         print('after merge to claims: {0}'.format(dft.shape[0]))
 

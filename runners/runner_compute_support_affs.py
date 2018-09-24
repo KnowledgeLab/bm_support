@@ -78,11 +78,11 @@ for c in df_agg_aff2.columns:
     print('{0} : {1:.2f} %'.format(c, 100*sum(df_agg_aff2[c] != 0)/df_agg_aff2.shape[0]))
 
 if not n_test:
-    df_agg_supp2.to_csv(expanduser('~/data/wos/cites/support_metric_authors.csv.gz'), compression='gzip')
+    df_agg_supp2.to_csv(expanduser('~/data/wos/cites/support_metric_affiliations.csv.gz'), compression='gzip')
 else:
     print(df_agg_supp2.head())
 
 if not n_test:
-    df_agg_aff2.to_csv(expanduser('~/data/wos/cites/affinity_metric_authors.csv.gz'), compression='gzip')
+    df_agg_aff2.to_csv(expanduser('~/data/wos/cites/affinity_metric_affiliations.csv.gz'), compression='gzip')
 else:
     print(df_agg_aff2.head())
