@@ -1304,3 +1304,18 @@ def logreg_driver(origin, version, batchsize, cutoff_len, a, b, hash_int, max_de
 
     fpath = expanduser('~/data/kl/reports/report_logreg_{0}_{1}_{2}.csv'.format(origin, version, hash_int))
     df_reports2.to_csv(fpath, float_format='%.3f')
+
+
+def get_corrs(df, coi, cols, thr=0.03, mask=None, verbose=False):
+    df_ = df.copy()
+    if mask is not None:
+        df_ = df_[mask].copy()
+    all_cols = list(set(cols) | {coi})
+    corr_df = df_[all_cols].corr()
+    corr_df_abs = corr_df.abs()
+    corr_abs_thr = corr_df_abs.loc[(corr_df_abs[coi] > thr), coi].sort_values(ascending=False).tail(-1)
+    corr_thr = corr_df.loc[(corr_df_abs[coi] > thr), coi].sort_values(ascending=False).tail(-1)
+    if verbose:
+        print(corr_abs_thr)
+        print(corr_thr)
+    return corr_abs_thr, corr_thr
