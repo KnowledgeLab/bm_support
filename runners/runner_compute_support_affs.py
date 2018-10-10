@@ -18,7 +18,7 @@ affinity_flag = False
 mod_flag = True
 
 n_test = None
-n_test = 2000
+# n_test = 2000
 
 df_pm_wid = pd.read_csv(expanduser('~/data/wos/cites/wosids.csv.gz'), index_col=0)
 dfy = pd.read_csv(expanduser('~/data/wos/pmids/updnyearpmid_all.csv.gz'), index_col=0)

@@ -17,7 +17,7 @@ affinity_flag = False
 mod_flag = True
 
 n_test = None
-n_test = 2000
+# n_test = 2000
 
 fname2 = expanduser('~/data/wos/cites/cites_cs_v2.pgz')
 with gzip.open(fname2, 'rb') as fp:

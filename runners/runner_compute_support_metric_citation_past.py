@@ -13,7 +13,7 @@ affinity_flag = False
 mod_flag = True
 
 n_test = None
-n_test = 2000
+# n_test = 2000
 
 df = pd.read_csv(expanduser('~/data/wos/cites/wos_citations.csv.gz'), compression='gzip', index_col=0)
 df_pm_wid = pd.read_csv(expanduser('~/data/wos/cites/wosids.csv.gz'), index_col=0)
