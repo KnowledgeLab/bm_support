@@ -185,8 +185,6 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
     else:
         columns = dfe2.columns
 
-    print(columns)
-
     dft = df_claims.merge(dfe2[columns], on=merge_on, how='inner')
 
     # add static communities
@@ -200,13 +198,15 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
 
     for ty in types_comm:
         fnames, cnames = get_community_fnames_cnames(ty)
-        print(len(fnames), fnames, cnames)
+        if verbose:
+            print(len(fnames), fnames, cnames)
         for fn, cn in zip(fnames, cnames):
             dfc = pd.read_csv(join(fpath_comm, fn),
                               compression='gzip', index_col=0)
             comm_ids = set(dfc.index)
-            print('{0} {1}. |ids_merge| : {2}. |ids_comm| {3}. |ids_merge - ids_comm| {4}.'.format(fn, cn, len(all_ids),
-                  len(comm_ids), len(all_ids - comm_ids)))
+            if verbose:
+                print('{0} {1}. |ids_merge| : {2}. |ids_comm| {3}. |ids_merge - ids_comm| {4}.'.
+                      format(fn, cn, len(all_ids), len(comm_ids), len(all_ids - comm_ids)))
             vc = dfc.groupby('comm_id').apply(lambda x: x.shape[0])
             dfc2 = dfc.merge(pd.DataFrame(vc), left_on='comm_id', right_index=True).rename(columns={0: 'csize'})
             dfc2_up = dfc2.rename(columns=dict([(c, cn + '_' + c + '_up') for c in dfc2.columns]))
@@ -230,11 +230,13 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
     up_dns_ye_acc = dft.drop_duplicates([up, dn, ye])[[up, dn, ye]].sort_values([up, dn, ye])
 
     for ff, cn in list(zip(fnames, cnames)):
-        print(ff)
+        if verbose:
+            print('filename of community {0}.'.format(ff))
         store = pd.HDFStore(expanduser(join(fpath_comm, ff)))
         keys = sorted(store.keys())
         dfa = []
-        print(keys)
+        if verbose:
+            print('keys of community h5 {0}.'.format(keys))
         for k in keys[:]:
             y = int(k[-4:])
             dfc = store.get(k)
@@ -254,24 +256,30 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
 
     dft = dft.merge(up_dns_ye_acc, on=[up, dn, ye], how='left')
 
-
     # add co-citation (future and past), coauthorship and co-affiliation metrics
     metric_sources = ['authors', 'affiliations', 'future', 'past']
-    metric_types = ['support', 'affinity']
+    # metric_types = ['support', 'affinity']
+    metric_types = ['support', 'affinity', 'modularity']
+    if verbose:
+        print('support, affiliation, modularity metrics')
 
     for mt in metric_types:
         for ms in metric_sources:
-            if mt == 'affinity':
+            if mt == 'affinity' or mt == 'modularity':
                 merge_cols = [up, dn, ye, pm]
             elif mt == 'support':
                 merge_cols = [up, dn, ye]
             else:
                 raise ValueError('unsupported metric type')
             df_att = pd.read_csv(expanduser('~/data/wos/cites/{0}_metric_{1}.csv.gz'.format(mt, ms)))
-            print(df_att.shape)
-            rename_dict = {c: '{0}_{1}'.format(ms, c) for c in df_att.columns if 'ind' in c}
-            support_cols = [c for c in df_att.columns if 'ind' in c] + merge_cols
-            print(support_cols)
+            if mt == 'modularity':
+                cols = list(set(df_att.columns) - set([up, dn, ye, pm]))
+                rename_dict = {c: '{0}_{1}'.format(ms, c) for c in cols}
+            else:
+                rename_dict = {c: '{0}_{1}'.format(ms, c) for c in df_att.columns if 'ind' in c}
+            support_cols = [c for c in rename_dict.keys()] + merge_cols
+            if verbose:
+                print('shape and columns: {0} {1}'.format(df_att.shape, rename_dict))
             dft = dft.merge(df_att[support_cols].rename(columns=rename_dict), on=merge_cols, how='left')
 
     if verbose:
