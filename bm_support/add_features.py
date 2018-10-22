@@ -56,7 +56,7 @@ def mask_out(df, cutoff=None, extra_masks=None, verbose=False):
     # mask only only the upper and the lower quartiles in cdf_exp
     if cutoff:
         upper_exp, lower_exp = 1 - cutoff, cutoff
-        exp_mask = ['cdf_exp', (upper_exp, lower_exp), lambda df_, th: (df_ >= th[0]) | (df_ <= th[1])]
+        exp_mask = [cexp, (upper_exp, lower_exp), lambda df_, th: (df_ >= th[0]) | (df_ <= th[1])]
         masks.append(exp_mask)
 
     # mask affiliation rating
@@ -513,3 +513,49 @@ def train_test_split_key(df, test_size, seed, agg_ind=None, stratify_key_agg=Non
                   .format(df_test.shape[0]/df.shape[0], test_size))
 
     return df_train, df_test
+
+
+def generate_feature_groups(columns_filename, verbose=True):
+    with open(columns_filename, 'r') as f:
+        line = f.read()
+    columns = line.split('\n')
+    columns = [x for x in columns if x != '']
+
+    dim1 = ['affiliations', 'authors', 'future', 'past']
+    patterns = ['cpop', 'cden', 'ksst', 'nhi'] + \
+               ['{0}_affind'.format(c) for c in dim1] + \
+               ['{0}_suppind'.format(c) for c in dim1] + \
+               ['{0}_comm_size'.format(c) for c in dim1] + \
+               ['{0}_ncomms'.format(c) for c in dim1] + \
+               ['{0}_ncomponents'.format(c) for c in dim1] + \
+               ['{0}_size_ulist'.format(c) for c in dim1] + \
+               ['pre_authors', 'pre_affs']
+
+    bipatterns = [('lincs', 'comm_size'), ('lincs', 'same_comm'), ('litgw', 'eff_comm_size'),
+                  ('litgw', 'same_comm'), ('litgw', 'csize_up'), ('litgw', 'csize_dn')]
+    print(patterns)
+
+    col_families = {pat: [x for x in columns if pat in x] for pat in patterns}
+    col_families_prefix_suffix = {pat0 + pat1: [x for x in columns if pat0 in x and pat1 in x] for pat0, pat1 in
+                                  bipatterns}
+
+    col_families_basic = {k: [k] for k in ['ai', 'ar', 'cite_count', 'delta_year']}
+    # fits of wos citations
+    col_families['citations'] = ['yearspan_flag', 'len_flag', 'succfit_flag', 'mu', 'sigma',
+                                 'A', 'A_log', 'A_log_sigma', 'err', 'int_3', 'int_3_log', 'int_3_log_sigma']
+    col_families['time'] = ['year_off', 'year_off2']
+
+    col_families['cden'].append('pop_density')
+
+    col_families = {**col_families, **col_families_basic, **col_families_prefix_suffix}
+
+    lens = {k: len(v) for k, v in col_families.items()}
+    cols_outstanding = list(set(columns) - set([x for v in col_families.values() for x in v]))
+    if verbose:
+        print(lens)
+        print(sum(lens.values()), len(columns))
+        print(sorted(cols_outstanding)[:30])
+        print(len(col_families))
+
+    return col_families
+

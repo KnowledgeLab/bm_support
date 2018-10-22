@@ -1314,16 +1314,56 @@ def logreg_driver(origin, version, batchsize, cutoff_len, a, b, hash_int, max_de
     df_reports2.to_csv(fpath, float_format='%.3f')
 
 
-def get_corrs(df, coi, cols, thr=0.03, mask=None, verbose=False):
+def get_corrs(df, target_column, covariate_columns, threshold=0.03, mask=None,
+              filename=None, filename_abs=None, verbose=False):
     df_ = df.copy()
     if mask is not None:
         df_ = df_[mask].copy()
-    all_cols = list(set(cols) | {coi})
-    corr_df = df_[all_cols].corr()
-    corr_df_abs = corr_df.abs()
-    corr_abs_thr = corr_df_abs.loc[(corr_df_abs[coi] > thr), coi].sort_values(ascending=False).tail(-1)
-    corr_thr = corr_df.loc[(corr_df_abs[coi] > thr), coi].sort_values(ascending=False).tail(-1)
+
     if verbose:
-        print(corr_abs_thr)
-        print(corr_thr)
-    return corr_abs_thr, corr_thr
+        print('number of rows {0}, which is a fraction {1:.3f} of the original'.format(df_.shape[0],
+                                                                                       df_.shape[0]/df.shape[0]))
+
+    if isinstance(covariate_columns, dict):
+        covariate_columns_dict = covariate_columns
+        covariate_columns = list([x for sublist in covariate_columns.values() for x in sublist])
+        dict_flag = True
+    else:
+        dict_flag = False
+
+    all_cols = list(set(covariate_columns) | {target_column})
+    corr_df = df_[all_cols].corr()
+    not_na_mask = corr_df[target_column].notnull()
+    not_na_columns = list(not_na_mask[not_na_mask].index)
+    corr_df_abs = corr_df.abs()
+
+    reduced_columns = []
+    if dict_flag:
+        for k, v in covariate_columns_dict.items():
+            cur_cols = list(set(not_na_columns) & set(v))
+            if len(cur_cols) > 1:
+                candidates = corr_df.loc[cur_cols, target_column].sort_values(ascending=False).iloc[[0, -1]]
+            else:
+                candidates = corr_df.loc[cur_cols, target_column]
+            # print(list(candidates.index))
+            reduced_columns.extend(list(candidates.index))
+    else:
+        reduced_columns = list(set(covariate_columns) & set(not_na_columns))
+
+    above_thr = set(corr_df_abs[corr_df_abs[target_column] > threshold].index)
+
+    corr_abs_thr = corr_df_abs.loc[list(set(reduced_columns) & above_thr),
+                                   target_column].sort_values(ascending=False).tail(-1)
+    corr_df_thr = corr_df.loc[list(set(reduced_columns) & above_thr),
+                              target_column].sort_values(ascending=False).tail(-1)
+
+    if filename:
+        corr_df_thr.to_csv(filename)
+    if filename_abs:
+        corr_abs_thr.to_csv(filename_abs)
+
+    if verbose:
+        # print(corr_abs_thr)
+        print(corr_df_thr)
+    return corr_abs_thr, corr_df_thr
+
