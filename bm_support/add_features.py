@@ -545,7 +545,7 @@ def generate_feature_groups(columns_filename, verbose=True):
                                  'A', 'A_log', 'A_log_sigma', 'err', 'int_3', 'int_3_log', 'int_3_log_sigma']
     col_families['time'] = ['year_off', 'year_off2']
 
-    col_families['cden'].append('pop_density')
+    # col_families['cden'].append('pop_density')
 
     col_families = {**col_families, **col_families_basic, **col_families_prefix_suffix}
 

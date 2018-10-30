@@ -23,6 +23,7 @@ from .add_features import prepare_final_df
 from datahelpers.community_tools import get_community_fnames_cnames
 from sklearn.cluster import KMeans
 from .gap_stat import choose_nc
+from copy import deepcopy
 
 
 def get_dataset(fpath_batches, origin, version, datatype, batchsize, cutoff_len, a, b,
@@ -681,7 +682,7 @@ def plot_importances(importances, stds, covariate_columns, fname, title_prefix, 
             indices = range(importances.size)
         n = len(covariate_columns)
         if not colors:
-            colors='r'
+            colors = 'r'
         imp_ccs = [covariate_columns[i] for i in indices]
         fig = plt.figure(figsize=(n*3, 5))
         sns.set_style("whitegrid")
@@ -1366,4 +1367,116 @@ def get_corrs(df, target_column, covariate_columns, threshold=0.03, mask=None,
         # print(corr_abs_thr)
         print(corr_df_thr)
     return corr_abs_thr, corr_df_thr
+
+
+def select_features_dict(df_train, df_test, target_column, feature_dict,
+                         model_type='rf',
+                         max_features_consider=8,
+                         metric_mode='f1',
+                         mode_scores=None,
+                         metric_uniform_exponent=0.5,
+                         eps_improvement=1e-8,
+                         model_dict={},
+                         verbose=False):
+    """
+
+    :param df_train: DataFrame for training
+    :param df_test: DataFrame for testing
+    :param target_column: target column
+    :param feature_dict: dict of feature groups
+    :param model_type: scikit-learn-like model type; rf or lr
+    :param max_features_consider: maximum number of features of the final model
+    :param metric_mode: which metric to choose for optimizing the model
+                        from ['corr',  'accuracy', 'precision','recall', 'f1']
+    :param mode_scores:
+    :param metric_uniform_exponent: the exponent to make small metrics more pronounced (0.5 by default)
+    :param verbose:
+    :return:
+    """
+    metric_selector = dict(zip(['corr',  'accuracy', 'precision', 'recall', 'f1'], range(5)))
+    y_train, y_test = df_train[target_column], df_test[target_column]
+    metric_index = metric_selector[metric_mode]
+
+    chosen_features = []
+    chosen_metrics = []
+    chosen_vector_metrics = []
+    feature_dict_dyn = deepcopy(feature_dict)
+    feature_dict_inv = {}
+    for k, v in feature_dict.items():
+        feature_dict_inv.update({x: k for x in v})
+
+    while len(chosen_features) <= max_features_consider and feature_dict_dyn:
+        trial_features = [x for sublist in feature_dict_dyn.values() for x in sublist]
+        vector_metrics, scalar_metrics = [], []
+        for tf in trial_features:
+            cur_features = chosen_features + [tf]
+            X_train, X_test = df_train[cur_features], df_test[cur_features]
+            if model_type == 'rf':
+                model = RandomForestClassifier(**model_dict)
+            else:
+                model = LogisticRegression(**model_dict)
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
+
+            corr = np.corrcoef(y_pred, y_test)[0, 1]
+            accuracy = accuracy_score(y_test, y_pred)
+            precision = precision_score(y_test, y_pred, average=mode_scores)
+            recall = recall_score(y_test, y_pred, average=mode_scores)
+            f1 = f1_score(y_test, y_pred, average=mode_scores)
+            # conf_matrix = confusion_matrix(y_test, y_pred)
+            # report['confusion'] = conf_matrix
+            # report['class_report'] = classification_report(y_test, y_pred)
+            vector_metrics.append((precision, recall, f1))
+            sc_vector_metrics = [np.sum(x**metric_uniform_exponent) for x in [precision, recall, f1]]
+            scalar_metrics.append((corr, accuracy, *sc_vector_metrics))
+
+        add_index = np.nanargmax(np.array(scalar_metrics)[:, metric_index])
+
+        if len(chosen_metrics) > 1:
+            potential_improvement = 1 - chosen_metrics[-1][metric_index] / scalar_metrics[add_index][metric_index]
+            print('Potential improvement: {0:.2f} %'.format(100*potential_improvement))
+            if potential_improvement < eps_improvement:
+                print('Terminating early: no improvement.')
+                break
+        current_feature = trial_features[add_index]
+        feature_group = feature_dict_inv[current_feature]
+
+        chosen_metrics.append(scalar_metrics[add_index])
+        chosen_vector_metrics.append(vector_metrics[add_index])
+        chosen_features.append(current_feature)
+
+        if verbose:
+            print('{0} {1:.3f} len cur features {2}'.format(current_feature, chosen_metrics[-1][metric_index],
+                                                            len(cur_features)))
+
+        if len(feature_dict[feature_group]) - len(feature_dict_dyn[feature_group]) < 1:
+            feature_dict_dyn[feature_group].remove(current_feature)
+        else:
+            del feature_dict_dyn[feature_group]
+
+    if model_type == 'rf':
+        model = RandomForestClassifier(n_estimators=5, random_state=13, max_features=None)
+    else:
+        model = LogisticRegression(C=10)
+
+    X_train = df_train[chosen_features]
+    model.fit(X_train, y_train)
+    return chosen_features, chosen_metrics, chosen_vector_metrics, model
+
+
+def report_metrics(model, X_test, y_test, mode_scores=None, metric_uniform_exponent=0.5):
+
+    y_pred = model.predict(X_test)
+    corr = np.corrcoef(y_pred, y_test)[0, 1]
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred, average=mode_scores)
+    recall = recall_score(y_test, y_pred, average=mode_scores)
+    f1 = f1_score(y_test, y_pred, average=mode_scores)
+
+    vector_metric = (precision, recall, f1)
+    sc_vector_metrics = [np.sum(x ** metric_uniform_exponent) for x in [precision, recall, f1]]
+    scalar_metric = (corr, accuracy, *sc_vector_metrics)
+    return scalar_metric, vector_metric
+
+
 
