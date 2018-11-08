@@ -339,7 +339,8 @@ def simple_stratify(df, statify_column, seed=0, ratios=None, verbose=False):
         if len(ratios) == vc.shape[0]:
             tentative_sizes = np.array([n/alpha for n, alpha in zip(sizes, ratios)])
         else:
-            print('ratios len does is not equal to the number of classes ')
+            print('ratios len does is not equal to the number of classes : '
+                  'len ratios {0}, value counts {1}'.format(len(ratios), vc.shape[0]))
         if verbose:
             print('ratios in the training : {0}'.format(ratios))
         optimal_index = np.argmin(tentative_sizes)
@@ -1432,12 +1433,15 @@ def select_features_dict(df_train, df_test, target_column, feature_dict,
 
         add_index = np.nanargmax(np.array(scalar_metrics)[:, metric_index])
 
-        if len(chosen_metrics) > 1:
+        if len(chosen_metrics) > 0:
             potential_improvement = 1 - chosen_metrics[-1][metric_index] / scalar_metrics[add_index][metric_index]
-            print('Potential improvement: {0:.2f} %'.format(100*potential_improvement))
             if potential_improvement < eps_improvement:
-                print('Terminating early: no improvement.')
+                if verbose:
+                    print('Terminating early: no improvement.')
                 break
+        else:
+            potential_improvement = 1
+
         current_feature = trial_features[add_index]
         feature_group = feature_dict_inv[current_feature]
 
@@ -1446,8 +1450,9 @@ def select_features_dict(df_train, df_test, target_column, feature_dict,
         chosen_features.append(current_feature)
 
         if verbose:
-            print('{0} {1:.3f} len cur features {2}'.format(current_feature, chosen_metrics[-1][metric_index],
-                                                            len(cur_features)))
+            print('nf: {0} cfeature: {1} metric: {2:.3f} metric_improv: {3:.2f} %'.format(len(cur_features),
+                  (current_feature[:27]+'...').ljust(30),
+                  chosen_metrics[-1][metric_index], 100*potential_improvement))
 
         if len(feature_dict[feature_group]) - len(feature_dict_dyn[feature_group]) < 1:
             feature_dict_dyn[feature_group].remove(current_feature)
@@ -1479,4 +1484,28 @@ def report_metrics(model, X_test, y_test, mode_scores=None, metric_uniform_expon
     return scalar_metric, vector_metric
 
 
-
+def logit_pvalue(model, x):
+    """ Calculate z-scores for scikit-learn LogisticRegression.
+    parameters:
+        model: fitted sklearn.linear_model.LogisticRegression with intercept and large C
+        x:     matrix on which the model was fit
+    This function uses asymtptics for maximum likelihood estimates.
+    """
+    probs = model.predict_proba(x)
+    n_datapoints = probs.shape[0]
+    n_feautures = len(model.coef_[0]) + 1
+    coeffs = np.hstack([model.intercept_.reshape(-1, 1), model.coef_])
+    x_full = np.matrix(np.insert(np.array(x), 0, 1, axis=1))
+    pvals = []
+    errors = []
+    for coeffs_vec, p_vec in zip(coeffs, probs.T):
+        ans = np.zeros((n_feautures, n_feautures))
+        for i in range(n_datapoints):
+            ans += np.dot(x_full[i].T, x_full[i]) * p_vec[i]*(1 - p_vec[i])
+        vcov = np.linalg.inv(np.matrix(ans))
+        serrors = np.sqrt(np.diag(vcov))
+        t = coeffs_vec/serrors
+        pn = (1 - norm.cdf(abs(t)))*2
+        pvals.append(pn)
+        errors.append(serrors)
+    return np.array(pvals), coeffs, np.array(errors)
