@@ -30,6 +30,8 @@ setup(
     install_requires=[
         'pandas', 'setuptools',
         'datahelpers', 'scipy',
+        'unidecode',
+        'Distance',
         'scikit-learn', 'seaborn',
         'pymc3'
     ],
