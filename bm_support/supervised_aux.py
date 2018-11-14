@@ -79,26 +79,23 @@ def study_sample(seed, dfw, dist, feature_dict,
 
         meta_agg.append(ii_dict)
 
-    # vscalar_mm = [x['validation_scalar_metrics'][metric_selector[metric_mode]] for x in meta_agg]
-    # vscalar = [x['validation_scalar_metrics'] for x in meta_agg]
-    # vvector = [x['validation_vector_metrics'] for x in meta_agg]
-    # index_best_run = np.argmax(vscalar_mm)
-    # best_features = meta_agg[index_best_run]['current_features']
-    # best_feature_groups = [feature_dict_inv[f] for f in best_features]
-    #
-    # report_dict = {}
-    # report_dict['best_features'] = best_features
-    # report_dict['best_feature_groups'] = best_feature_groups
-    # report_dict['max_scalar_mm'] = np.max(vscalar_mm)
-    # report_dict['vscalar'] = vscalar
-    # report_dict['vvector'] = vvector
-    # report_dict['corr_all'] = dfw[best_features + [dist]].corr()[dist]
-    # report_dict['corr_all_test'] = df_test[best_features + [dist]].corr()[dist]
-    # report_dict['corr_all_valid'] = df_valid[best_features + [dist]].corr()[dist]
-    # if model_type == 'lr':
-    #     report_dict['pval_errors'] = meta_agg[index_best_run]['pval_errors']
+    vscalar_mm = [x['validation_scalar_metrics'][metric_selector[metric_mode]] for x in meta_agg]
+    vscalar = [x['validation_scalar_metrics'] for x in meta_agg]
+    vvector = [x['validation_vector_metrics'] for x in meta_agg]
+    index_best_run = np.argmax(vscalar_mm)
+    best_features = meta_agg[index_best_run]['current_features']
+    best_feature_groups = [feature_dict_inv[f] for f in best_features]
 
-    # meta_report.append(report_dict)
-    # print('{0:.2f} % done.'.format(100*(cnt+1)/len(seeds)))
+    report_dict = {}
+    report_dict['best_features'] = best_features
+    report_dict['best_feature_groups'] = best_feature_groups
+    report_dict['max_scalar_mm'] = np.max(vscalar_mm)
+    report_dict['vscalar'] = vscalar
+    report_dict['vvector'] = vvector
+    report_dict['corr_all'] = dfw[best_features + [dist]].corr()[dist]
+    report_dict['corr_all_test'] = df_test[best_features + [dist]].corr()[dist]
+    report_dict['corr_all_valid'] = df_valid[best_features + [dist]].corr()[dist]
+    if model_type == 'lr':
+        report_dict['pval_errors'] = meta_agg[index_best_run]['pval_errors']
 
-    return meta_agg
+    return report_dict, meta_agg

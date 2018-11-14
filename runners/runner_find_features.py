@@ -5,6 +5,8 @@ import pandas as pd
 from bm_support.add_features import generate_feature_groups
 from bm_support.add_features import normalize_columns
 from bm_support.supervised_aux import study_sample, metric_selector
+from functools import partial
+from multiprocessing import Pool
 from copy import deepcopy
 import warnings
 from numpy.random import RandomState
@@ -126,10 +128,21 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
     if model_type == 'lr':
         dfw = normalize_columns(dfw, trial_features)
 
-    for seed in seeds:
-        report_dict = study_sample(seed, dfw, dist, feature_dict,
-                 mm, model_type, n_subtrials, n_estimators,
-                 log_reg_dict, verbose)
+    func = partial(study_sample, dfw=dfw, dist=dist, feature_dict=feature_dict, metric_mode=mm,
+                   model_type=model_type,
+                   n_subtrials=n_subtrials, n_estimators=n_estimators,
+                   log_reg_dict=log_reg_dict, verbose=verbose)
+
+    if n_jobs > 1:
+        with Pool(n_jobs) as p:
+            meta_report = p.map(func, seeds)
+    else:
+        meta_report = list(map(func, seeds))
+
+    # for seed in seeds:
+    #     report_dict = study_sample(seed, dfw, dist, feature_dict,
+    #              mm, model_type, n_subtrials, n_estimators,
+    #              log_reg_dict, verbose)
 
         # rns = RandomState(seed)
         # df_train, df_testgen = train_test_split(dfw, test_size=0.4,
@@ -206,9 +219,9 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
         # if model_type == 'lr':
         #     report_dict['pval_errors'] = meta_agg[index_best_run]['pval_errors']
         #
-        meta_report.append(report_dict)
-        print('{0:.2f} % done.'.format(100*(cnt+1)/len(seeds)))
-        cnt += 1
+        # meta_report.append(report_dict)
+        # print('{0:.2f} % done.'.format(100*(cnt+1)/len(seeds)))
+        # cnt += 1
         # fig, ax = plt.subplots(figsize=(5, 5))
         # ax.set_ylabel(mm)
         # for item in meta_agg:
@@ -216,7 +229,7 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
         #     xcoords = list(range(len(cmetrics)))
         #     ax.plot(xcoords, np.array(cmetrics)[:, metric_selector[mm]])
 
-    fout = expanduser('~/data/kl/reports/{0}_{1}_{2}_{3}_seed0_{4}_.report.pgz'.format(origin, version,
+    fout = expanduser('~/data/kl/reports/{0}_{1}_{2}_{3}_seed0_{4}.report.pgz'.format(origin, version,
                                                                                       an_version, model_type, seed0))
     with gzip.open(fout, 'wb') as fp:
         pickle.dump(meta_report, fp)
