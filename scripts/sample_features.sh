@@ -24,10 +24,17 @@ installs() {
     fi
 }
 
-mode=$1
-input_fname=$2
-package_name_agg=wos_agg
-package_name_gg=graph_tools
+seed=$1
+njobs=$2
+mode=$3
+verb=$4
+trials=$5
+subtrials=$6
+estimators=$7
+
+package_name_bm=bm_support
+package_name_dh=datahelpers
+
 data_path=../
 verb=INFO
 
@@ -56,7 +63,9 @@ exec_driver() {
 cd ./$1
 echo "starting exec_driver $1"
 echo $python_
-$python_ ./driver_citations.py -s $data_path -d $data_path -m $mode -v $verb -w $input_fname
+$python_ ./runner_find_features.py -s $data_path -d $data_path -s $seed\
+                -p $njobs -m $mode -v $verb -t $trials -st $subtrials -e $estimators
+
 cd ..
 }
 
@@ -69,9 +78,9 @@ ls -thor *
 installs
 setup_data
 # Clone repos from gh
-clone_repo $package_name_agg
-clone_repo $package_name_gg
+clone_repo $package_name_dh
+clone_repo $package_name_bm
 # Execute the driver script
-exec_driver $package_name_agg
+exec_driver $package_name_bm
 # Prepare the results
 post_processing

@@ -1502,10 +1502,14 @@ def logit_pvalue(model, x):
         ans = np.zeros((n_feautures, n_feautures))
         for i in range(n_datapoints):
             ans += np.dot(x_full[i].T, x_full[i]) * p_vec[i]*(1 - p_vec[i])
-        vcov = np.linalg.inv(np.matrix(ans))
-        serrors = np.sqrt(np.diag(vcov))
-        t = coeffs_vec/serrors
-        pn = (1 - norm.cdf(abs(t)))*2
+        try:
+            vcov = np.linalg.inv(np.matrix(ans))
+            serrors = np.sqrt(np.diag(vcov))
+            t = coeffs_vec / serrors
+            pn = (1 - norm.cdf(abs(t))) * 2
+        except np.linalg.linalg.LinAlgError as e:
+            serrors = np.zeros(ans.shape[0])
+            pn = np.zeros(ans.shape[0])
         pvals.append(pn)
         errors.append(serrors)
     return np.array(pvals), coeffs, np.array(errors)
