@@ -25,14 +25,19 @@ installs() {
         chmod +x miniconda.sh
         sudo bash miniconda.sh -b
         echo "try to find conda in ~"
-        ls -lht ~
+        ls -lht ~/m*
+        cuser=$(whoami)
+        av=$'export PATH=\"/home/'
+        bv=$'/miniconda3/bin:$PATH\"'
+        echo "$av$cuser$bv" >> ~/.bash_profile
+        source ~/.bash_profile
         conda create -n p3 python=3
         source activate p3
         conda install -y numpy pandas=0.23.4 scikit-learn=0.20.0 cvxopt pathos pympler pymysql unidecode networkx \
             h5py seaborn gensim geopandas tqdm theano pymc3 pycparser nltk psutil
         conda install -y -c conda-forge python-igraph pytables python-levenshtein
         conda install -y -c dgursoy pywavelets
-        pip install -y Distance
+        pip install Distance
 #        usname=`whoami`
 #        python3 -m pip install pip numpy nose h5py pandas==0.23.4 scikit-learn==0.20.0 pympler Distance psutil
     fi
