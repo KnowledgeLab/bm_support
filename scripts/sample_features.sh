@@ -98,7 +98,7 @@ source activate p3
 cd ./$1/runners/
 echo "starting exec_driver $1"
 echo `which python`
-python ./runner_find_features.py -o $origin -v $version --verbosity $verb -s $seed -p $njobs -m $mode -v $verb -t $trials -st $subtrials -e $estimators --datapath ~/
+python ./runner_find_features.py -o $origin -v $version --verbosity $verb -s $seed -p $njobs -m $mode -t $trials -st $subtrials -e $estimators --datapath ~/
 cd ../..
 }
 
