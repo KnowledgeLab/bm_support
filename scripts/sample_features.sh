@@ -39,11 +39,12 @@ installs() {
         echo "ls ~/miniconda3/bin"
         conda create -n p3 python=3
         source activate p3
-        conda install -y numpy pandas=0.23.4 scikit-learn=0.20.0 cvxopt pathos pympler pymysql unidecode networkx \
-            h5py seaborn gensim geopandas tqdm theano pymc3 pycparser nltk psutil
+        conda install -y numpy pandas=0.23.4 scikit-learn=0.20.0 cvxopt pathos pympler pymysql unidecode networkx h5py seaborn gensim geopandas tqdm theano pymc3 pycparser nltk psutil
         conda install -y -c conda-forge python-igraph pytables python-levenshtein
         conda install -y -c dgursoy pywavelets
         pip install Distance
+        echo "conda list"
+        conda list
         echo "pip freeze"
         pip freeze
 #        usname=`whoami`
