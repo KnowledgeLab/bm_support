@@ -18,9 +18,23 @@ installs() {
         sudo rm /var/lib/dpkg/lock
         yes | sudo dpkg --configure -a
         yes | sudo apt update
-        yes | sudo apt install python3 python3-dev
-        usname=`whoami`
-        python3 -m pip install pip numpy nose h5py pandas==0.23.4 scikit-learn==0.20.0 pympler Distance psutil
+        yes | sudo apt install wget
+#        yes | sudo apt install python3 python3-dev
+        cd ~
+        wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
+        chmod +x miniconda.sh
+        sudo bash miniconda.sh -b
+        echo "try to find conda in ~"
+        ls -lht ~
+        conda create -n p3 python=3
+        source activate p3
+        conda install -y numpy pandas=0.23.4 scikit-learn=0.20.0 cvxopt pathos pympler pymysql unidecode networkx \
+            h5py seaborn gensim geopandas tqdm theano pymc3 pycparser nltk psutil
+        conda install -y -c conda-forge python-igraph pytables python-levenshtein
+        conda install -y -c dgursoy pywavelets
+        pip install -y Distance
+#        usname=`whoami`
+#        python3 -m pip install pip numpy nose h5py pandas==0.23.4 scikit-learn==0.20.0 pympler Distance psutil
     fi
 }
 
@@ -60,7 +74,7 @@ cd ..
 }
 
 exec_driver() {
-cd ./$1
+cd ./$1/runners/
 echo "starting exec_driver $1"
 echo $python_
 $python_ ./runner_find_features.py -s $data_path -d $data_path -s $seed\
