@@ -1,11 +1,5 @@
 #!/bin/bash
 
-unamestr=`uname`
-if [[ "$unamestr" == 'Linux' ]]; then
-python_=python3
-else python_=python
-fi
-
 installs() {
     if [[ "$unamestr" == 'Linux' ]]; then
         lsb_release -a
@@ -55,6 +49,8 @@ trials=$5
 subtrials=$6
 estimators=$7
 
+git_ab=alexander-belikov
+git_kl=KnowledgeLab
 package_name_bm=bm_support
 package_name_dh=datahelpers
 
@@ -71,38 +67,38 @@ setup_data() {
 
 clone_repo() {
 echo "starting cloning $1"
-git clone https://github.com/alexander-belikov/$1.git
+git clone https://github.com/$2/$1.git
 echo "*** list files in "$1":"
 ls -lht ./$1
 echo "*** list files in "$1"/"$1 ":"
 ls -lht ./$1/$1
 cd ./$1
 echo "starting installing $1"
-$python_ ./setup.py install
+python ./setup.py install
 cd ..
 }
 
 exec_driver() {
 cd ./$1/runners/
 echo "starting exec_driver $1"
-echo $python_
-$python_ ./runner_find_features.py -s $data_path -d $data_path -s $seed\
+echo `which python`
+python ./runner_find_features.py -s $data_path -d $data_path -s $seed\
                 -p $njobs -m $mode -v $verb -t $trials -st $subtrials -e $estimators
 
-cd ..
+cd ../..
 }
 
 post_processing() {
 echo "*** all files sizes :"
-ls -thor *
+ls -thor ~/*
 }
 
 # Install packages
 installs
 setup_data
 # Clone repos from gh
-clone_repo $package_name_dh
-clone_repo $package_name_bm
+clone_repo $package_name_dh $git_ab
+clone_repo $package_name_bm $git_kl
 # Execute the driver script
 exec_driver $package_name_bm
 # Prepare the results
