@@ -19,8 +19,6 @@ installs() {
         yes | sudo dpkg --configure -a
         yes | sudo apt update
         yes | sudo apt install wget
-        exit
-#        yes | sudo apt install python3 python3-dev
         cd ~
         wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
         chmod +x miniconda.sh
