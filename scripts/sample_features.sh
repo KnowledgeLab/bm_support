@@ -28,7 +28,6 @@ installs() {
         echo "try to find conda in ~"
         ls -lht ~/m*
         cuser=$(whoami)
-#        av=$'export PATH=\"'
         av=$'export PATH=\"/home/ubuntu/miniconda3/bin:/home/'
         bv=$'/miniconda3/bin:$PATH\"'
         echo "$av$cuser$bv" > ~/.bash_profile
@@ -39,7 +38,12 @@ installs() {
         echo "ls ~/miniconda3/bin"
         conda create -n p3 python=3
         source activate p3
-        conda install -y numpy pandas=0.23.4 scikit-learn=0.20.0 cvxopt pathos pympler pymysql unidecode networkx h5py seaborn gensim geopandas tqdm theano pymc3 pycparser nltk psutil
+        conda install -y numpy pandas=0.23.4 scikit-learn=0.20.0 dill
+        conda install -y cvxopt pathos pympler pymysql
+        conda insstall -y unidecode networkx h5py
+        conda install -y seaborn gensim geopandas
+        conda install -y tqdm theano pymc3
+        conda install -y pycparser nltk psutil
         conda install -y -c conda-forge python-igraph pytables python-levenshtein
         conda install -y -c dgursoy pywavelets
         pip install Distance
@@ -47,8 +51,6 @@ installs() {
         conda list
         echo "pip freeze"
         pip freeze
-#        usname=`whoami`
-#        python3 -m pip install pip numpy nose h5py pandas==0.23.4 scikit-learn==0.20.0 pympler Distance psutil
     fi
 }
 
