@@ -27,10 +27,14 @@ installs() {
         echo "try to find conda in ~"
         ls -lht ~/m*
         cuser=$(whoami)
-        av=$'export PATH=\"/home/'
-        bv=$'/miniconda3/bin:$PATH\"'
+        av=$'export PATH=\"'
+        bv=$'~/miniconda3/bin:$PATH\"'
         echo "$av$cuser$bv" >> ~/.bash_profile
+        echo "cat .bash_profile"
+        ls ~/miniconda3/bin
         source ~/.bash_profile
+        echo "ls ~/miniconda3/bin"
+        ls ~/miniconda3/bin
         conda create -n p3 python=3
         source activate p3
         conda install -y numpy pandas=0.23.4 scikit-learn=0.20.0 cvxopt pathos pympler pymysql unidecode networkx \
