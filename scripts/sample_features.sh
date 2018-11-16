@@ -23,14 +23,14 @@ installs() {
         cd ~
         wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
         chmod +x miniconda.sh
-        sudo bash miniconda.sh -b
+        bash miniconda.sh -b
         echo "try to find conda in ~"
         ls -lht ~/m*
         cuser=$(whoami)
 #        av=$'export PATH=\"'
-        av=$'export PATH=\"/home/'
+        av=$'export PATH=\"/home/ubuntu/miniconda3/bin:/home/'
         bv=$'/miniconda3/bin:$PATH\"'
-        echo "$av$cuser$bv" >> ~/.bash_profile
+        echo "$av$cuser$bv" > ~/.bash_profile
         echo "cat .bash_profile"
         cat ~/.bash_profile
         ls ~/miniconda3/bin
