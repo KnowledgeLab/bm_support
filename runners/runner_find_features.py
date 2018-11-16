@@ -207,5 +207,5 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     run(args.origin, args.version, args.anversion, args.model_type,
-        args.ntrials, args.subtrials, args.estimators, args.seed0, args.datapath,
+        args.ntrials, args.subtrials, args.estimators, args.datapath, args.seed0,
         args.parallel, args.verbosity)
