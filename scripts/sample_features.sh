@@ -22,6 +22,8 @@ installs() {
         cd ~
         wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
         chmod +x miniconda.sh
+        echo "try to rm current conda"
+        rm -rf /home/ubuntu/miniconda3
         bash miniconda.sh -b
         echo "try to find conda in ~"
         ls -lht ~/m*
@@ -42,6 +44,8 @@ installs() {
         conda install -y -c conda-forge python-igraph pytables python-levenshtein
         conda install -y -c dgursoy pywavelets
         pip install Distance
+        echo "pip freeze"
+        pip freeze
 #        usname=`whoami`
 #        python3 -m pip install pip numpy nose h5py pandas==0.23.4 scikit-learn==0.20.0 pympler Distance psutil
     fi
