@@ -1,6 +1,6 @@
 from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, nw, wi, dist, rdist, pm, \
                                     cpop, cden, ct, affs, aus
-from os.path import expanduser
+from os.path import expanduser, join
 import pandas as pd
 from bm_support.add_features import generate_feature_groups
 from bm_support.add_features import normalize_columns
@@ -17,7 +17,8 @@ import argparse
 warnings.filterwarnings('ignore')
 
 
-def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estimators, seed0, n_jobs, verbose):
+def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estimators, datapath=None,
+        seed0=13, n_jobs=1, verbose=False):
 
     # an_version = 13
     # origin = 'lit'
@@ -40,8 +41,11 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
     eps = 0.2
     upper_exp, lower_exp = 1 - eps, eps
     # thrs = [-1e-8, lower_exp, upper_exp, 1.0001e0]
+    if datapath:
+        col_families = generate_feature_groups(expanduser(join(datapath, 'v12_columns.txt')))
+    else:
+        col_families = generate_feature_groups(expanduser('~/data/kl/columns/v12_columns.txt'))
 
-    col_families = generate_feature_groups(expanduser('~/data/kl/columns/v12_columns.txt'))
     if verbose:
         print('Number of col families: {0}. Keys: {1}'.format(len(col_families), sorted(col_families.keys())))
 
@@ -51,8 +55,11 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
                                                                              sorted(col_families.keys())))
 
     columns_interest = [x for sublist in col_families.values() for x in sublist]
-
-    df = pd.read_hdf(expanduser('~/data/kl/final/{0}_{1}_{2}.h5'.format(origin, version, an_version)), key='df')
+    if datapath:
+        df_path = expanduser(join(datapath, '{0}_{1}_{2}.h5'.format(origin, version, an_version)))
+    else:
+        df_path = expanduser('~/data/kl/final/{0}_{1}_{2}.h5'.format(origin, version, an_version))
+    df = pd.read_hdf(df_path, key='df')
 
     # mask: literome - mask out a specific interaction
     mask_lit = (df[up] == 7157) & (df[dn] == 1026)
@@ -138,8 +145,15 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
             meta_report = p.map(func, seeds)
     else:
         meta_report = list(map(func, seeds))
-    fout = expanduser('~/data/kl/reports/{0}_{1}_{2}_{3}_seed0_{4}.report.pgz'.format(origin, version,
-                                                                                      an_version, model_type, seed0))
+
+    if datapath:
+        fout = expanduser(join(datapath, '{0}_{1}_{2}_{3}_seed0_{4}.report.pgz'.format(origin, version,
+                                                                                       an_version, model_type, seed0)))
+    else:
+        fout = expanduser('~/data/kl/reports/{0}_{1}_{2}_{3}_seed0_{4}.report.pgz'.format(origin, version,
+                                                                                          an_version,
+                                                                                          model_type, seed0))
+
     with gzip.open(fout, 'wb') as fp:
         pickle.dump(meta_report, fp)
 
@@ -187,6 +201,11 @@ if __name__ == "__main__":
                         default=True, type=bool,
                         help='True for verbose output ')
 
+    parser.add_argument('--datapath',
+                        default=None, type=str,
+                        help='True for verbose output ')
+
     args = parser.parse_args()
     run(args.origin, args.version, args.anversion, args.model_type,
-        args.ntrials, args.subtrials, args.estimators, args.seed0, args.parallel, args.verbosity)
+        args.ntrials, args.subtrials, args.estimators, args.seed0, args.datapath,
+        args.parallel, args.verbosity)
