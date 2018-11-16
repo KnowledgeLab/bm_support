@@ -1,5 +1,11 @@
 #!/bin/bash
 
+unamestr=`uname`
+if [[ "$unamestr" == 'Linux' ]]; then
+python_=python3
+else python_=python
+fi
+
 installs() {
     if [[ "$unamestr" == 'Linux' ]]; then
         lsb_release -a
