@@ -20,6 +20,10 @@ installs() {
         yes | sudo apt update
         yes | sudo apt install wget
         cd ~
+        echo "try to find inputs"
+        ls -lht ~/v12_columns*
+        ls -lht ~/*h5
+        echo "success?"
         wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
         chmod +x miniconda.sh
         echo "try to rm current conda"
