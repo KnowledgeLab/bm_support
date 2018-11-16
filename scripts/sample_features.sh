@@ -92,10 +92,11 @@ cd ..
 }
 
 exec_driver() {
+source activate p3
 cd ./$1/runners/
 echo "starting exec_driver $1"
 echo `which python`
-python ./runner_find_features.py -s $data_path -d $data_path -s $seed\
+python ./runner_find_features.py -s $data_path -d $data_path -s $seed \
                 -p $njobs -m $mode -v $verb -t $trials -st $subtrials -e $estimators
 
 cd ../..
