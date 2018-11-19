@@ -139,7 +139,7 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
 
     print('Starting {0} processes...'.format(n_jobs))
 
-    # lr seems to run 4x 
+    # lr seems to run 4x
     if n_jobs > 1:
         with Pool(n_jobs) as p:
             meta_report = p.map(func, seeds)
