@@ -1406,6 +1406,8 @@ def select_features_dict(df_train, df_test, target_column, feature_dict,
     for k, v in feature_dict.items():
         feature_dict_inv.update({x: k for x in v})
 
+    if verbose:
+        print('model_dict {0}'.format(model_dict))
     while len(chosen_features) <= max_features_consider and feature_dict_dyn:
         trial_features = [x for sublist in feature_dict_dyn.values() for x in sublist]
         vector_metrics, scalar_metrics = [], []

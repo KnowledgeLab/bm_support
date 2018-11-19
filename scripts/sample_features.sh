@@ -8,6 +8,13 @@ fi
 
 installs() {
     if [[ "$unamestr" == 'Linux' ]]; then
+        pushd .
+        cdir=$(pwd)
+        echo "echo cdir"
+        echo $cdir
+        echo "try to find inputs"
+        ls -lht
+        echo "success?"
         lsb_release -a
         sudo rm /var/lib/apt/lists/lock
         sudo rm /var/cache/apt/archives/lock
@@ -19,27 +26,28 @@ installs() {
         yes | sudo dpkg --configure -a
         yes | sudo apt update
         yes | sudo apt install wget
-        cd ~
-        echo "try to find inputs"
-        ls -lht ~/v12_columns*
-        ls -lht ~/*h5
-        echo "success?"
-        wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
+        wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O $cdir/miniconda.sh
         chmod +x miniconda.sh
         echo "try to rm current conda"
-        rm -rf /home/ubuntu/miniconda3
+        echo "echo cdir"
+        echo $cdir
+        rm -rf $cdir/miniconda3
         bash miniconda.sh -b
-        echo "try to find conda in ~"
-        ls -lht ~/m*
-        cuser=$(whoami)
-        av=$'export PATH=\"/home/ubuntu/miniconda3/bin:/home/'
-        bv=$'/miniconda3/bin:$PATH\"'
-        echo "$av$cuser$bv" > ~/.bash_profile
-        echo "cat .bash_profile"
-        cat ~/.bash_profile
-        ls ~/miniconda3/bin
-        source ~/.bash_profile
+        echo "ls ./miniconda3/bin"
+        ls ./miniconda3/bin
         echo "ls ~/miniconda3/bin"
+        ls ~/miniconda3/bin
+        echo "echo cdir"
+        echo $cdir
+        popd
+        av=$'export PATH=\"'
+        bv=$'/miniconda3/bin:~/miniconda3/bin:$PATH\"'
+        echo "$av$cdir$bv" > $cdir/.bash_profile
+        echo "cat .bash_profile"
+        cat $cdir/.bash_profile
+        ls $cdir/.bash_profile
+        source $cdir/.bash_profile
+        echo "ls ./miniconda3/bin"
         conda create -n p3 python=3
         source activate p3
         conda install -y numpy pandas=0.23.4 scikit-learn=0.20.0 dill
@@ -73,7 +81,6 @@ git_kl=KnowledgeLab
 package_name_bm=bm_support
 package_name_dh=datahelpers
 
-data_path=../
 verb=INFO
 
 setup_data() {
@@ -102,13 +109,13 @@ source activate p3
 cd ./$1/runners/
 echo "starting exec_driver $1"
 echo `which python`
-python ./runner_find_features.py -o $origin -v $version --verbosity $verb -s $seed -p $njobs -m $mode -t $trials -st $subtrials -e $estimators --datapath ~/
+python ./runner_find_features.py -o $origin -v $version --verbosity $verb -s $seed -p $njobs -m $mode -t $trials -st $subtrials -e $estimators --datapath $cdir
 cd ../..
 }
 
 post_processing() {
 echo "*** all files sizes :"
-ls -thor ~/*
+ls -thor $cdir/*
 }
 
 # Install packages

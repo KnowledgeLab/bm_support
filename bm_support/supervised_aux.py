@@ -32,11 +32,9 @@ def study_sample(seed, dfw, dist, feature_dict,
     df_train2 = simple_stratify(df_train, dist, seed, ratios=(2, 1, 1))
 
     if model_type == 'rf':
-        # since this implementation is parallel, n_jobs for random forest is 1
         param_dict = {'n_estimators': n_estimators, 'max_features': None, 'n_jobs': 1}
-        # param_dict = {'n_estimators': n_estimators, 'max_features': None, 'n_jobs': n_jobs}
     else:
-        param_dict = {}
+        param_dict = {'n_jobs': 1}
 
     meta_agg = []
     if model_type == 'rf':
