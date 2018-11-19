@@ -36,7 +36,7 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
 
     min_log_alpha = -2
     max_log_alpha = 2
-    log_reg_dict = {'min_log_alpha': -2., 'max_log_alpha': 2.}
+    log_reg_dict = {'min_log_alpha': min_log_alpha, 'max_log_alpha': max_log_alpha}
 
     eps = 0.2
     upper_exp, lower_exp = 1 - eps, eps
@@ -126,11 +126,8 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
 
     nmax = 5000
 
-    meta_report = []
-
     rns = RandomState(seed0)
     seeds = rns.randint(nmax, size=n_trials)
-    cnt = 0
 
     if model_type == 'lr':
         dfw = normalize_columns(dfw, trial_features)
@@ -140,6 +137,9 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
                    n_subtrials=n_subtrials, n_estimators=n_estimators,
                    log_reg_dict=log_reg_dict, verbose=verbose)
 
+    print('Starting {0} processes...'.format(n_jobs))
+
+    # lr seems to run 4x 
     if n_jobs > 1:
         with Pool(n_jobs) as p:
             meta_report = p.map(func, seeds)
