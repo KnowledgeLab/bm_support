@@ -203,7 +203,7 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
 
     # define distance between qcexp and ps
     dft2 = derive_distance_column(dft2_, (cexp, qcexp, quantize_intervals), ps, dist)
-    dft2[rdist] = (dft2[cexp] - dft2[ps]).abs()
+    dft2[rdist] = (dft2[cexp] - dft2[ps])
 
     dft = dft2
     if verbose:

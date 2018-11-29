@@ -3,8 +3,6 @@ from bm_support.supervised import generate_samples
 from bm_support.add_features import prepare_final_df
 from os.path import expanduser
 
-fpath = expanduser('~/data/kl/figs/rf')
-
 an_version = 12
 
 origin = 'gw'
@@ -34,7 +32,11 @@ print(data_columns)
 
 df = generate_samples(origin, version, a, b, batchsize, cutoff_len, lincs_type=lincs_type,
                       data_columns=data_columns, hash_int=hash_int, verbose=True)
-print(df.shape)
+
+
+print('df size {0}, df unique [up, dn, pm] {1}'.format(df.shape[0],
+                                                       df.drop_duplicates([up, dn, pm]).shape[0]))
+df = df.drop_duplicates([up, dn, pm])
 
 masks = []
 # mask affiliation rating
@@ -64,5 +66,8 @@ df2_ = prepare_final_df(df, normalize=True, columns_normalize=cols_norm,
                         masks=masks, cutoff=None,
                         add_cite_fits=True,
                         verbose=True)
+print('df2_ size {0}, df2_ unique [up, dn, pm] {1}'.format(df2_.shape[0],
+                                                           df2_.drop_duplicates([up, dn, pm]).shape[0]))
+df2_ = df2_.drop_duplicates([up, dn, pm])
 
 df2_.to_hdf(expanduser('~/data/kl/final/{0}_{1}_{2}.h5'.format(origin, version, an_version)), key='df', complevel=9)

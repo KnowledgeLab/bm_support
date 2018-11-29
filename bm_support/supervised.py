@@ -10,7 +10,7 @@ import statsmodels.api as sm
 from numpy import histogram, argmin, flatnonzero
 from scipy.stats import norm
 from sklearn.metrics import roc_auc_score, roc_curve, accuracy_score, precision_score, recall_score,\
-    f1_score, classification_report, confusion_matrix
+    f1_score, classification_report, confusion_matrix, balanced_accuracy_score
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import label_binarize
 from sklearn import model_selection
@@ -138,9 +138,12 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
             df_claims = pd.read_hdf(expanduser(join(batches_path, fname)))
 
     if verbose:
+        print('df size {0}, df unique [up, dn, pm] {1}'.format(df_claims.shape[0],
+                                                               df_claims.drop_duplicates([up, dn, pm]).shape[0]))
         print('{0} dataframe size {1}'.format(origin, df_claims.shape[0]))
         print('unique statements {0}'.format(len(df_claims[ni].unique())))
 
+    df_claims = df_claims.drop_duplicates([up, dn, pm])
     # experimental
     df_exp = get_lincs_df(**full_arg)
 
@@ -1373,10 +1376,10 @@ def get_corrs(df, target_column, covariate_columns, threshold=0.03, mask=None,
 def select_features_dict(df_train, df_test, target_column, feature_dict,
                          model_type='rf',
                          max_features_consider=8,
-                         metric_mode='f1',
+                         metric_mode='accuracy',
                          mode_scores=None,
                          metric_uniform_exponent=0.5,
-                         eps_improvement=1e-8,
+                         eps_improvement=1e-6,
                          model_dict={},
                          verbose=False):
     """
@@ -1391,16 +1394,18 @@ def select_features_dict(df_train, df_test, target_column, feature_dict,
                         from ['corr',  'accuracy', 'precision','recall', 'f1']
     :param mode_scores:
     :param metric_uniform_exponent: the exponent to make small metrics more pronounced (0.5 by default)
+    :param eps_improvement: epsilon at which to stop improvment
+    :param model_dict:
     :param verbose:
     :return:
     """
-    metric_selector = dict(zip(['corr',  'accuracy', 'precision', 'recall', 'f1'], range(5)))
+    # metric_selector = dict(zip(['corr',  'accuracy', 'precision', 'recall', 'f1'], range(5)))
     y_train, y_test = df_train[target_column], df_test[target_column]
-    metric_index = metric_selector[metric_mode]
+    # metric_index = metric_selector[metric_mode]
 
     chosen_features = []
     chosen_metrics = []
-    chosen_vector_metrics = []
+    chosen_total_metrics = []
     feature_dict_dyn = deepcopy(feature_dict)
     feature_dict_inv = {}
     for k, v in feature_dict.items():
@@ -1410,7 +1415,8 @@ def select_features_dict(df_train, df_test, target_column, feature_dict,
         print('model_dict {0}'.format(model_dict))
     while len(chosen_features) <= max_features_consider and feature_dict_dyn:
         trial_features = [x for sublist in feature_dict_dyn.values() for x in sublist]
-        vector_metrics, scalar_metrics = [], []
+        scalar_metrics = []
+        cur_metrics = []
         for tf in trial_features:
             cur_features = chosen_features + [tf]
             X_train, X_test = df_train[cur_features], df_test[cur_features]
@@ -1419,24 +1425,26 @@ def select_features_dict(df_train, df_test, target_column, feature_dict,
             else:
                 model = LogisticRegression(**model_dict)
             model.fit(X_train, y_train)
-            y_pred = model.predict(X_test)
+            rmetrics = report_metrics(model, X_test, y_test, mode_scores, metric_uniform_exponent, metric_mode)
+            # y_pred = model.predict(X_test)
 
-            corr = np.corrcoef(y_pred, y_test)[0, 1]
-            accuracy = accuracy_score(y_test, y_pred)
-            precision = precision_score(y_test, y_pred, average=mode_scores)
-            recall = recall_score(y_test, y_pred, average=mode_scores)
-            f1 = f1_score(y_test, y_pred, average=mode_scores)
+            # corr = np.corrcoef(y_pred, y_test)[0, 1]
+            # accuracy = accuracy_score(y_test, y_pred)
+            # precision = precision_score(y_test, y_pred, average=mode_scores)
+            # recall = recall_score(y_test, y_pred, average=mode_scores)
+            # f1 = f1_score(y_test, y_pred, average=mode_scores)
             # conf_matrix = confusion_matrix(y_test, y_pred)
             # report['confusion'] = conf_matrix
             # report['class_report'] = classification_report(y_test, y_pred)
-            vector_metrics.append((precision, recall, f1))
-            sc_vector_metrics = [np.sum(x**metric_uniform_exponent) for x in [precision, recall, f1]]
-            scalar_metrics.append((corr, accuracy, *sc_vector_metrics))
+            # vector_metrics.append((precision, recall, f1))
+            # sc_vector_metrics = [np.sum(x**metric_uniform_exponent) for x in [precision, recall, f1]]
+            scalar_metrics.append(rmetrics['main_metric'])
+            cur_metrics.append(rmetrics)
 
-        add_index = np.nanargmax(np.array(scalar_metrics)[:, metric_index])
+        add_index = np.nanargmax(np.array(scalar_metrics))
 
         if len(chosen_metrics) > 0:
-            potential_improvement = 1 - chosen_metrics[-1][metric_index] / scalar_metrics[add_index][metric_index]
+            potential_improvement = 1 - chosen_metrics[-1] / scalar_metrics[add_index]
             if potential_improvement < eps_improvement:
                 if verbose:
                     print('Terminating early: no improvement.')
@@ -1448,13 +1456,14 @@ def select_features_dict(df_train, df_test, target_column, feature_dict,
         feature_group = feature_dict_inv[current_feature]
 
         chosen_metrics.append(scalar_metrics[add_index])
-        chosen_vector_metrics.append(vector_metrics[add_index])
+
         chosen_features.append(current_feature)
+        chosen_total_metrics.append(cur_metrics[add_index])
 
         if verbose:
             print('nf: {0} cfeature: {1} metric: {2:.3f} metric_improv: {3:.2f} %'.format(len(cur_features),
                   (current_feature[:27]+'...').ljust(30),
-                  chosen_metrics[-1][metric_index], 100*potential_improvement))
+                  chosen_metrics[-1], 100*potential_improvement))
 
         if len(feature_dict[feature_group]) - len(feature_dict_dyn[feature_group]) < 1:
             feature_dict_dyn[feature_group].remove(current_feature)
@@ -1462,28 +1471,45 @@ def select_features_dict(df_train, df_test, target_column, feature_dict,
             del feature_dict_dyn[feature_group]
 
     if model_type == 'rf':
-        model = RandomForestClassifier(n_estimators=5, random_state=13, max_features=None)
+        model = RandomForestClassifier(**model_dict)
     else:
-        model = LogisticRegression(C=10)
+        model = LogisticRegression(**model_dict)
 
     X_train = df_train[chosen_features]
     model.fit(X_train, y_train)
-    return chosen_features, chosen_metrics, chosen_vector_metrics, model
+    return chosen_features, chosen_metrics, chosen_total_metrics, model
 
 
-def report_metrics(model, X_test, y_test, mode_scores=None, metric_uniform_exponent=0.5):
+def report_metrics(model, X_test, y_test, mode_scores=None, metric_uniform_exponent=0.5, metric_mode='accuracy'):
 
     y_pred = model.predict(X_test)
-    corr = np.corrcoef(y_pred, y_test)[0, 1]
-    accuracy = accuracy_score(y_test, y_pred)
-    precision = precision_score(y_test, y_pred, average=mode_scores)
-    recall = recall_score(y_test, y_pred, average=mode_scores)
-    f1 = f1_score(y_test, y_pred, average=mode_scores)
+    report = dict()
+    # NB corr might be NaN
+    report['corr'] = np.corrcoef(y_pred, y_test)[0, 1]
+    report['accuracy'] = dict()
+    report['accuracy']['normal'] = accuracy_score(y_test, y_pred)
+    report['accuracy']['balanced'] = accuracy_score(y_test, y_pred)
 
-    vector_metric = (precision, recall, f1)
-    sc_vector_metrics = [np.sum(x ** metric_uniform_exponent) for x in [precision, recall, f1]]
-    scalar_metric = (corr, accuracy, *sc_vector_metrics)
-    return scalar_metric, vector_metric
+    report['vector'] = dict()
+    report['vector']['precision'] = precision_score(y_test, y_pred, average=mode_scores)
+    report['vector']['recall'] = recall_score(y_test, y_pred, average=mode_scores)
+    report['vector']['f1'] = f1_score(y_test, y_pred, average=mode_scores)
+
+    report['macro'] = dict()
+    report['macro']['precision'] = precision_score(y_test, y_pred, average='macro')
+    report['macro']['recall'] = recall_score(y_test, y_pred, average='macro')
+    report['macro']['f1'] = f1_score(y_test, y_pred, average='macro')
+
+    nclasses = report['vector']['precision'] .shape[0]
+
+    report['exponent'] = dict()
+    report['exponent'] = {k: np.sum(v ** metric_uniform_exponent)/nclasses for k, v in report['vector'].items()}
+
+    if metric_mode == 'accuracy':
+        report['main_metric'] = report['accuracy']['balanced']
+    else:
+        report['main_metric'] = report['macro'][metric_mode]
+    return report
 
 
 def logit_pvalue(model, x):

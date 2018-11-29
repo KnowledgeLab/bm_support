@@ -118,6 +118,7 @@ def process(args_reports_list, args_lincs_list):
                     results.append(res_dict)
     return results
 
+
 def process_simple(args_reports_list, args_lincs_list):
     results = []
 

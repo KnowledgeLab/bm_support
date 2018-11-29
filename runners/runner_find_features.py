@@ -21,6 +21,10 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
         seed0=13, n_jobs=1, verbose=False):
 
     # an_version = 13
+
+    # origin = 'litgw'
+    # version = 1
+
     # origin = 'lit'
     # version = 8
 
@@ -114,7 +118,7 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
     print('Number of trial features: {0}'.format(len(trial_features)))
     print('Number of notnull entries (over all features): {0} from {1}'.format(sum(mask_notnull), mask_notnull.shape))
 
-    if origin == 'lit':
+    if origin != 'gw':
         mask_agg = mask_notnull & ~mask_lit
     else:
         mask_agg = mask_notnull
