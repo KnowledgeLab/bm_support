@@ -11,11 +11,11 @@ from numpy import histogram, argmin, flatnonzero
 from scipy.stats import norm
 from sklearn.metrics import roc_auc_score, roc_curve, accuracy_score, precision_score, recall_score,\
     f1_score, classification_report, confusion_matrix, balanced_accuracy_score
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.preprocessing import label_binarize
 from sklearn import model_selection
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from bm_support.reporting import get_id_up_dn_df, get_lincs_df
 from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, nw, wi, dist, pm, ct, affs, aus
 from datahelpers.dftools import select_appropriate_datapoints, dict_to_array, accumulate_dicts, add_column_from_file
@@ -24,6 +24,8 @@ from datahelpers.community_tools import get_community_fnames_cnames
 from sklearn.cluster import KMeans
 from .gap_stat import choose_nc
 from copy import deepcopy
+
+problem_type_dict = {'rf': 'class', 'lr': 'class', 'rfr': 'regr', 'lrg': 'regr'}
 
 
 def get_dataset(fpath_batches, origin, version, datatype, batchsize, cutoff_len, a, b,
@@ -1399,9 +1401,8 @@ def select_features_dict(df_train, df_test, target_column, feature_dict,
     :param verbose:
     :return:
     """
-    # metric_selector = dict(zip(['corr',  'accuracy', 'precision', 'recall', 'f1'], range(5)))
+
     y_train, y_test = df_train[target_column], df_test[target_column]
-    # metric_index = metric_selector[metric_mode]
 
     chosen_features = []
     chosen_metrics = []
@@ -1420,31 +1421,29 @@ def select_features_dict(df_train, df_test, target_column, feature_dict,
         for tf in trial_features:
             cur_features = chosen_features + [tf]
             X_train, X_test = df_train[cur_features], df_test[cur_features]
+
             if model_type == 'rf':
                 model = RandomForestClassifier(**model_dict)
-            else:
+            elif model_type == 'rfr':
+                model = RandomForestRegressor(**model_dict)
+            elif model_type == 'lr':
                 model = LogisticRegression(**model_dict)
-            model.fit(X_train, y_train)
-            rmetrics = report_metrics(model, X_test, y_test, mode_scores, metric_uniform_exponent, metric_mode)
-            # y_pred = model.predict(X_test)
+            elif model_type == 'lrg':
+                model = LinearRegression(**model_dict)
+            else:
+                raise ValueError('model_type value is not admissible')
 
-            # corr = np.corrcoef(y_pred, y_test)[0, 1]
-            # accuracy = accuracy_score(y_test, y_pred)
-            # precision = precision_score(y_test, y_pred, average=mode_scores)
-            # recall = recall_score(y_test, y_pred, average=mode_scores)
-            # f1 = f1_score(y_test, y_pred, average=mode_scores)
-            # conf_matrix = confusion_matrix(y_test, y_pred)
-            # report['confusion'] = conf_matrix
-            # report['class_report'] = classification_report(y_test, y_pred)
-            # vector_metrics.append((precision, recall, f1))
-            # sc_vector_metrics = [np.sum(x**metric_uniform_exponent) for x in [precision, recall, f1]]
+            model.fit(X_train, y_train)
+            rmetrics = report_metrics(model, X_test, y_test, mode_scores, metric_uniform_exponent, metric_mode,
+                                      problem_type=problem_type_dict[model_type])
             scalar_metrics.append(rmetrics['main_metric'])
             cur_metrics.append(rmetrics)
 
         add_index = np.nanargmax(np.array(scalar_metrics))
-
         if len(chosen_metrics) > 0:
-            potential_improvement = 1 - chosen_metrics[-1] / scalar_metrics[add_index]
+            potential_improvement = np.sign(chosen_metrics[-1])*(1 - chosen_metrics[-1]/scalar_metrics[add_index])
+            if verbose:
+                print('Fractional potential improvement: {0}'.format(potential_improvement))
             if potential_improvement < eps_improvement:
                 if verbose:
                     print('Terminating early: no improvement.')
@@ -1472,43 +1471,61 @@ def select_features_dict(df_train, df_test, target_column, feature_dict,
 
     if model_type == 'rf':
         model = RandomForestClassifier(**model_dict)
-    else:
+    elif model_type == 'rfr':
+        model = RandomForestRegressor(**model_dict)
+    elif model_type == 'lr':
         model = LogisticRegression(**model_dict)
+    elif model_type == 'lrg':
+        model = LinearRegression(**model_dict)
+    else:
+        raise ValueError('model_type value is not admissible')
 
     X_train = df_train[chosen_features]
     model.fit(X_train, y_train)
     return chosen_features, chosen_metrics, chosen_total_metrics, model
 
 
-def report_metrics(model, X_test, y_test, mode_scores=None, metric_uniform_exponent=0.5, metric_mode='accuracy'):
+def report_metrics(model, X_test, y_test, mode_scores=None, metric_uniform_exponent=0.5, metric_mode='accuracy',
+                   problem_type='class'):
 
     y_pred = model.predict(X_test)
     report = dict()
     # NB corr might be NaN
     report['corr'] = np.corrcoef(y_pred, y_test)[0, 1]
-    report['accuracy'] = dict()
-    report['accuracy']['normal'] = accuracy_score(y_test, y_pred)
-    report['accuracy']['balanced'] = accuracy_score(y_test, y_pred)
+    if problem_type == 'class':
+        report['accuracy'] = dict()
+        report['accuracy']['normal'] = accuracy_score(y_test, y_pred)
+        report['accuracy']['balanced'] = balanced_accuracy_score(y_test, y_pred, adjusted=True)
 
-    report['vector'] = dict()
-    report['vector']['precision'] = precision_score(y_test, y_pred, average=mode_scores)
-    report['vector']['recall'] = recall_score(y_test, y_pred, average=mode_scores)
-    report['vector']['f1'] = f1_score(y_test, y_pred, average=mode_scores)
+        report['vector'] = dict()
+        report['vector']['precision'] = precision_score(y_test, y_pred, average=mode_scores)
+        report['vector']['recall'] = recall_score(y_test, y_pred, average=mode_scores)
+        report['vector']['f1'] = f1_score(y_test, y_pred, average=mode_scores)
 
-    report['macro'] = dict()
-    report['macro']['precision'] = precision_score(y_test, y_pred, average='macro')
-    report['macro']['recall'] = recall_score(y_test, y_pred, average='macro')
-    report['macro']['f1'] = f1_score(y_test, y_pred, average='macro')
+        report['macro'] = dict()
+        report['macro']['precision'] = precision_score(y_test, y_pred, average='macro')
+        report['macro']['recall'] = recall_score(y_test, y_pred, average='macro')
+        report['macro']['f1'] = f1_score(y_test, y_pred, average='macro')
 
-    nclasses = report['vector']['precision'] .shape[0]
+        nclasses = report['vector']['precision'] .shape[0]
 
-    report['exponent'] = dict()
-    report['exponent'] = {k: np.sum(v ** metric_uniform_exponent)/nclasses for k, v in report['vector'].items()}
+        report['exponent'] = dict()
+        report['exponent'] = {k: np.sum(v ** metric_uniform_exponent)/nclasses for k, v in report['vector'].items()}
 
-    if metric_mode == 'accuracy':
-        report['main_metric'] = report['accuracy']['balanced']
+        if metric_mode == 'accuracy':
+            report['main_metric'] = report['accuracy']['balanced']
+        else:
+            report['main_metric'] = report['macro'][metric_mode]
+
+        report['conf'] = confusion_matrix(y_test, y_pred)
+
+        positive_proba = model.predict_proba(X_test)
+        y_test_binary = label_binarize(y_test, classes=np.arange(0.0, nclasses))
+        auroc = [roc_auc_score(y_, proba_) for proba_, y_ in zip(positive_proba.T, y_test_binary.T)]
+        report['auroc'] = auroc
     else:
-        report['main_metric'] = report['macro'][metric_mode]
+        report['mse'] = np.sum((1 - y_test/y_pred)**2)**0.5/y_pred.shape[0]
+        report['main_metric'] = -report['mse']
     return report
 
 

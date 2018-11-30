@@ -127,6 +127,7 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
 
     #metric to optimize for
     mm = 'precision'
+    mm = 'accuracy'
 
     nmax = 5000
 
@@ -136,7 +137,7 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
     if model_type == 'lr':
         dfw = normalize_columns(dfw, trial_features)
 
-    func = partial(study_sample, dfw=dfw, dist=dist, feature_dict=feature_dict, metric_mode=mm,
+    func = partial(study_sample, dfw=dfw, target=dist, feature_dict=feature_dict, metric_mode=mm,
                    model_type=model_type,
                    n_subtrials=n_subtrials, n_estimators=n_estimators,
                    log_reg_dict=log_reg_dict, verbose=verbose)
