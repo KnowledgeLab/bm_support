@@ -3,7 +3,7 @@ from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp,
 from os.path import expanduser, join
 import pandas as pd
 from bm_support.add_features import generate_feature_groups
-from bm_support.add_features import normalize_columns
+from bm_support.add_features import normalize_columns, select_feature_families
 from bm_support.supervised_aux import study_sample, metric_selector
 from functools import partial
 from multiprocessing import Pool
@@ -18,9 +18,9 @@ warnings.filterwarnings('ignore')
 
 
 def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estimators, datapath=None,
-        seed0=13, n_jobs=1, verbose=False):
+        seed0=13, n_jobs=1, target=dist, excl_columns=(), verbose=False):
 
-    # an_version = 13
+    cooked_version = 12
 
     # origin = 'litgw'
     # version = 1
@@ -39,6 +39,7 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
     # n_estimators = 55
 
     min_log_alpha = -2
+    # min_log_alpha = 0
     max_log_alpha = 2
     log_reg_dict = {'min_log_alpha': min_log_alpha, 'max_log_alpha': max_log_alpha}
 
@@ -60,9 +61,9 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
 
     columns_interest = [x for sublist in col_families.values() for x in sublist]
     if datapath:
-        df_path = expanduser(join(datapath, '{0}_{1}_{2}.h5'.format(origin, version, an_version)))
+        df_path = expanduser(join(datapath, '{0}_{1}_{2}.h5'.format(origin, version, cooked_version)))
     else:
-        df_path = expanduser('~/data/kl/final/{0}_{1}_{2}.h5'.format(origin, version, an_version))
+        df_path = expanduser('~/data/kl/final/{0}_{1}_{2}.h5'.format(origin, version, cooked_version))
     df = pd.read_hdf(df_path, key='df')
 
     # mask: literome - mask out a specific interaction
@@ -82,22 +83,11 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
                 )
 
     feature_dict = deepcopy(col_families)
-    # families = ['affiliations_affind', 'affiliations_comm_size', 'affiliations_ncomms',
-    #             'affiliations_ncomponents', 'affiliations_size_ulist', 'affiliations_suppind',
-    #             'ai', 'ar', 'authors_affind', 'authors_comm_size', 'authors_ncomms', 'authors_ncomponents',
-    #             'authors_size_ulist', 'authors_suppind', 'cden', 'citations',
-    #             'cite_count', 'cpop', 'delta_year', 'ksst', 'lincscomm_size', 'lincssame_comm',
-    #             'litgwcsize_dn', 'litgwcsize_up',
-    #             'litgweff_comm_size', 'litgwsame_comm', 'nhi', 'past_affind',
-    #             'past_comm_size', 'past_ncomms', 'past_ncomponents',
-    #             'past_size_ulist', 'past_suppind', 'pre_affs', 'pre_authors', 'time']
-    families = ['affiliations_comm_size',
-                'ai', 'ar', 'cden', 'citations',
-                'cite_count', 'cpop', 'delta_year', 'ksst', 'lincscomm_size', 'lincssame_comm',
-                'litgweff_comm_size', 'litgwsame_comm', 'nhi', 'past_affind',
-                'past_comm_size', 'time']
 
+    families = select_feature_families(an_version)
     feature_dict = {k: v for k, v in feature_dict.items() if k in families}
+
+    feature_dict = {k: list(v) for k, v in feature_dict.items() if not any([c in v for c in excl_columns])}
 
     trial_features = [x for sublist in feature_dict.values() for x in sublist]
 
@@ -134,10 +124,10 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
     rns = RandomState(seed0)
     seeds = rns.randint(nmax, size=n_trials)
 
-    if model_type == 'lr':
+    if model_type == 'lr' or model_type == 'lrg':
         dfw = normalize_columns(dfw, trial_features)
 
-    func = partial(study_sample, dfw=dfw, target=dist, feature_dict=feature_dict, metric_mode=mm,
+    func = partial(study_sample, dfw=dfw, target=target, feature_dict=feature_dict, metric_mode=mm,
                    model_type=model_type,
                    n_subtrials=n_subtrials, n_estimators=n_estimators,
                    log_reg_dict=log_reg_dict, verbose=verbose)
@@ -204,13 +194,21 @@ if __name__ == "__main__":
 
     parser.add_argument('--verbosity',
                         default=True, type=bool,
-                        help='True for verbose output ')
+                        help='True for verbose output')
 
     parser.add_argument('--datapath',
                         default=None, type=str,
-                        help='True for verbose output ')
+                        help='path to datafiles')
+
+    parser.add_argument('--target',
+                        default=dist, type=str,
+                        help='True for verbose output')
+
+    parser.add_argument('--exclude-columns',
+                        nargs='*',
+                        default=[])
 
     args = parser.parse_args()
     run(args.origin, args.version, args.anversion, args.model_type,
         args.ntrials, args.subtrials, args.estimators, args.datapath, args.seed0,
-        args.parallel, args.verbosity)
+        args.parallel, args.target, args.exclude_columns, args.verbosity)

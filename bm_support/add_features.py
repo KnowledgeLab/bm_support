@@ -528,16 +528,22 @@ def generate_feature_groups(columns_filename, verbose=True):
                ['{0}_comm_size'.format(c) for c in dim1] + \
                ['{0}_ncomms'.format(c) for c in dim1] + \
                ['{0}_ncomponents'.format(c) for c in dim1] + \
-               ['{0}_size_ulist'.format(c) for c in dim1] + \
                ['pre_authors', 'pre_affs']
 
-    bipatterns = [('lincs', 'comm_size'), ('lincs', 'same_comm'), ('litgw', 'eff_comm_size'),
-                  ('litgw', 'same_comm'), ('litgw', 'csize_up'), ('litgw', 'csize_dn')]
+    bipatterns = [('lincs', 'comm_size'), ('lincs', 'same_comm'),
+                  ('litgw', 'dyn_eff_comm_size'), ('litgw', 'dyn_same_comm'),
+                  ('litgw', 'comm_size'), ('litgw', 'same_comm')]
+
     print(patterns)
 
     col_families = {pat: [x for x in columns if pat in x] for pat in patterns}
     col_families_prefix_suffix = {pat0 + pat1: [x for x in columns if pat0 in x and pat1 in x] for pat0, pat1 in
                                   bipatterns}
+
+    # little filtering hack
+
+    for k in ['litgwcomm_size', 'litgwsame_comm']:
+        col_families_prefix_suffix[k] = [c for c in col_families_prefix_suffix[k] if not 'dyn' in c]
 
     col_families_basic = {k: [k] for k in ['ai', 'ar', 'cite_count', 'delta_year']}
     # fits of wos citations
@@ -558,4 +564,60 @@ def generate_feature_groups(columns_filename, verbose=True):
         print(len(col_families))
 
     return col_families
+
+
+def select_feature_families(an_version):
+
+    full_families = [
+                'affiliations_comm_size', 'affiliations_ncomms', 'affiliations_ncomponents',
+                'affiliations_suppind', 'affiliations_affind',
+                'authors_comm_size', 'authors_ncomms', 'authors_ncomponents',
+                'authors_suppind', 'authors_affind',
+                'past_comm_size', 'past_ncomms', 'past_ncomponents',
+                'past_suppind', 'past_affind',
+                'future_comm_size', 'future_ncomms', 'future_ncomponents',
+                'future_suppind', 'future_affind',
+                'cpop', 'cden', 'ksst',
+                'lincscomm_size', 'lincssame_comm',
+                'litgweff_comm_size', 'litgwsame_comm',
+                'ai', 'ar', 'citations', 'cite_count', 'nhi', 'delta_year', 'time'
+                ]
+
+    comm_families = [
+        'lincscomm_size', 'lincssame_comm',
+        'litgweff_comm_size', 'litgwsame_comm',
+    ]
+
+    indep_families = [
+            'affiliations_comm_size', 'affiliations_ncomms', 'affiliations_ncomponents',
+            'affiliations_suppind', 'affiliations_affind',
+            'authors_comm_size', 'authors_ncomms', 'authors_ncomponents',
+            'authors_suppind', 'authors_affind',
+            'past_comm_size', 'past_ncomms', 'past_ncomponents',
+            'past_suppind', 'past_affind',
+            'future_comm_size', 'future_ncomms', 'future_ncomponents',
+            'future_suppind', 'future_affind'
+    ]
+
+    denindep_families = [
+        'affiliations_comm_size', 'affiliations_ncomms', 'affiliations_ncomponents',
+        'affiliations_suppind', 'affiliations_affind',
+        'authors_comm_size', 'authors_ncomms', 'authors_ncomponents',
+        'authors_suppind', 'authors_affind',
+        'past_comm_size', 'past_ncomms', 'past_ncomponents',
+        'past_suppind', 'past_affind',
+        'future_comm_size', 'future_ncomms', 'future_ncomponents',
+        'future_suppind', 'future_affind',
+        'cpop', 'cden', 'ksst'
+    ]
+
+    version_selector = dict()
+
+    version_selector['full'] = full_families
+    version_selector['communities'] = comm_families
+    version_selector['indep'] = indep_families
+    version_selector['denindep'] = denindep_families
+
+    an_version_selector = {15: 'full', 16: 'communities', 17: 'indep', 18: 'denindep'}
+    return version_selector[an_version_selector[an_version]]
 

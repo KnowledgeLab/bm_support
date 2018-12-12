@@ -1383,6 +1383,7 @@ def select_features_dict(df_train, df_test, target_column, feature_dict,
                          metric_uniform_exponent=0.5,
                          eps_improvement=1e-6,
                          model_dict={},
+                         max_feat_per_family=1,
                          verbose=False):
     """
 
@@ -1443,7 +1444,8 @@ def select_features_dict(df_train, df_test, target_column, feature_dict,
         if len(chosen_metrics) > 0:
             potential_improvement = np.sign(chosen_metrics[-1])*(1 - chosen_metrics[-1]/scalar_metrics[add_index])
             if verbose:
-                print('Fractional potential improvement: {0}'.format(potential_improvement))
+                print('Fractional potential improvement: {0:.3f}, abs value: {1:.3f}'.format(potential_improvement,
+                                                                                             scalar_metrics[add_index]))
             if potential_improvement < eps_improvement:
                 if verbose:
                     print('Terminating early: no improvement.')
@@ -1461,13 +1463,15 @@ def select_features_dict(df_train, df_test, target_column, feature_dict,
 
         if verbose:
             print('nf: {0} cfeature: {1} metric: {2:.3f} metric_improv: {3:.2f} %'.format(len(cur_features),
-                  (current_feature[:27]+'...').ljust(30),
+                  (current_feature[:47]+'...').ljust(50),
                   chosen_metrics[-1], 100*potential_improvement))
 
-        if len(feature_dict[feature_group]) - len(feature_dict_dyn[feature_group]) < 1:
-            feature_dict_dyn[feature_group].remove(current_feature)
-        else:
+        if len(feature_dict_dyn[feature_group]) <= len(feature_dict[feature_group]) - (max_feat_per_family - 1):
+            if verbose:
+                print('{0} {1}'.format(len(feature_dict_dyn[feature_group]), len(feature_dict[feature_group])))
             del feature_dict_dyn[feature_group]
+        else:
+            feature_dict_dyn[feature_group].remove(current_feature)
 
     if model_type == 'rf':
         model = RandomForestClassifier(**model_dict)

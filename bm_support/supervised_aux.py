@@ -84,13 +84,12 @@ def study_sample(seed, dfw, target, feature_dict,
                                                                                model_dict=param_dict,
                                                                                verbose=verbose)
 
-
         rmetrics = report_metrics(model_, df_valid[cfeatures], df_valid[target],
                                   mode_scores=mode_scores,
                                   metric_uniform_exponent=metric_uniform_exponent,
                                   metric_mode=metric_mode, problem_type=problem_type_dict[model_type])
 
-        ii_dict = {}
+        ii_dict = dict()
         ii_dict['run_par'] = seed
         ii_dict['current_features'] = cfeatures
         ii_dict['current_metrics'] = chosen_metrics
@@ -101,8 +100,11 @@ def study_sample(seed, dfw, target, feature_dict,
         ii_dict['corr_all_test'] = df_test[cfeatures + [target]].corr()[target]
         ii_dict['corr_all_valid'] = df_valid[cfeatures + [target]].corr()[target]
 
-        if model_type == 'lr':
-            ii_dict['pval_errors'] = logit_pvalue(model_, df_train2[cfeatures])
+        if model_type[0] == 'l':
+            if model_type == 'lr':
+                ii_dict['pval_errors'] = logit_pvalue(model_, df_train2[cfeatures])
+            elif model_type == 'lrg':
+                ii_dict['pval_errors'] = logit_pvalue(model_, df_train2[cfeatures])
 
         meta_agg.append(ii_dict)
         models.append(model_)
@@ -130,7 +132,7 @@ def study_sample(seed, dfw, target, feature_dict,
     report_dict['corr_all_test'] = df_test[best_features + [target]].corr()[target]
     report_dict['corr_all_valid'] = df_valid[best_features + [target]].corr()[target]
     report_dict['best_model'] = models[index_best_run]
-    if model_type == 'lr':
+    if model_type[0] == 'l':
         report_dict['pval_errors'] = meta_agg[index_best_run]['pval_errors']
 
     return report_dict, meta_agg
