@@ -78,6 +78,7 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
     # mask : interactions which are between
     eps_window_mean = 0.1
     mean_col = 0.5
+
     mask_exp = ((df[cexp] <= lower_exp - eps_window_mean) | (df[cexp] >= upper_exp + eps_window_mean)
                 # | ((df2[cexp] <= (mean_col + eps_window_mean)) & (df2[cexp] >= (mean_col - eps_window_mean)))
                 )
@@ -86,6 +87,7 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
 
     families = select_feature_families(an_version)
     feature_dict = {k: v for k, v in feature_dict.items() if k in families}
+    excl_columns = list(set(excl_columns) | set([target]))
 
     feature_dict = {k: list(v) for k, v in feature_dict.items() if not any([c in v for c in excl_columns])}
 

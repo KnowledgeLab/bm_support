@@ -1,7 +1,7 @@
 import pickle
 import gzip
 import pandas as pd
-from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, nw, wi, dist, pm
+from datahelpers.constants import ye, up, dn, pm
 from bm_support.bigraph_support import compute_support_index, compute_affinity_index, compute_modularity_index
 from os.path import expanduser
 import time
@@ -11,11 +11,12 @@ fraction_imporant_v_vertices = 0.5
 window_sizes = [None, 1, 2, 3]
 disjoint_uv = False
 
-support_flag = False
-affinity_flag = False
-# affinity_flag = True
-# mod_flag = False
+support_flag = True
+# support_flag = False
+affinity_flag = True
+# affinity_flag = False
 mod_flag = True
+# mod_flag = False
 
 n_test = None
 # n_test = 2000
@@ -23,7 +24,7 @@ n_test = None
 df_pm_wid = pd.read_csv(expanduser('~/data/wos/cites/wosids.csv.gz'), index_col=0)
 dfy = pd.read_csv(expanduser('~/data/wos/pmids/updnyearpmid_all.csv.gz'), index_col=0)
 
-aff_dict_fname=expanduser('~/data/wos/affs_disambi/pm2id_dict.pgz')
+aff_dict_fname = expanduser('~/data/wos/affs_disambi/pm2id_dict.pgz')
 if aff_dict_fname:
     with gzip.open(aff_dict_fname, 'rb') as fp:
         pm_affs_dict = pickle.load(fp)

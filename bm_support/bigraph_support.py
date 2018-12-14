@@ -6,7 +6,8 @@ import igraph as ig
 
 def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
                           window=None, frac_important=0.1,
-                          transform='square', mode='all', use_wosids=True):
+                          transform='square', mode='all', use_wosids=True,
+                          verbose=False):
     """
 
     :param data:
@@ -25,6 +26,8 @@ def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
             fraction of the important papers
     :param transform: 'linear' or 'square', applied to degree of vertex set V
     :param mode: 'cross' for support index for the intersection of U and V
+    :param use_wosids:
+    :param verbose:
     :return:
     """
 
@@ -40,11 +43,14 @@ def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
         if use_wosids:
             cur_wosids = [pm_wid_dict[k] for k in cur_pmids if k in pm_wid_dict.keys()]
         else:
-            cur_wosids = cur_pmids
+            cur_wosids = list(set(cur_pmids))
         if mode == 'all':
-            cur_cites = [bipart_edges_dict[k] for k in cur_wosids]
+            cur_cites = [list(set(bipart_edges_dict[k])) for k in cur_wosids]
         elif mode == 'cross':
-            cur_cites = [[y for y in bipart_edges_dict[k] if y in cur_wosids] for k in cur_wosids]
+            cur_cites = [[y for y in list(set(bipart_edges_dict[k])) if y in cur_wosids] for k in cur_wosids]
+
+        if verbose:
+            print(ix, cur_cites)
 
         alpha, n_unique_citations, n_edges = compute_support(cur_cites, frac_important, transform)
         ind_agg.append(ix)
@@ -100,9 +106,9 @@ def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
             wosids_present = pmids
         if pmids_ix:
             if mode == 'cross':
-                cur_cites = [[y for y in bipart_edges_dict[k] if y in wosids_present] for k in wosids_present]
+                cur_cites = [[y for y in list(set(bipart_edges_dict[k])) if y in wosids_present] for k in wosids_present]
             else:
-                cur_cites = [bipart_edges_dict[k] for k in wosids_present]
+                cur_cites = [list(set(bipart_edges_dict[k])) for k in wosids_present]
             alphas = compute_affinity(cur_cites)
             alphas_dict = dict(zip(pmids_present, alphas))
             output = [(ix, j, alphas_dict[j]) for j in pmids_ix]
@@ -168,9 +174,9 @@ def compute_modularity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye
             wosids_present = pmids
         if pmids_ix:
             if mode == 'cross':
-                uvs_list = [(k, [y for y in bipart_edges_dict[k] if y in wosids_present]) for k in wosids_present]
+                uvs_list = [(k, [y for y in list(set(bipart_edges_dict[k])) if y in wosids_present]) for k in wosids_present]
             else:
-                uvs_list = [(k, bipart_edges_dict[k]) for k in wosids_present]
+                uvs_list = [(k, list(set(bipart_edges_dict[k]))) for k in wosids_present]
             commsize_ncomm_usize = compute_comm_structure_bigraph(uvs_list, disjoint_uv, verbose)
 
             csize_dict = dict(zip(pmids_present, commsize_ncomm_usize))
@@ -183,9 +189,8 @@ def compute_modularity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye
     else:
         suff = ''
 
-    cols = ['comm_size', 'ncomms', 'size_ulist', 'ncomponents']
+    cols = ['comm_size', 'ncomms', 'size_ulist', 'ncomponents', 'commproj_size', 'commprojrel_size']
     ren_cols = ['{0}{1}'.format(k, suff) for k in cols]
-
 
     if r_agg:
         rdata = np.concatenate(r_agg)
@@ -237,9 +242,7 @@ def compute_support(data, frac_important=0.2, mode='square'):
     if len(uniques) == 0 or len(data) == 1:
         return 0, len(uniques), sum(counts)
     power_v = len(uniques)
-    mean_degree_v = np.mean([len(x) for x in data])
-
-    n_top = int(np.ceil(frac_important * mean_degree_v))
+    n_top = int(np.ceil(len(uniques)*frac_important))
     volume = n_top * foo(len(data))
     counts_sorted = sorted(counts)[::-1][:n_top]
     alpha = sum([foo(z) for z in counts_sorted]) / volume
@@ -277,7 +280,7 @@ def compute_comm_structure_bigraph(uvs_list, disjoint_uv=True, verbose=False):
     :param uvs_list: list of u vertices
     :param disjoint_uv:
     :param verbose:
-    :return:
+    :return: (|comm size|, |number of comms|, |U|, |number of components of G|)
     """
 
     ulist = [x for x, _ in uvs_list]
@@ -305,13 +308,19 @@ def compute_comm_structure_bigraph(uvs_list, disjoint_uv=True, verbose=False):
         comm_df = pd.DataFrame(communities.membership,
                                index=[v.index for v in g.vs], columns=['comm_id'])
         comm_size_dict = comm_df['comm_id'].value_counts().to_dict()
+        # communities restricted to u set
+        uset_comm_size_dict = comm_df.loc[uset_conv.values(), 'comm_id'].value_counts().to_dict()
         if verbose:
             print('comm_size_dict', comm_size_dict)
+            # print('comm_df', comm_df)
+            print('comm_df len', comm_df.shape)
+            print('comm_df len', comm_df.loc[uset_conv.values()].shape)
         uset_comm_dict = comm_df.loc[list(uset_conv.values())]['comm_id'].to_dict()
         # map: (original uset id) -> (int uset id) -> (community id) -> (community size)
         commsize_ncomm_usize = [(comm_size_dict[uset_comm_dict[uset_conv_inv[u]]], len(communities), len(ulist),
-                                 len(g.clusters()))
+                                 len(g.clusters()), uset_comm_size_dict[uset_comm_dict[uset_conv_inv[u]]],
+                                 uset_comm_size_dict[uset_comm_dict[uset_conv_inv[u]]]/len(ulist))
                                 for u in ulist]
     else:
-        commsize_ncomm_usize = [(1, len(ulist), len(ulist), len(ulist)) for u in ulist]
+        commsize_ncomm_usize = [(1, len(ulist), len(ulist), len(ulist), 1, 1) for u in ulist]
     return commsize_ncomm_usize

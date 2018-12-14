@@ -12,9 +12,12 @@ fraction_imporant_v_vertices = 0.2
 window_sizes = [None, 1, 2, 3]
 disjoint_uv = False
 
-support_flag = False
-affinity_flag = False
+support_flag = True
+# support_flag = False
+affinity_flag = True
+# affinity_flag = False
 mod_flag = True
+# mod_flag = False
 
 n_test = None
 # n_test = 2000

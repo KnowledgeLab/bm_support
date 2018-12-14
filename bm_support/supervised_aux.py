@@ -2,7 +2,7 @@ from numpy.random import RandomState
 from sklearn.model_selection import train_test_split
 from .supervised import simple_stratify
 from .supervised import problem_type_dict
-from .supervised import select_features_dict, logit_pvalue, report_metrics
+from .supervised import select_features_dict, logit_pvalue, linear_pvalue, report_metrics
 import numpy as np
 
 metric_selector = dict(zip(['corr', 'accuracy', 'precision', 'recall', 'f1'], range(5)))
@@ -104,7 +104,7 @@ def study_sample(seed, dfw, target, feature_dict,
             if model_type == 'lr':
                 ii_dict['pval_errors'] = logit_pvalue(model_, df_train2[cfeatures])
             elif model_type == 'lrg':
-                ii_dict['pval_errors'] = logit_pvalue(model_, df_train2[cfeatures])
+                ii_dict['pval_errors'] = linear_pvalue(model_, df_train2[cfeatures], df_train2[target])
 
         meta_agg.append(ii_dict)
         models.append(model_)

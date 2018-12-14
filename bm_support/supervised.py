@@ -22,6 +22,7 @@ from datahelpers.dftools import select_appropriate_datapoints, dict_to_array, ac
 from .add_features import prepare_final_df
 from datahelpers.community_tools import get_community_fnames_cnames
 from sklearn.cluster import KMeans
+from scipy.stats import t as tdistr
 from .gap_stat import choose_nc
 from copy import deepcopy
 
@@ -1468,7 +1469,9 @@ def select_features_dict(df_train, df_test, target_column, feature_dict,
 
         if len(feature_dict_dyn[feature_group]) <= len(feature_dict[feature_group]) - (max_feat_per_family - 1):
             if verbose:
-                print('{0} {1}'.format(len(feature_dict_dyn[feature_group]), len(feature_dict[feature_group])))
+                str_rep = 'in dyn dict {0} in tot dict {1}'.format(len(feature_dict_dyn[feature_group]),
+                                                                   len(feature_dict[feature_group]))
+                print('Feature group {0}: {1}'.format(feature_group, str_rep))
             del feature_dict_dyn[feature_group]
         else:
             feature_dict_dyn[feature_group].remove(current_feature)
@@ -1538,7 +1541,6 @@ def logit_pvalue(model, x):
     parameters:
         model: fitted sklearn.linear_model.LogisticRegression with intercept and large C
         x:     matrix on which the model was fit
-    This function uses asymtptics for maximum likelihood estimates.
     """
     probs = model.predict_proba(x)
     n_datapoints = probs.shape[0]
@@ -1562,3 +1564,26 @@ def logit_pvalue(model, x):
         pvals.append(pn)
         errors.append(serrors)
     return np.array(pvals), coeffs, np.array(errors)
+
+
+def linear_pvalue(model, X, y):
+    """ Calculate z-scores for scikit-learn LinearRegression.
+    parameters:
+        model: fitted sklearn.linear_model.LinearRegression with intercept and large C
+        x:     matrix on which the model was fit
+    """
+
+    pred = model.predict(X)
+    sse = np.sum((pred - y) ** 2, axis=0)
+    full_X = np.hstack([np.ones((X.shape[0], 1)), X])
+    sse = sse / (float(full_X.shape[0] - full_X.shape[1]))
+    full_co = np.array([model.intercept_] + list(model.coef_))
+    try:
+        vcov = np.linalg.inv(np.dot(full_X.T, full_X))
+        se = np.sqrt(np.diagonal(sse * vcov))
+        t = full_co / se
+        pvals = 2 * (1 - tdistr.cdf(np.abs(t), y.shape[0] - full_X.shape[1]))
+    except np.linalg.linalg.LinAlgError as e:
+        se = np.zeros(X.shape[1])
+        pvals = np.zeros(X.shape[1])
+    return pvals, full_co, se
