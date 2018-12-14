@@ -589,24 +589,24 @@ def select_feature_families(an_version):
     ]
 
     indep_families = [
-            'affiliations_comm_size', 'affiliations_ncomms', 'affiliations_ncomponents',
+            'affiliations_comm_size',
             'affiliations_suppind', 'affiliations_affind',
-            'authors_comm_size', 'authors_ncomms', 'authors_ncomponents',
+            'authors_comm_size',
             'authors_suppind', 'authors_affind',
-            'past_comm_size', 'past_ncomms', 'past_ncomponents',
+            'past_comm_size',
             'past_suppind', 'past_affind',
-            'future_comm_size', 'future_ncomms', 'future_ncomponents',
+            'future_comm_size',
             'future_suppind', 'future_affind'
     ]
 
     denindep_families = [
-        'affiliations_comm_size', 'affiliations_ncomms', 'affiliations_ncomponents',
+        'affiliations_comm_size',
         'affiliations_suppind', 'affiliations_affind',
-        'authors_comm_size', 'authors_ncomms', 'authors_ncomponents',
+        'authors_comm_size',
         'authors_suppind', 'authors_affind',
-        'past_comm_size', 'past_ncomms', 'past_ncomponents',
+        'past_comm_size',
         'past_suppind', 'past_affind',
-        'future_comm_size', 'future_ncomms', 'future_ncomponents',
+        'future_comm_size',
         'future_suppind', 'future_affind',
         'cpop', 'cden', 'ksst'
     ]
