@@ -38,8 +38,8 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
     # n_estimators = 17
     # n_estimators = 55
 
+    # min_log_alpha = -2
     min_log_alpha = -2
-    # min_log_alpha = 0
     max_log_alpha = 2
     log_reg_dict = {'min_log_alpha': min_log_alpha, 'max_log_alpha': max_log_alpha}
 
