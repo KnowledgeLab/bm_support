@@ -567,6 +567,11 @@ def generate_feature_groups(columns_filename, verbose=True):
 
 
 def select_feature_families(an_version):
+    """
+    returns a subset of features
+    :param an_version: version
+    :return:
+    """
 
     full_families = [
                 'affiliations_comm_size', 'affiliations_ncomms', 'affiliations_ncomponents',
@@ -621,3 +626,104 @@ def select_feature_families(an_version):
     an_version_selector = {15: 'full', 16: 'communities', 17: 'indep', 18: 'denindep'}
     return version_selector[an_version_selector[an_version]]
 
+
+def get_mapping_data(metric_type, dfy, df_pm_wid):
+    """
+
+    :param metric_type:
+    :param dfy:
+    :param df_pm_wid:
+    :return:
+    """
+    if metric_type == 'affiliations':
+        aff_dict_fname = expanduser('~/data/wos/affs_disambi/pm2id_dict.pgz')
+        if aff_dict_fname:
+            with gzip.open(aff_dict_fname, 'rb') as fp:
+                uv_dict = pickle.load(fp)
+        outstanding = list(set(dfy[pm].unique()) - set(uv_dict.keys()))
+        outstanding_dict = {k: [] for k in outstanding}
+        uv_dict = {**uv_dict, **outstanding_dict}
+        uv_dict = {k: list(set(v)) for k, v in uv_dict.items()}
+
+        pm_wid_dict = {}
+
+    elif metric_type == 'authors':
+
+        df = retrieve_wos_aff_au_df()
+        print('df shape {0}'.format(df.shape[0]))
+
+        df_working = df.loc[df[aus].apply(lambda x: x != '')]
+        pm_aus_map = df_working[[pm, aus]].values
+        pm_aus_dict = {pm_: x.lower().split('|') for pm_, x in pm_aus_map}
+        print('len pm_aus_dict {0}'.format(len(pm_aus_dict)))
+
+        outstanding = list(set(dfy[pm].unique()) - set(pm_aus_dict.keys()))
+        print('outstanding {0}'.format(len(outstanding)))
+        outstanding_dict = {k: [] for k in outstanding}
+        uv_dict = {**pm_aus_dict, **outstanding_dict}
+        uv_dict = {k: list(set(v)) for k, v in uv_dict.items()}
+
+        print('uv_dict {0}'.format(len(uv_dict)))
+
+        pm_wid_dict = {}
+
+        """
+        df_working = df.loc[df[aus].apply(lambda x: x != '')]
+        pm_aus_map = df_working[[pm, aus]].values
+        pm_aus_dict = {pm_: x.lower().split('|') for pm_, x in pm_aus_map}
+        print('len pm_aus_dict {0}'.format(len(pm_aus_dict)))
+        
+        outstanding = list(set(dfy[pm].unique()) - set(pm_aus_dict.keys()))
+        print('outstanding {0}'.format(len(outstanding)))
+        outstanding_dict = {k: [] for k in outstanding}
+        pm_aus_dict = {**pm_aus_dict, **outstanding_dict}
+        pm_wid_dict = {}
+        
+        print('len pm_wid_dict {0}'.format(len(pm_wid_dict)))
+        print('len pm_aus_dict {0}'.format(len(pm_aus_dict)))        
+        """
+
+    elif metric_type == 'past':
+        df = pd.read_csv(expanduser('~/data/wos/cites/wos_citations.csv.gz'), compression='gzip', index_col=0)
+        wids2analyze = df['wos_id'].unique()
+
+        # create w2i dict
+        super_set = set()
+        for c in df.columns:
+            super_set |= set(df[c].unique())
+        print('len of super set', len(super_set))
+        w2i = dict(zip(list(super_set), range(len(super_set))))
+
+        df['wos_id_int'] = df['wos_id'].apply(lambda x: w2i[x])
+        df['uid_int'] = df['uid'].apply(lambda x: w2i[x])
+
+        # produce cites_dict
+        uv_dict = dict(df.groupby('wos_id_int').apply(lambda x: list(x['uid_int'].values)))
+
+        df_pm_wid = df_pm_wid.loc[df_pm_wid['wos_id'].isin(wids2analyze)]
+        df_pm_wid['wos_id_int'] = df_pm_wid['wos_id'].apply(lambda x: w2i[x])
+        pm_wid_dict = dict(df_pm_wid[[pm, 'wos_id_int']].values)
+
+    elif metric_type == 'future':
+        fname = expanduser('~/data/wos/cites/cites_cs_v2.pgz')
+        with gzip.open(fname, 'rb') as fp:
+            pack = pickle.load(fp)
+
+        # wos/uid stripped to index
+        w2i = pack['s2i']
+        uv_dict = pack['id_cited_by']
+
+        df_pm_wid['wos_id_stripped'] = df_pm_wid['wos_id'].apply(lambda x: x[4:])
+        df_pm_wid['wos_id_int'] = df_pm_wid['wos_id_stripped'].apply(lambda x: w2i[x] if x in w2i.keys() else np.nan)
+        df_pm_wid = df_pm_wid[~df_pm_wid['wos_id_int'].isnull()]
+        df_pm_wid['wos_id_int'] = df_pm_wid['wos_id_int'].astype(int)
+        pm_wid_dict = dict(df_pm_wid[[pm, 'wos_id_int']].values)
+
+        outstanding = list(set(pm_wid_dict.values()) - set(uv_dict.keys()))
+        outstanding_dict = {k: [] for k in outstanding}
+        uv_dict = {**uv_dict, **outstanding_dict}
+    else:
+        uv_dict = {}
+        pm_wid_dict = {}
+
+    return uv_dict, pm_wid_dict

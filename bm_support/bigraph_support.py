@@ -1,8 +1,9 @@
 import pandas as pd
 import numpy as np
+from itertools import combinations
 from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, dist, rdist, pm
 import igraph as ig
-
+import random
 
 def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
                           window=None, frac_important=0.1,
@@ -130,7 +131,9 @@ def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
 
 
 def compute_modularity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
-                             window=None, mode='all', use_wosids=True, disjoint_uv=True, verbose=False):
+                             window=None, mode='all', use_wosids=True, disjoint_uv=True,
+                             modularity_mode='uv',
+                             verbose=False):
     """
 
     :param data:
@@ -148,6 +151,7 @@ def compute_modularity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye
     :param mode: 'cross' for support index for the intersection of U and V
     :param use_wosids: use wosids
     :param disjoint_uv: treat U and V  as disjoint sets
+    :param modularity_mode: uv for u-v bipartite graph communities, u for U graph communities (weight from uv structure)
     :param verbose: verbosity level
     :return:
     """
@@ -163,7 +167,8 @@ def compute_modularity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye
         pmids = list(data.loc[mask, pm].unique())
         pmids_ix = list(data.loc[data[window_col] == ix, pm].unique())
         if verbose:
-            print(len(pmids_ix), pmids_ix[:5])
+            print('***')
+            print('up, dn, ye: {0} {1}'.format(list(data[[up, dn]].iloc[0].values), ix))
 
         if use_wosids:
             pmids_present = [pmx for pmx in pmids if pmx in pm_wid_dict.keys()]
@@ -174,11 +179,17 @@ def compute_modularity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye
             wosids_present = pmids
         if pmids_ix:
             if mode == 'cross':
-                uvs_list = [(k, [y for y in list(set(bipart_edges_dict[k])) if y in wosids_present]) for k in wosids_present]
+                uvs_list = [(k, [y for y in list(set(bipart_edges_dict[k])) if y in wosids_present])
+                            for k in wosids_present]
             else:
                 uvs_list = [(k, list(set(bipart_edges_dict[k]))) for k in wosids_present]
-            commsize_ncomm_usize = compute_comm_structure_bigraph(uvs_list, disjoint_uv, verbose)
+            # if verbose:
+            #     print('uv_list: {0}'.format(uvs_list))
 
+            if modularity_mode == 'uv':
+                commsize_ncomm_usize = compute_comm_structure_bigraph(uvs_list, disjoint_uv, verbose)
+            else:
+                commsize_ncomm_usize = compute_comm_structure_reduced_graph(uvs_list, verbose)
             csize_dict = dict(zip(pmids_present, commsize_ncomm_usize))
             output = [(ix, p, *csize_dict[p]) for p in pmids_ix]
             if output:
@@ -189,7 +200,11 @@ def compute_modularity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye
     else:
         suff = ''
 
-    cols = ['comm_size', 'ncomms', 'size_ulist', 'ncomponents', 'commproj_size', 'commprojrel_size']
+    if modularity_mode == 'uv':
+        cols = ['comm_size', 'ncomms', 'size_ulist', 'ncomponents', 'commproj_size', 'commprojrel_size']
+    else:
+        cols = ['rcomm_size', 'rncomms', 'rncomponents', 'rcommid', 'rcommrel_size']
+
     ren_cols = ['{0}{1}'.format(k, suff) for k in cols]
 
     if r_agg:
@@ -288,10 +303,12 @@ def compute_comm_structure_bigraph(uvs_list, disjoint_uv=True, verbose=False):
     if len(vlist_flat) > 0:
         vset = set(vlist_flat)
         if verbose:
-            print('len ulist: {0}, len vset {1}, len edges {2}'.format(len(ulist), len(vset), len(vlist_flat)))
+            print('diff: {0}, len ulist: {1}, len vset {2}, len edges {3}'.format(len(vlist_flat)
+                                                                                  - len(vset), len(ulist),
+                                                                                  len(vset), len(vlist_flat)))
 
         uset_conv = {k: j for k, j in zip(ulist, range(len(ulist)))}
-        uset_conv_inv = {v: k for v, k in uset_conv.items()}
+        # uset_conv_inv = {v: k for k, v in uset_conv.items()}
         if disjoint_uv:
             # treat U and V as disjoint sets
             vset_conv = {k: j + len(ulist) for k, j in zip(vset, range(len(vset)))}
@@ -303,6 +320,7 @@ def compute_comm_structure_bigraph(uvs_list, disjoint_uv=True, verbose=False):
 
         edges_agg = [[(uset_conv[u], vset_conv[v]) for v in vs] for u, vs in uvs_list]
         edges_flat = [e for sublist in edges_agg for e in sublist]
+        random.seed(13)
         g = ig.Graph(edges_flat, directed=False)
         communities = g.community_infomap()
         comm_df = pd.DataFrame(communities.membership,
@@ -314,13 +332,74 @@ def compute_comm_structure_bigraph(uvs_list, disjoint_uv=True, verbose=False):
             print('comm_size_dict', comm_size_dict)
             # print('comm_df', comm_df)
             print('comm_df len', comm_df.shape)
-            print('comm_df len', comm_df.loc[uset_conv.values()].shape)
+            print('comm_df uset len', comm_df.loc[uset_conv.values()].shape)
         uset_comm_dict = comm_df.loc[list(uset_conv.values())]['comm_id'].to_dict()
         # map: (original uset id) -> (int uset id) -> (community id) -> (community size)
-        commsize_ncomm_usize = [(comm_size_dict[uset_comm_dict[uset_conv_inv[u]]], len(communities), len(ulist),
-                                 len(g.clusters()), uset_comm_size_dict[uset_comm_dict[uset_conv_inv[u]]],
-                                 uset_comm_size_dict[uset_comm_dict[uset_conv_inv[u]]]/len(ulist))
+        commsize_ncomm_usize = [(comm_size_dict[uset_comm_dict[uset_conv[u]]],
+                                 len(communities),
+                                 len(ulist),
+                                 len(g.clusters()),
+                                 uset_comm_size_dict[uset_comm_dict[uset_conv[u]]],
+                                 uset_comm_size_dict[uset_comm_dict[uset_conv[u]]]/len(ulist))
                                 for u in ulist]
     else:
         commsize_ncomm_usize = [(1, len(ulist), len(ulist), len(ulist), 1, 1) for u in ulist]
+    return commsize_ncomm_usize
+
+
+def compute_comm_structure_reduced_graph(uvs, verbose=False):
+    ulist = [x for x, _ in uvs]
+    c = combinations(uvs, 2)
+    u_edges = []
+
+    for a_node, b_node in c:
+        a, a_vs = a_node
+        b, b_vs = b_node
+        a_vs_set = set(a_vs)
+        b_vs_set = set(b_vs)
+        union = a_vs_set | b_vs_set
+        if union:
+            weight = len(a_vs_set & b_vs_set) / len(a_vs_set | b_vs_set)
+        else:
+            weight = 0
+        u_edges.append((a, b, weight))
+    weights = [z for x, y, z in u_edges]
+    if weights:
+        max_weight = max(weights)
+        if max_weight:
+            weights_normed = [w / max_weight for w in weights]
+        else:
+            weights_normed = weights
+        # u : uproj
+        uset_conv = {k: j for k, j in zip(ulist, range(len(ulist)))}
+        uset_conv_inv = {v: k for k, v in uset_conv.items()}
+        edges = [(uset_conv[x], uset_conv[y]) for x, y, z in u_edges]
+        g = ig.Graph(edges, directed=False)
+        communities = g.community_infomap(edge_weights=weights_normed)
+        comm_df = pd.DataFrame(communities.membership,
+                               index=[v.index for v in g.vs], columns=['comm_id'])
+        # comm_id : size
+        comm_size_dict = comm_df['comm_id'].value_counts().to_dict()
+        # u_proj : comm_id
+        uset_comm_dict = comm_df.loc[list(uset_conv.values())]['comm_id'].to_dict()
+        if verbose:
+            print('uset_conv: ', uset_conv)
+            print('uset_conv_inv: ', uset_conv_inv)
+
+            print('comm_size_dict', comm_size_dict)
+            print('comm_df len', comm_df.shape)
+            print('ulist: ', ulist)
+
+        commsize_ncomm_usize = [(comm_size_dict[uset_comm_dict[uset_conv[u]]],
+                                 len(communities),
+                                 len(g.clusters()),
+                                 uset_comm_dict[uset_conv[u]],
+                                 comm_size_dict[uset_comm_dict[uset_conv[u]]] / len(ulist))
+                                for u in ulist]
+    else:
+        commsize_ncomm_usize = [(1,
+                                 len(ulist),
+                                 len(ulist),
+                                 0,
+                                 1 / len(ulist)) for u in ulist]
     return commsize_ncomm_usize
