@@ -265,8 +265,8 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
 
     # add co-citation (future and past), coauthorship and co-affiliation metrics
     metric_sources = ['authors', 'affiliations', 'future', 'past']
-    # metric_types = ['support', 'affinity']
-    metric_types = ['support', 'affinity', 'modularity']
+    metric_types = ['support', 'affinity']
+    # metric_types = ['support', 'affinity', 'modularity']
     if verbose:
         print('support, affiliation, modularity metrics')
 
