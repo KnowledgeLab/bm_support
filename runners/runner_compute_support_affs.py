@@ -100,10 +100,8 @@ for window_size in window_sizes:
 
         print([(k, (len(pm_affs_dict[k]), sorted(pm_affs_dict[k])[:5])) for k in sorted_keys[-5:]])
 
-        dfr3 = dfy.groupby([up, dn]).apply(lambda x: compute_modularity_index(x, pm_affs_dict, pm_wid_dict,
-                                                                              ye, window_size,
-                                                                              use_wosids=False,
-                                                                              disjoint_uv=disjoint_uv,
+        dfr3 = dfy.groupby([up, dn]).apply(lambda x: compute_modularity_index(x, pm_affs_dict, pm_wid_dict, ye,
+                                                                              window_size, disjoint_uv=disjoint_uv,
                                                                               verbose=verbosity))
         print(dfr3.shape)
         dfr3 = dfr3.reset_index()
@@ -120,12 +118,9 @@ for window_size in window_sizes:
 
     # modularity reduced
     if red_mod_flag:
-        dfr4 = dfy.groupby([up, dn]).apply(lambda x: compute_modularity_index(x, pm_affs_dict, pm_wid_dict,
-                                                                              ye, window_size,
-                                                                              use_wosids=False,
-                                                                              disjoint_uv=disjoint_uv,
-                                                                              modularity_mode='u',
-                                                                              verbose=verbosity))
+        dfr4 = dfy.groupby([up, dn]).apply(lambda x: compute_modularity_index(x, pm_affs_dict, pm_wid_dict, ye,
+                                                                              window_size, disjoint_uv=disjoint_uv,
+                                                                              modularity_mode='u', verbose=verbosity))
         print(dfr4.shape)
         dfr4 = dfr4.reset_index()
 

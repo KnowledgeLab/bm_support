@@ -94,8 +94,8 @@ for window_size in window_sizes:
     # modularity
     if mod_flag:
 
-        dfr3 = dfy.groupby([up, dn]).apply(lambda x: compute_modularity_index(x, cites_dict, pm_wid_dict,
-                                                                              ye, window_size, disjoint_uv=disjoint_uv))
+        dfr3 = dfy.groupby([up, dn]).apply(lambda x: compute_modularity_index(x, cites_dict, pm_wid_dict, ye,
+                                                                              window_size, disjoint_uv=disjoint_uv))
         dfr3 = dfr3.reset_index()
 
         dfr3 = dfr3.drop(['level_2'], axis=1)
@@ -110,12 +110,9 @@ for window_size in window_sizes:
 
     # modularity reduced
     if red_mod_flag:
-        dfr4 = dfy.groupby([up, dn]).apply(lambda x: compute_modularity_index(x, cites_dict, pm_wid_dict,
-                                                                              ye, window_size,
-                                                                              use_wosids=True,
-                                                                              disjoint_uv=disjoint_uv,
-                                                                              modularity_mode='u',
-                                                                              verbose=verbosity))
+        dfr4 = dfy.groupby([up, dn]).apply(lambda x: compute_modularity_index(x, cites_dict, pm_wid_dict, ye,
+                                                                              window_size, disjoint_uv=disjoint_uv,
+                                                                              modularity_mode='u', verbose=verbosity))
         print(dfr4.shape)
         dfr4 = dfr4.reset_index()
 

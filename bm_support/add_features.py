@@ -635,6 +635,7 @@ def get_mapping_data(metric_type, dfy, df_pm_wid):
     :param df_pm_wid:
     :return:
     """
+    print('get_mapping_data for {0}'.format(metric_type))
     if metric_type == 'affiliations':
         aff_dict_fname = expanduser('~/data/wos/affs_disambi/pm2id_dict.pgz')
         if aff_dict_fname:
@@ -700,7 +701,7 @@ def get_mapping_data(metric_type, dfy, df_pm_wid):
         # produce cites_dict
         uv_dict = dict(df.groupby('wos_id_int').apply(lambda x: list(x['uid_int'].values)))
 
-        df_pm_wid = df_pm_wid.loc[df_pm_wid['wos_id'].isin(wids2analyze)]
+        df_pm_wid = df_pm_wid.loc[df_pm_wid['wos_id'].isin(wids2analyze)].copy()
         df_pm_wid['wos_id_int'] = df_pm_wid['wos_id'].apply(lambda x: w2i[x])
         pm_wid_dict = dict(df_pm_wid[[pm, 'wos_id_int']].values)
 
@@ -715,7 +716,7 @@ def get_mapping_data(metric_type, dfy, df_pm_wid):
 
         df_pm_wid['wos_id_stripped'] = df_pm_wid['wos_id'].apply(lambda x: x[4:])
         df_pm_wid['wos_id_int'] = df_pm_wid['wos_id_stripped'].apply(lambda x: w2i[x] if x in w2i.keys() else np.nan)
-        df_pm_wid = df_pm_wid[~df_pm_wid['wos_id_int'].isnull()]
+        df_pm_wid = df_pm_wid[~df_pm_wid['wos_id_int'].isnull()].copy()
         df_pm_wid['wos_id_int'] = df_pm_wid['wos_id_int'].astype(int)
         pm_wid_dict = dict(df_pm_wid[[pm, 'wos_id_int']].values)
 
@@ -727,3 +728,19 @@ def get_mapping_data(metric_type, dfy, df_pm_wid):
         pm_wid_dict = {}
 
     return uv_dict, pm_wid_dict
+
+
+def get_mapping_data_reduced(metric_type, dfy, df_pm_wid):
+    """
+    map wids to pmids if the mapping is present
+    :param metric_type:
+    :param dfy:
+    :param df_pm_wid:
+    :return:
+    """
+    uv_dict, pm_wid_dict = get_mapping_data(metric_type, dfy, df_pm_wid)
+    if pm_wid_dict:
+        wid_pm_map = {v: k for k, v in pm_wid_dict.items()}
+        uv_dict = {wid_pm_map[k]: v for k, v in uv_dict.items() if k in wid_pm_map.keys()}
+
+    return uv_dict
