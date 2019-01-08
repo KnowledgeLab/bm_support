@@ -1080,10 +1080,14 @@ def cluster_optimally_pd(data, nc_max=2, min_size=5):
     return pd.DataFrame(r, index=data.index, columns=columns)
 
 
-def clean_zeros(arr, p_min):
+def clean_zeros(arr, p_min, verbose=False):
     arr2 = arr.copy()
     arr2[arr2 == 0.0] = p_min
-    arr2 = arr2/np.sum(arr, axis=1).reshape(-1)[:, np.newaxis]
+    if verbose:
+        print(np.sum(arr2, axis=1)[:5])
+    arr2 = arr2/np.sum(arr2, axis=1).reshape(-1)[:, np.newaxis]
+    if verbose:
+        print(np.sum(arr2, axis=1)[:5])
     return arr2
 
 # def optimal_2split(data, verbose=False):
