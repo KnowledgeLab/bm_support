@@ -1,5 +1,4 @@
-from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, nw, wi, dist, rdist, pm, \
-                                    cpop, cden, ct, affs, aus
+from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, nw, wi, dist, rdist, pm
 from os.path import expanduser, join
 import pandas as pd
 from bm_support.add_features import generate_feature_groups
@@ -69,12 +68,6 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
     # mask: literome - mask out a specific interaction
     mask_lit = (df[up] == 7157) & (df[dn] == 1026)
 
-    # mask:  interaction with more than 3 claims
-    thr = 3
-    mask_len_ = (df.groupby(ni).apply(lambda x: x.shape[0]) > thr)
-    mask_max_len = df[ni].isin(mask_len_[mask_len_].index)
-    print(mask_max_len.shape[0], sum(mask_max_len))
-
     # mask : interactions which are between
     eps_window_mean = 0.1
     mean_col = 0.5
@@ -117,7 +110,12 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
 
     dfw = df.loc[mask_agg].copy()
 
-    #metric to optimize for
+    thr = 2
+    mask_len_ = (dfw.groupby([up, dn]).apply(lambda x: x.shape[0]) > thr)
+    updns = mask_len_[mask_len_].reset_index()[[up, dn]]
+    dfw = dfw.merge(updns, how='right', on=[up, dn])
+
+    # metric to optimize for
     mm = 'precision'
     mm = 'accuracy'
 
