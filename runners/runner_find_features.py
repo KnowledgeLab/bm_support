@@ -80,7 +80,7 @@ def run(origin, version, an_version, model_type, n_trials, n_subtrials, n_estima
 
     families = select_feature_families(an_version)
     feature_dict = {k: v for k, v in feature_dict.items() if k in families}
-    excl_columns = list(set(excl_columns) | set([target]))
+    excl_columns = list(set(excl_columns) | {target})
 
     feature_dict = {k: list(v) for k, v in feature_dict.items() if not any([c in v for c in excl_columns])}
 

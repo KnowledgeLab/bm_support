@@ -79,4 +79,22 @@ def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4, 
 
     df_train = df.merge(keys_train, how='inner', on=agg_columns)
     df_test = df.merge(keys_test, how='inner', on=agg_columns)
+    if verbose:
+        counts = df_train.groupby(agg_columns).apply(lambda x: x.shape[0])
+        vcs = counts.value_counts()
+        xs = np.log(np.array(vcs.index))
+        ys = np.log(vcs.values)
+        reg = LinearRegression().fit(xs[:head].reshape(-1, 1), ys[:head])
+        beta_train = reg.coef_[0]
+
+        counts = df_test.groupby(agg_columns).apply(lambda x: x.shape[0])
+        vcs = counts.value_counts()
+        xs = np.log(np.array(vcs.index))
+        ys = np.log(vcs.values)
+        reg = LinearRegression().fit(xs[:head].reshape(-1, 1), ys[:head])
+        beta_test = reg.coef_[0]
+        if verbose:
+            print('df_train power law exponent: {0:.3f}'.format(beta_train))
+            print('df_test power law exponent: {0:.3f}'.format(beta_test))
+
     return df_train, df_test

@@ -25,6 +25,7 @@ from sklearn.cluster import KMeans
 from scipy.stats import t as tdistr
 from .gap_stat import choose_nc
 from copy import deepcopy
+from numpy.random import RandomState
 
 problem_type_dict = {'rf': 'class', 'lr': 'class', 'rfr': 'regr', 'lrg': 'regr'}
 
@@ -265,23 +266,32 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
 
     # add co-citation (future and past), coauthorship and co-affiliation metrics
     metric_sources = ['authors', 'affiliations', 'future', 'past']
-    metric_types = ['support', 'affinity']
+    metric_types = ['support', 'affinity', 'linear']
     # metric_types = ['support', 'affinity', 'modularity']
     if verbose:
         print('support, affiliation, modularity metrics')
-
+    # (*** here)
     for mt in metric_types:
-        for ms in metric_sources:
+        if mt == 'linear':
+            metric_sources2 = metric_sources[:2]
+        else:
+            metric_sources2 = metric_sources
+        for ms in metric_sources2:
             if mt == 'affinity' or mt == 'modularity':
                 merge_cols = [up, dn, ye, pm]
             elif mt == 'support':
                 merge_cols = [up, dn, ye]
+            elif mt == 'linear':
+                merge_cols = [up, dn, pm]
             else:
                 raise ValueError('unsupported metric type')
             df_att = pd.read_csv(expanduser('~/data/wos/cites/{0}_metric_{1}.csv.gz'.format(mt, ms)))
             if mt == 'modularity':
-                cols = list(set(df_att.columns) - set([up, dn, ye, pm]))
+                cols = list(set(df_att.columns) - {up, dn, ye, pm})
                 rename_dict = {c: '{0}_{1}'.format(ms, c) for c in cols}
+            elif mt == 'linear':
+                cols = list(set(df_att.columns) - {up, dn, ye, pm})
+                rename_dict = {c: c for c in cols}
             else:
                 rename_dict = {c: '{0}_{1}'.format(ms, c) for c in df_att.columns if 'ind' in c}
             support_cols = [c for c in rename_dict.keys()] + merge_cols
@@ -669,6 +679,70 @@ def train_massif(dfw, feature_columns, y_column,
     return report, massif, df_test
 
 
+def train_massif_clean(df_train, feature_columns, y_column,
+                       seed_=11, n_throws=10, n_trees=10, ratios=None,
+                       min_samples_leaf=10):
+    massif = []
+
+    rns = RandomState(seed_)
+    seeds = rns.randint(10000, size=n_throws)
+
+    for seed_ in seeds:
+        dd = simple_stratify(df_train, y_column, seed_, ratios=ratios)
+        X_train, y_train = dd[feature_columns], dd[y_column]
+        rf_clf = RandomForestClassifier(n_trees, max_depth=None, random_state=seed_, min_samples_leaf=min_samples_leaf)
+        rf_clf = rf_clf.fit(X_train, y_train)
+        massif.append(rf_clf)
+    report = {}
+
+    importances = np.array([rf.feature_importances_ for rf in massif])
+    stds = np.array([np.std([tree.feature_importances_ for tree in rf.estimators_], axis=0) for rf in massif])
+
+    report['feature_importance'] = {}
+    report['feature_importance_std'] = {}
+
+    for k, rvs, errors in zip(feature_columns, importances.T, stds.T):
+        ls = np.ones(len(rvs))
+        mean = np.mean(rvs)
+        error = std_over_samples(ls, rvs, errors)
+        report['feature_importance'][k] = mean
+        report['feature_importance_std'][k] = error
+
+    return report, massif
+
+
+def train_massif_lr_clean(df_train, feature_columns, y_column,
+                           seed_=11, n_throws=10, n_trees=10, ratios=None):
+    massif = []
+
+    rns = RandomState(seed_)
+    seeds = rns.randint(10000, size=n_throws)
+
+    for seed_ in seeds:
+        dd = simple_stratify(df_train, y_column, seed_, ratios=ratios)
+        X_train, y_train = dd[feature_columns], dd[y_column]
+        rf_clf = LogisticRegression(n_trees, random_state=seed_)
+        rf_clf = rf_clf.fit(X_train, y_train)
+        massif.append(rf_clf)
+    report = {}
+
+    importances = np.array([rf.feature_importances_ for rf in massif])
+    stds = np.array([np.std([tree.feature_importances_ for tree in rf.estimators_], axis=0) for rf in massif])
+
+    report['feature_importance'] = {}
+    report['feature_importance_std'] = {}
+
+    for k, rvs, errors in zip(feature_columns, importances.T, stds.T):
+        ls = np.ones(len(rvs))
+        mean = np.mean(rvs)
+        error = std_over_samples(ls, rvs, errors)
+        report['feature_importance'][k] = mean
+        report['feature_importance_std'][k] = error
+
+    return report, massif
+
+
+
 def plot_importances(importances, stds, covariate_columns, fname, title_prefix, colors=None,
                      show=False, sort_them=False):
     """
@@ -927,16 +1001,21 @@ def invert_bayes(df_input, clf, feature_columns, p_min=1e-2, verbose=False, debu
     if isinstance(debug, np.ndarray):
         arr_probs = debug
     else:
-        arr_probs = clf.predict_proba(df[feature_columns])
+        if isinstance(clf, list):
+            p_min = np.float(5e-1/ clf[0].n_estimators)
+            probs = [rfm.predict_proba(df[feature_columns])[np.newaxis, ...] for rfm in clf]
+            arr_probs = np.concatenate(probs, axis=0)
+            arr_probs2 = clean_zeros(arr_probs, p_min, 2)
+            arr_probs2 = np.sum(arr_probs, axis=0)
+            arr_probs2 = arr_probs2 / np.sum(arr_probs2, axis=1)[..., np.newaxis]
+        else:
+            arr_probs = clf.predict_proba(df[feature_columns])
+            arr_probs2 = clean_zeros(arr_probs, p_min)
     if verbose:
         print('names of feature columns:', feature_columns)
         print('probs shape: ', arr_probs.shape)
+    # arr_probs2 = clean_zeros(arr_probs, p_min)
     arr_ps = df[ps].values
-    # p_min = np.float(5e-1/clf.n_estimators)
-    arr_probs2 = clean_zeros(arr_probs, p_min)
-    # arr_probs[arr_probs == 0.0] = p_min
-    # arr_probs2 = arr_probs/np.sum(arr_probs, axis=1).reshape(-1)[:, np.newaxis]
-
     tensor_claims = np.stack([1 - arr_ps, arr_ps])
     tensor_probs = np.stack([arr_probs2, arr_probs2[:, ::-1]])
     if verbose:
@@ -968,6 +1047,25 @@ def aggregate_over_claims(df, barrier):
     p_agg4 = p_agg4.merge(pd.DataFrame(df.drop_duplicates(ni)[[ni, 'qcdf_exp']]),
                           how='left', left_index=True, right_on=ni)
     return p_agg4
+
+
+def aggregate_over_claims_new(df, groupby_columns=(up, dn)):
+    pes = ['pe_{0}'.format(j) for j in range(3)]
+    p_agg = df.groupby(groupby_columns).apply(lambda x: np.sum(np.log(x[pes]), axis=0))
+    qcexp_pred = p_agg[pes].apply(lambda x: np.float(np.argmax(x.values)), axis=1)
+    qcexp_val = df.groupby(groupby_columns).apply(lambda x: x[qcexp].unique()[0])
+    return qcexp_val, qcexp_pred
+
+
+def aggregate_over_claims_comm(dfn, dft_comm, groupby_columns=(up, dn),
+                               groupby_columns2=(up, dn, pm), groupby_columns3=(up, dn, 'rcommid')):
+    pes = ['pe_{0}'.format(j) for j in range(3)]
+    dfn2 = dfn.merge(dft_comm, how='inner', on=groupby_columns2)
+    dfn3 = dfn2.groupby(groupby_columns3).apply(lambda x: np.mean(np.log(x[pes]), axis=0)).reset_index()
+    p_agg = dfn3.groupby(groupby_columns).apply(lambda x: np.sum(x[pes], axis=0))
+    qcexp_pred = p_agg[pes].apply(lambda x: np.float(np.argmax(x.values)), axis=1)
+    qcexp_val = dfn2.groupby(groupby_columns).apply(lambda x: x[qcexp].unique()[0])
+    return qcexp_val, qcexp_pred
 
 
 def kmeans_cluster(data, n_classes=2, seed=11, tol=1e-6, verbose=False, return_flags=True):
@@ -1080,14 +1178,14 @@ def cluster_optimally_pd(data, nc_max=2, min_size=5):
     return pd.DataFrame(r, index=data.index, columns=columns)
 
 
-def clean_zeros(arr, p_min, verbose=False):
+def clean_zeros(arr, p_min, sumaxis=1, verbose=False):
     arr2 = arr.copy()
     arr2[arr2 == 0.0] = p_min
     if verbose:
-        print(np.sum(arr2, axis=1)[:5])
-    arr2 = arr2/np.sum(arr2, axis=1).reshape(-1)[:, np.newaxis]
+        print(np.sum(arr2, axis=sumaxis)[:5])
+    arr2 = arr2/np.sum(arr2, axis=sumaxis)[...,  np.newaxis]
     if verbose:
-        print(np.sum(arr2, axis=1)[:5])
+        print(np.sum(arr2, axis=sumaxis)[:5])
     return arr2
 
 # def optimal_2split(data, verbose=False):
@@ -1500,6 +1598,21 @@ def report_metrics(model, X_test, y_test, mode_scores=None, metric_uniform_expon
                    problem_type='class'):
 
     y_pred = model.predict(X_test)
+
+    report = report_metrics_(y_test, y_pred, mode_scores, metric_uniform_exponent, metric_mode,
+                             problem_type)
+    if problem_type == 'class':
+        nclasses = len(set(y_test))
+        positive_proba = model.predict_proba(X_test)
+        y_test_binary = label_binarize(y_test, classes=np.arange(0.0, nclasses))
+        auroc = [roc_auc_score(y_, proba_) for proba_, y_ in zip(positive_proba.T, y_test_binary.T)]
+        report['auroc'] = auroc
+    return report
+
+
+def report_metrics_(y_test, y_pred, mode_scores=None, metric_uniform_exponent=0.5, metric_mode='accuracy',
+                    problem_type='class'):
+
     report = dict()
     # NB corr might be NaN
     report['corr'] = np.corrcoef(y_pred, y_test)[0, 1]
@@ -1518,7 +1631,7 @@ def report_metrics(model, X_test, y_test, mode_scores=None, metric_uniform_expon
         report['macro']['recall'] = recall_score(y_test, y_pred, average='macro')
         report['macro']['f1'] = f1_score(y_test, y_pred, average='macro')
 
-        nclasses = report['vector']['precision'] .shape[0]
+        nclasses = report['vector']['precision'].shape[0]
 
         report['exponent'] = dict()
         report['exponent'] = {k: np.sum(v ** metric_uniform_exponent)/nclasses for k, v in report['vector'].items()}
@@ -1530,14 +1643,11 @@ def report_metrics(model, X_test, y_test, mode_scores=None, metric_uniform_expon
 
         report['conf'] = confusion_matrix(y_test, y_pred)
 
-        positive_proba = model.predict_proba(X_test)
-        y_test_binary = label_binarize(y_test, classes=np.arange(0.0, nclasses))
-        auroc = [roc_auc_score(y_, proba_) for proba_, y_ in zip(positive_proba.T, y_test_binary.T)]
-        report['auroc'] = auroc
     else:
         report['mse'] = np.sum((1 - y_test/y_pred)**2)**0.5/y_pred.shape[0]
         report['main_metric'] = -report['mse']
     return report
+
 
 
 def logit_pvalue(model, x):

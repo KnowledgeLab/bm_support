@@ -5,12 +5,12 @@ from os.path import expanduser
 
 an_version = 12
 
-origin = 'gw'
-version = 11
-hash_int = 471980
-# origin = 'lit'
-# version = 8
-# hash_int = 502784
+# origin = 'gw'
+# version = 11
+# hash_int = 471980
+origin = 'lit'
+version = 8
+hash_int = 502784
 
 batchsize = 1
 cutoff_len = 1
@@ -64,8 +64,10 @@ df2_ = prepare_final_df(df, normalize=True, columns_normalize=cols_norm,
                         columns_normalize_by_interaction=cols_norm_by_int,
                         quantize_intervals=thrs, aff_dict_fname=aff_dict_fname,
                         masks=masks, cutoff=None,
-                        add_cite_fits=True,
+                        add_cite_fits=True, define_visible_prior=True,
                         verbose=True)
+
+
 print('df2_ size {0}, df2_ unique [up, dn, pm] {1}'.format(df2_.shape[0],
                                                            df2_.drop_duplicates([up, dn, pm]).shape[0]))
 df2_ = df2_.drop_duplicates([up, dn, pm])

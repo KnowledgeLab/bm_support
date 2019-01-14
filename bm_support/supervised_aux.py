@@ -4,6 +4,12 @@ from .supervised import simple_stratify
 from .supervised import problem_type_dict
 from .supervised import select_features_dict, logit_pvalue, linear_pvalue, report_metrics
 import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import precision_score
+import pandas as pd
+import matplotlib.pyplot as plt
+from datahelpers.constants import up, dn
+
 
 metric_selector = dict(zip(['corr', 'accuracy', 'precision', 'recall', 'f1'], range(5)))
 
@@ -136,3 +142,56 @@ def study_sample(seed, dfw, target, feature_dict,
         report_dict['pval_errors'] = meta_agg[index_best_run]['pval_errors']
 
     return report_dict, meta_agg
+
+
+def find_optimal_model(X_train, y_train, max_features=None, verbose=False):
+    def foo(x):
+        clf = LogisticRegression('l1', C=x)
+        clf.fit(X_train, y_train)
+        y_pred = clf.predict(X_train)
+        acc = precision_score(y_train, y_pred,  pos_label=0)
+        nzero = X_train.shape[1] - np.sum(clf.coef_ == 0., axis=1)
+        # if acc > 1e-2:
+        if verbose:
+            print('c: {0:.3f}, acc: {1:.4f}, non zero coeffs: {2}'.format(x, acc, nzero))
+        return acc, clf
+    penalties = [10**p for p in np.arange(-2, 2.1, 0.1)]
+    grid = [foo(p) for p in penalties]
+    accs = [x for x, _ in grid]
+    if max_features:
+        clfs = [x for _, x in grid]
+        co_nzero_lens = [sum(clf.coef_[0] != 0) for clf in clfs]
+        co_len_condition = [True if x <= max_features else False for x in co_nzero_lens]
+        accs = [acc for acc, flag in zip(accs, co_len_condition) if flag]
+        clfs = [clf for clf, flag in zip(clfs, co_len_condition) if flag]
+    if accs:
+        ii = np.argmax(accs)
+        clf = clfs[ii]
+        return clf, penalties[ii], accs[ii]
+    else:
+        return None, 0, 0.
+
+
+def produce_topk_model(clf, dft, features, target, plot_title=None, verbose=False):
+    dft = dft.copy()
+    y_test = dft[target]
+    if verbose:
+        print('Freq of 1s: {0}'.format(sum(dft[target])/dft.shape[0]))
+    p_pos = clf.predict_proba(dft[features])[:, 0]
+    dft['proba_pos'] = pd.Series(p_pos, index=dft.index)
+    p_level_base = 1. - dft[target].sum()/dft.shape[0]
+    top_ps = np.arange(0.02, 3*p_level_base, 0.02)
+    precs = []
+    for p_level in top_ps:
+        p_thr = np.percentile(p_pos, 100*(1-p_level))
+        y_pred = 1. - (dft['proba_pos'] > p_thr).astype(int)
+        precs.append(precision_score(y_test, y_pred,  pos_label=0))
+    baseline = 1.0 - sum(dft[target])/dft.shape[0]
+    if plot_title:
+        plt.plot(top_ps, precs)
+        plt.axhline(y=baseline, color='r')
+        plt.ylim([0, np.round(np.max(precs), 1) + 0.3])
+        plt.title(plot_title)
+    y_pred = clf.predict(dft[features])
+    p_norm = precision_score(y_test, y_pred, pos_label=0)
+    return top_ps, precs, p_norm

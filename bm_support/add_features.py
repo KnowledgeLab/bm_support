@@ -5,7 +5,7 @@ from sklearn.preprocessing import MinMaxScaler
 from datahelpers.dftools import agg_file_info
 from os import listdir
 from os.path import isfile, join, expanduser
-from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, dist, rdist, pm, ct, affs, aus
+from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, dist, rdist, pm, ct, affs, aus, bdist
 from datahelpers.dftools import select_appropriate_datapoints, add_column_from_file
 import Levenshtein as lev
 from functools import partial
@@ -144,6 +144,7 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
                      add_cite_fits=False,
                      min_len=-1,
                      max_len=None,
+                     define_visible_prior=False,
                      verbose=False):
 
     mask_len_ = (df.groupby(ni).apply(lambda x: x.shape[0]) > min_len)
@@ -236,6 +237,21 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
         if verbose:
             print('{0} entries were not identified in wos db  ({1:.1f}%)'.format(report_nas,
                                                                                  100*report_nas/dft3.shape[0]))
+    dft[bdist] = 1.0
+    mask = (2 * dft[ps] == dft[qcexp])
+    dft.loc[mask, bdist] = 0.0
+
+    if define_visible_prior:
+        mns = dft.groupby([up, dn, ye]).apply(lambda x: pd.Series([x[bdist].sum(), x.shape[0]],
+                                                                  index=['mu', 's']))
+        mns2 = mns.groupby(level=[0, 1]).apply(lambda x: pd.DataFrame(np.array([np.cumsum(x['mu']),
+                                                                                np.cumsum(x['s'])]).T,
+                                                                      index=x.index.get_level_values(2),
+                                                                      columns=['csmu', 'cssum']))
+        mns2['mu'] = mns2['csmu'] / mns2['cssum']
+        mns3 = mns2['mu'].groupby(level=[0, 1]).apply(lambda x: x.shift())
+        mns3 = mns3.reset_index().rename(columns={'mu': 'obs_mu'})
+        dft = dft.merge(mns3, on=[up, dn, ye])
 
     if normalize:
         if verbose:
@@ -550,6 +566,9 @@ def generate_feature_groups(columns_filename, verbose=True):
     col_families['citations'] = ['yearspan_flag', 'len_flag', 'succfit_flag', 'mu', 'sigma',
                                  'A', 'A_log', 'A_log_sigma', 'err', 'int_3', 'int_3_log', 'int_3_log_sigma']
     col_families['time'] = ['year_off', 'year_off2']
+    col_families['authors_count'] = ['authors_count']
+    col_families['affiliations_count'] = ['affiliations_count']
+    col_families['obs_mu'] = ['obs_mu']
 
     # col_families['cden'].append('pop_density')
 
@@ -584,13 +603,29 @@ def select_feature_families(an_version):
                 'future_suppind', 'future_affind',
                 'cpop', 'cden', 'ksst',
                 'lincscomm_size', 'lincssame_comm',
-                'litgweff_comm_size', 'litgwsame_comm',
+                'litgwcomm_size', 'litgwsame_comm',
                 'ai', 'ar', 'citations', 'cite_count', 'nhi', 'delta_year', 'time'
+                ]
+
+    full_families_new = [
+                'affiliations_comm_size', 'affiliations_ncomms', 'affiliations_ncomponents',
+                'affiliations_suppind', 'affiliations_affind',
+                'authors_comm_size', 'authors_ncomms', 'authors_ncomponents',
+                'authors_suppind', 'authors_affind',
+                'past_comm_size', 'past_ncomms', 'past_ncomponents',
+                'past_suppind', 'past_affind',
+                'future_comm_size', 'future_ncomms', 'future_ncomponents',
+                'future_suppind', 'future_affind',
+                'cpop', 'cden', 'ksst',
+                'lincscomm_size', 'lincssame_comm',
+                'litgwcomm_size', 'litgwsame_comm',
+                'ai', 'ar', 'citations', 'cite_count', 'nhi', 'delta_year', 'time',
+                'authors_count', 'affiliations_count', 'obs_mu'
                 ]
 
     comm_families = [
         'lincscomm_size', 'lincssame_comm',
-        'litgweff_comm_size', 'litgwsame_comm',
+        'litgwcomm_size', 'litgwsame_comm',
     ]
 
     indep_families = [
@@ -616,14 +651,73 @@ def select_feature_families(an_version):
         'cpop', 'cden', 'ksst'
     ]
 
+    nosame_nodelta_families = [
+                'affiliations_comm_size', 'affiliations_ncomms', 'affiliations_ncomponents',
+                'affiliations_suppind', 'affiliations_affind',
+                'authors_comm_size', 'authors_ncomms', 'authors_ncomponents',
+                'authors_suppind', 'authors_affind',
+                'past_comm_size', 'past_ncomms', 'past_ncomponents',
+                'past_suppind', 'past_affind',
+                'future_comm_size', 'future_ncomms', 'future_ncomponents',
+                'future_suppind', 'future_affind',
+                'cpop', 'cden', 'ksst',
+                'lincscomm_size', 'lincssame_comm',
+                'litgwcomm_size',
+                'ai', 'ar', 'citations', 'cite_count', 'nhi', 'time'
+                ]
+
+    denindep_litgw_families = [
+        'litgwcomm_size',
+        'affiliations_comm_size',
+        'affiliations_suppind', 'affiliations_affind',
+        'authors_comm_size',
+        'authors_suppind', 'authors_affind',
+        'past_comm_size',
+        'past_suppind', 'past_affind',
+        'future_comm_size',
+        'future_suppind', 'future_affind',
+        'cpop', 'cden', 'ksst'
+    ]
+
+    indiv_families = [
+                'cpop', 'cden', 'ksst',
+                'ai', 'ar', 'citations', 'cite_count', 'nhi', 'delta_year', 'time'
+                ]
+
+    full_nocomm = [
+                'affiliations_comm_size', 'affiliations_ncomms', 'affiliations_ncomponents',
+                'affiliations_suppind', 'affiliations_affind',
+                'authors_comm_size', 'authors_ncomms', 'authors_ncomponents',
+                'authors_suppind', 'authors_affind',
+                'past_comm_size', 'past_ncomms', 'past_ncomponents',
+                'past_suppind', 'past_affind',
+                'future_comm_size', 'future_ncomms', 'future_ncomponents',
+                'future_suppind', 'future_affind',
+                'cpop', 'cden', 'ksst',
+                'ai', 'ar', 'citations', 'cite_count', 'nhi', 'delta_year', 'time',
+                'authors_count', 'affiliations_count', 'obs_mu'
+                ]
+
     version_selector = dict()
 
     version_selector['full'] = full_families
     version_selector['communities'] = comm_families
     version_selector['indep'] = indep_families
     version_selector['denindep'] = denindep_families
+    version_selector['nosame_nodelta'] = nosame_nodelta_families
+    version_selector['denindep_litgw'] = denindep_litgw_families
+    version_selector['indiv'] = indiv_families
+    version_selector['nfull'] = full_families_new
+    version_selector['nfull_nocomm'] = full_nocomm
 
-    an_version_selector = {15: 'full', 16: 'communities', 17: 'indep', 18: 'denindep'}
+    an_version_selector = {15: 'full', 16: 'communities',
+                           17: 'indep', 18: 'denindep',
+                           19: 'nosame_nodelta',
+                           20: 'denindep_litgw',
+                           21: 'indiv',
+                           22: 'nfull',
+                           23: 'nfull_nocomm'}
+
     return version_selector[an_version_selector[an_version]]
 
 
@@ -744,3 +838,35 @@ def get_mapping_data_reduced(metric_type, dfy, df_pm_wid):
         uv_dict = {wid_pm_map[k]: v for k, v in uv_dict.items() if k in wid_pm_map.keys()}
 
     return uv_dict
+
+
+def transform_last_stage(df, trial_features, origin, len_thr=2, normalize=False, verbose=False):
+    masks = []
+    mask_lit = (df[up] == 7157) & (df[dn] == 1026)
+
+    for c in trial_features:
+        # print(c)
+        masks.append(df[c].notnull())
+
+    mask_notnull = pd.Series([True]*df.shape[0], index=df.index)
+    for m in masks:
+        mask_notnull &= m
+    if verbose:
+        print('Number of trial features: {0}'.format(len(trial_features)))
+        print('Number of notnull entries (over all features): {0} from {1}'.format(sum(mask_notnull),
+                                                                                   mask_notnull.shape))
+
+    if origin != 'gw':
+        mask_agg = mask_notnull & ~mask_lit
+    else:
+        mask_agg = mask_notnull
+
+    dfw = df.loc[mask_agg].copy()
+    print(sum(dfw['obs_mu'].isnull()))
+
+    mask_len_ = (dfw.groupby([up, dn]).apply(lambda x: x.shape[0]) > len_thr)
+    updns = mask_len_[mask_len_].reset_index()[[up, dn]]
+    dfw = dfw.merge(updns, how='right', on=[up, dn])
+    if normalize:
+        dfw = normalize_columns(dfw, trial_features)
+    return dfw

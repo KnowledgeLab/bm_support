@@ -1,6 +1,6 @@
 import pandas as pd
 from datahelpers.constants import ye, up, dn, pm, aus
-from bm_support.bigraph_support import compute_support_index
+from bm_support.bigraph_support import compute_support_index, calculate_batch_numsum
 from bm_support.bigraph_support import compute_affinity_index, compute_modularity_index
 from bm_support.bigraph_support import compute_modularity_index_multipart, compute_modularity_index_gen
 from bm_support.add_features import get_mapping_data, get_mapping_data_reduced
@@ -243,6 +243,53 @@ def main(head, window_sizes, flag_dict, metric_type, verbosity=False):
                           compression='gzip')
 
 
+def main_linear(head, metric_type, verbosity=False):
+    print('in main_linear()')
+    random.seed(13)
+
+    df_pm_wid = pd.read_csv(expanduser('~/data/wos/cites/wosids.csv.gz'), index_col=0)
+    dfy = pd.read_csv(expanduser('~/data/wos/pmids/updnyearpmid_all.csv.gz'), index_col=0)
+
+    if verbosity:
+        print('metric type: {0}'.format(metric_type))
+    uv_dict, pm_wid_dict = get_mapping_data(metric_type, dfy, df_pm_wid)
+
+    if verbosity:
+        print('number of rows in dfy: {0}'.format(dfy.shape[0]))
+        print('len pm_wid_dict {0}'.format(len(pm_wid_dict)))
+        print('len pm_aus_dict {0}'.format(len(uv_dict)))
+
+    if head > 0:
+        dfy = dfy.head(head)
+
+    df_agg_supp = []
+
+    times = [time.time()]
+
+    dfr = dfy.groupby([up, dn]).apply(lambda x: calculate_batch_numsum(x, uv_dict))
+    dfr = dfr.reset_index()
+    dfr = dfr.drop(['level_2'], axis=1)
+    dfr = dfr.set_index([up, dn, pm]).rename(columns={'count': '{0}_count'.format(metric_type)})
+    print(dfr.head())
+    times.append(time.time())
+    print('linear, window size {0:.2f} sec elapsed'.format(times[-1] - times[-2]))
+
+    for y, d in zip(window_sizes, df_agg_supp):
+        print(y, d.shape)
+
+    # dft = pd.concat(df_agg_supp, axis=1)
+    print('supp concat shape: ', dfr.shape)
+    print('Support: fractions of indices that are non zero:')
+    # for c in [col for col in dft if 'ind' in col]:
+    #     print('{0} : {1:.2f} %'.format(c, 100*sum(dft[c] != 0)/dft.shape[0]))
+    if head < 0:
+        dfr.to_csv(expanduser('~/data/wos/linear_metrics/linear_metric_{0}.csv.gz'.format(metric_type)),
+                   compression='gzip')
+    else:
+        dfr.to_csv(expanduser('~/data/wos/linear_metrics/linear_metric_{0}_tmp2.csv.gz'.format(metric_type)),
+                   compression='gzip')
+
+
 if __name__ == "__main__":
 
     """
@@ -276,7 +323,7 @@ if __name__ == "__main__":
                         help='take head rows')
 
     parser.add_argument('-f', '--flag',
-                        default=False,
+                        default='multi',
                         help='flag if to use multi')
 
     parser.add_argument('-v', '--verbosity',
@@ -289,12 +336,17 @@ if __name__ == "__main__":
     extra = {k: False for k in list({'support', 'affinity', 'mod', 'redmod'} - set(args.metrics))}
     metrics_dict.update(extra)
 
-    if args.flag:
+    if args.flag == 'multi':
         main_multipart(args.head, window_sizes, args.metric_type,  args.verbosity)
-    else:
+    elif args.flag == 'supp':
         for mt in args.metric_type:
             print('metric type {0} : running... '.format(mt))
             main(args.head, window_sizes, metrics_dict, mt, args.verbosity)
+    elif args.flag == 'linear':
+        for mt in args.metric_type:
+            print('metric type {0} : running... '.format(mt))
+            main_linear(args.head, mt, args.verbosity)
 
-
+    else:
+        print('dry... ')
 

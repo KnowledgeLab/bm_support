@@ -553,3 +553,44 @@ def compute_comm_structure_reduced_graph(uv_list, multi=False, verbose=False):
                                  0,
                                  1 / len(ulist)) for u in ulist]
     return commsize_ncomm_usize
+
+
+def calculate_batch_numsum(data, bipart_edges_dict, verbose=False):
+    vn = 'vnode'
+    slist = data.apply(lambda x: [(x[pm], x[ye], y) for y in
+                                  (bipart_edges_dict[x[pm]] if x[pm] in bipart_edges_dict.keys() else [])], axis=1)
+
+    flat_list = [x for sublist in slist for x in sublist]
+    if verbose:
+        print(data.shape)
+    if verbose:
+        print(flat_list)
+    if flat_list:
+        uv_edges_df = pd.DataFrame(flat_list, columns=[pm, ye, vn])
+        uv_year = uv_edges_df.groupby([vn, ye]).apply(lambda x: x.shape[0])
+        uv_year_cumsum = uv_year.groupby(level=0).apply(lambda x: np.cumsum(x))
+        uv_year_cumsum_observed = uv_year_cumsum.groupby(level=0).apply(lambda x: x.shift())
+        if verbose:
+            print('***')
+            print(uv_year_cumsum_observed.shape)
+        uv_year_cumsum_observed.loc[~uv_year_cumsum_observed.notnull()] = 0.0
+        uv_year_cumsum_observed.name = 'count'
+        uv_year_cumsum_observed = uv_year_cumsum_observed.reset_index()
+        if verbose:
+            print('***')
+            print(uv_edges_df.head())
+            print(uv_year_cumsum_observed.head())
+
+        ultimate_df = pd.merge(uv_edges_df, uv_year_cumsum_observed, on=[vn, ye], how='inner')
+        take_max = ultimate_df.groupby([pm, ye]).apply(lambda x: x['count'].max())
+        take_max.name = 'count'
+        take_max = take_max.reset_index()
+    else:
+        take_max = pd.DataFrame([], columns=[pm, 'count'])
+    pm_absent = list(set(data[pm]) - set(bipart_edges_dict.keys()))
+    if verbose:
+        print(len(pm_absent))
+    take_max_absent = pd.DataFrame([(p, 0.) for p in pm_absent], columns=[pm, 'count'])
+    ultimate_df = pd.concat([take_max[[pm, 'count']], take_max_absent])
+    return ultimate_df[[pm, 'count']]
+    # return take_max, take_max_absent
