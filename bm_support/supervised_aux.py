@@ -5,9 +5,10 @@ from .supervised import problem_type_dict
 from .supervised import select_features_dict, logit_pvalue, linear_pvalue, report_metrics
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import precision_score
+from sklearn.metrics import precision_score, recall_score, roc_auc_score, roc_curve
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 from datahelpers.constants import up, dn
 
 
@@ -172,7 +173,7 @@ def find_optimal_model(X_train, y_train, max_features=None, verbose=False):
         return None, 0, 0.
 
 
-def produce_topk_model(clf, dft, features, target, plot_title=None, verbose=False):
+def produce_topk_model(clf, dft, features, target, verbose=False):
     dft = dft.copy()
     y_test = dft[target]
     if verbose:
@@ -182,16 +183,97 @@ def produce_topk_model(clf, dft, features, target, plot_title=None, verbose=Fals
     p_level_base = 1. - dft[target].sum()/dft.shape[0]
     top_ps = np.arange(0.02, 3*p_level_base, 0.02)
     precs = []
+    recs = []
     for p_level in top_ps:
         p_thr = np.percentile(p_pos, 100*(1-p_level))
         y_pred = 1. - (dft['proba_pos'] > p_thr).astype(int)
         precs.append(precision_score(y_test, y_pred,  pos_label=0))
-    baseline = 1.0 - sum(dft[target])/dft.shape[0]
-    if plot_title:
-        plt.plot(top_ps, precs)
-        plt.axhline(y=baseline, color='r')
-        plt.ylim([0, np.round(np.max(precs), 1) + 0.3])
-        plt.title(plot_title)
+        recs.append(recall_score(y_test, y_pred,  pos_label=0))
+
+    metrics_dict = {'level': top_ps, 'prec': precs, 'rec': recs}
+
+    base_prec = 1.0 - sum(dft[target])/dft.shape[0]
+
+    metrics_dict['prec_base'] = base_prec
+
     y_pred = clf.predict(dft[features])
-    p_norm = precision_score(y_test, y_pred, pos_label=0)
-    return top_ps, precs, p_norm
+    y_prob = clf.predict_proba(dft[features])[:, 0]
+
+    metrics_dict['prec0'] = precision_score(y_test, y_pred, pos_label=0)
+    metrics_dict['rec0'] = recall_score(y_test, y_pred, pos_label=0)
+
+    fpr, tpr, thresholds = roc_curve(y_test, y_prob, pos_label=0)
+    metrics_dict['roc_curve'] = fpr, tpr, thresholds
+
+    metrics_dict['auc'] = roc_auc_score(y_test, 1.-y_prob)
+
+    return metrics_dict
+
+
+def plot_prec_recall(metrics_dict, ax=None, title=None):
+
+    ax_init = ax
+    sns.set_style('whitegrid')
+    alpha_level = 0.8
+    linewidth = 0.6
+
+    if not ax:
+        fig = plt.figure(figsize=(6, 6))
+        rect = [0.15, 0.15, 0.75, 0.75]
+        ax = fig.add_axes(rect)
+    if title:
+        ax.set_title(title)
+
+    lines = []
+    if 'prec' in metrics_dict.keys() and 'level' in metrics_dict.keys():
+        xcoords = metrics_dict['level']
+        precs = metrics_dict['prec']
+        pline = ax.plot(xcoords, precs, color='b', linewidth=linewidth,
+                        alpha=alpha_level, label='precision')
+        lines.append(pline)
+
+    if 'prec_base' in metrics_dict.keys():
+        ax.axhline(y=metrics_dict['prec_base'], color='b', linewidth=linewidth,
+                   alpha=alpha_level)
+
+    if 'rec' in metrics_dict.keys() and 'level' in metrics_dict.keys():
+        xcoords = metrics_dict['level']
+        recs = metrics_dict['rec']
+        rline = ax.plot(xcoords, recs, color='r', linewidth=linewidth,
+                        alpha=alpha_level, label='recall')
+        lines.append(rline)
+
+    if not ax_init:
+        ax.legend()
+    return ax
+
+
+def plot_auc(metrics_dict, ax=None, title=None):
+
+    ax_init = ax
+    sns.set_style('whitegrid')
+    alpha_level = 0.8
+    linewidth = 0.6
+
+    if not ax:
+        fig = plt.figure(figsize=(6, 6))
+        rect = [0.15, 0.15, 0.75, 0.75]
+        ax = fig.add_axes(rect)
+    if title:
+        ax.set_title(title)
+
+    if 'roc_curve' in metrics_dict.keys():
+        fpr, tpr, thresholds = metrics_dict['roc_curve']
+        ax.plot(fpr, tpr,  linewidth=2*linewidth, alpha=alpha_level,
+                label='AUC={0:.3f}'.format(metrics_dict['auc']))
+        ax.plot([0, 1], [0, 1], 'r--', linewidth=2*linewidth)
+        ax.set_xlim([0.0, 1.0])
+        ax.set_ylim([0.0, 1.05])
+        ax.set_xlabel('False Positive Rate')
+        ax.set_ylabel('True Positive Rate')
+        ax.set_title('ROC')
+
+    if not ax_init:
+        ax.legend(loc="lower right")
+    return ax
+

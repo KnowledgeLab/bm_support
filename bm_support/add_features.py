@@ -867,6 +867,6 @@ def transform_last_stage(df, trial_features, origin, len_thr=2, normalize=False,
     mask_len_ = (dfw.groupby([up, dn]).apply(lambda x: x.shape[0]) > len_thr)
     updns = mask_len_[mask_len_].reset_index()[[up, dn]]
     dfw = dfw.merge(updns, how='right', on=[up, dn])
-    if normalize:
+    if trial_features and normalize:
         dfw = normalize_columns(dfw, trial_features)
     return dfw
