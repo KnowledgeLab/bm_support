@@ -179,33 +179,47 @@ def produce_topk_model(clf, dft, features, target, verbose=False):
     if verbose:
         print('Freq of 1s: {0}'.format(sum(dft[target])/dft.shape[0]))
     p_pos = clf.predict_proba(dft[features])[:, 0]
+    # p_pos = clf.predict_proba(dft[features])[:, 1]
+    # print(clf.predict_proba(dft[features]).shape)
+    # print(clf.predict_proba(dft[features])[:5, :])
     dft['proba_pos'] = pd.Series(p_pos, index=dft.index)
-    p_level_base = 1. - dft[target].sum()/dft.shape[0]
-    top_ps = np.arange(0.02, 3*p_level_base, 0.02)
+    # p_level_base = 1. - dft[target].sum()/dft.shape[0]
+    top_ps = np.arange(0.0, 1.0, 0.01)
     precs = []
     recs = []
     for p_level in top_ps:
         p_thr = np.percentile(p_pos, 100*(1-p_level))
-        y_pred = 1. - (dft['proba_pos'] > p_thr).astype(int)
-        precs.append(precision_score(y_test, y_pred,  pos_label=0))
-        recs.append(recall_score(y_test, y_pred,  pos_label=0))
+        y_pred = 1. - (dft['proba_pos'] >= p_thr).astype(int)
+        # y_pred = (dft['proba_pos'] > p_thr).astype(int)
+        # print(p_level, p_thr, sum(1. - y_pred))
+        precs.append(precision_score(y_test, y_pred, pos_label=0))
+        recs.append(recall_score(y_test, y_pred, pos_label=0))
+        # precs.append(precision_score(y_test, y_pred))
+        # recs.append(recall_score(y_test, y_pred))
 
     metrics_dict = {'level': top_ps, 'prec': precs, 'rec': recs}
 
     base_prec = 1.0 - sum(dft[target])/dft.shape[0]
+    # base_prec = sum(dft[target])/dft.shape[0]
 
     metrics_dict['prec_base'] = base_prec
 
     y_pred = clf.predict(dft[features])
     y_prob = clf.predict_proba(dft[features])[:, 0]
+    # y_prob = clf.predict_proba(dft[features])[:, 1]
 
     metrics_dict['prec0'] = precision_score(y_test, y_pred, pos_label=0)
     metrics_dict['rec0'] = recall_score(y_test, y_pred, pos_label=0)
-
     fpr, tpr, thresholds = roc_curve(y_test, y_prob, pos_label=0)
+
+    # metrics_dict['prec0'] = precision_score(y_test, y_pred)
+    # metrics_dict['rec0'] = recall_score(y_test, y_pred)
+    # fpr, tpr, thresholds = roc_curve(y_test, y_prob)
+
     metrics_dict['roc_curve'] = fpr, tpr, thresholds
 
     metrics_dict['auc'] = roc_auc_score(y_test, 1.-y_prob)
+    # metrics_dict['auc'] = roc_auc_score(y_test, y_prob)
 
     return metrics_dict
 
