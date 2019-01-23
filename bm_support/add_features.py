@@ -862,7 +862,8 @@ def transform_last_stage(df, trial_features, origin, len_thr=2, normalize=False,
         mask_agg = mask_notnull
 
     dfw = df.loc[mask_agg].copy()
-    print(sum(dfw['obs_mu'].isnull()))
+    if verbose:
+        print('Number of obs_mu nulls {0}'.format(sum(dfw['obs_mu'].isnull())))
 
     mask_len_ = (dfw.groupby([up, dn]).apply(lambda x: x.shape[0]) > len_thr)
     updns = mask_len_[mask_len_].reset_index()[[up, dn]]

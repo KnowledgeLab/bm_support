@@ -369,6 +369,34 @@ def simple_stratify(df, statify_column, seed=0, ratios=None, verbose=False):
         return dfr
 
 
+def simple_oversample(df, statify_column, seed=0, ratios=None, verbose=False):
+    """
+    return oversampled df
+    """
+
+    if not ratios:
+        ratios = [1] * df[statify_column].unique()
+    elif ratios == 'original':
+        return df
+
+    np.random.seed(seed)
+    vc = df[statify_column].value_counts()
+    if verbose:
+        print(vc)
+    masks = [(df[statify_column] == v) for v in vc.index]
+    sizes = list(vc)
+
+    new_sizes = [int(r * sizes[0] / ratios[0]) for r in ratios[1:]]
+    if verbose:
+        print('sizes: {0} new_size: {1}'.format(sizes, new_sizes))
+    indices = [np.random.choice(actual, new_size, replace=True) for
+               actual, new_size in zip(sizes[1:], new_sizes)]
+    # print([len(ii) for ii in indices])
+    subdfs = [df.loc[masks[0]]] + [df.loc[m].iloc[ii] for m, ii in zip(masks[1:], indices)]
+    dfr = pd.concat(subdfs)
+    return dfr
+
+
 def smart_stratify_df(df, column, size=500, ratios=None, replacement=False, seed=17, verbose=False):
     vc = df[column].value_counts()
     if verbose:
@@ -740,7 +768,6 @@ def train_massif_lr_clean(df_train, feature_columns, y_column,
         report['feature_importance_std'][k] = error
 
     return report, massif
-
 
 
 def plot_importances(importances, stds, covariate_columns, fname, title_prefix, colors=None,
@@ -1439,6 +1466,7 @@ def get_corrs(df, target_column, covariate_columns, threshold=0.03, mask=None,
         covariate_columns = list([x for sublist in covariate_columns.values() for x in sublist])
         dict_flag = True
     else:
+        covariate_columns_dict = dict()
         dict_flag = False
 
     all_cols = list(set(covariate_columns) | {target_column})
@@ -1446,6 +1474,7 @@ def get_corrs(df, target_column, covariate_columns, threshold=0.03, mask=None,
     not_na_mask = corr_df[target_column].notnull()
     not_na_columns = list(not_na_mask[not_na_mask].index)
     corr_df_abs = corr_df.abs()
+    # print(corr_df_abs[target_column].sort_values())
 
     reduced_columns = []
     if dict_flag:
@@ -1460,12 +1489,13 @@ def get_corrs(df, target_column, covariate_columns, threshold=0.03, mask=None,
     else:
         reduced_columns = list(set(covariate_columns) & set(not_na_columns))
 
+    # print(reduced_columns)
     above_thr = set(corr_df_abs[corr_df_abs[target_column] > threshold].index)
 
     corr_abs_thr = corr_df_abs.loc[list(set(reduced_columns) & above_thr),
-                                   target_column].sort_values(ascending=False).tail(-1)
+                                   target_column].sort_values(ascending=False)
     corr_df_thr = corr_df.loc[list(set(reduced_columns) & above_thr),
-                              target_column].sort_values(ascending=False).tail(-1)
+                              target_column].sort_values(ascending=False)
 
     if filename:
         corr_df_thr.to_csv(filename)
@@ -1649,8 +1679,7 @@ def report_metrics_(y_test, y_pred, mode_scores=None, metric_uniform_exponent=0.
     return report
 
 
-
-def logit_pvalue(model, x):
+def logit_pvalue(model, x, verbose=False):
     """ Calculate z-scores for scikit-learn LogisticRegression.
     parameters:
         model: fitted sklearn.linear_model.LogisticRegression with intercept and large C
@@ -1673,11 +1702,15 @@ def logit_pvalue(model, x):
             t = coeffs_vec / serrors
             pn = (1 - norm.cdf(abs(t))) * 2
         except np.linalg.linalg.LinAlgError as e:
+            if verbose:
+                print('det : {0}'.format(np.linalg.det(np.matrix(ans))))
             serrors = np.zeros(ans.shape[0])
             pn = np.zeros(ans.shape[0])
         pvals.append(pn)
         errors.append(serrors)
-    return np.array(pvals), coeffs, np.array(errors)
+    pvals = np.array(pvals)
+    errors = np.array(errors)
+    return pvals.T, coeffs.T, errors.T
 
 
 def linear_pvalue(model, X, y):

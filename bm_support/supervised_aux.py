@@ -145,32 +145,67 @@ def study_sample(seed, dfw, target, feature_dict,
     return report_dict, meta_agg
 
 
-def find_optimal_model(X_train, y_train, max_features=None, verbose=False):
-    def foo(x):
-        clf = LogisticRegression('l1', C=x)
-        clf.fit(X_train, y_train)
-        y_pred = clf.predict(X_train)
-        acc = precision_score(y_train, y_pred,  pos_label=0)
-        nzero = X_train.shape[1] - np.sum(clf.coef_ == 0., axis=1)
-        # if acc > 1e-2:
-        if verbose:
-            print('c: {0:.3f}, acc: {1:.4f}, non zero coeffs: {2}'.format(x, acc, nzero))
-        return acc, clf
-    penalties = [10**p for p in np.arange(-2, 2.1, 0.1)]
-    grid = [foo(p) for p in penalties]
-    accs = [x for x, _ in grid]
-    if max_features:
-        clfs = [x for _, x in grid]
-        co_nzero_lens = [sum(clf.coef_[0] != 0) for clf in clfs]
-        co_len_condition = [True if x <= max_features else False for x in co_nzero_lens]
-        accs = [acc for acc, flag in zip(accs, co_len_condition) if flag]
-        clfs = [clf for clf, flag in zip(clfs, co_len_condition) if flag]
-    if accs:
-        ii = np.argmax(accs)
-        clf = clfs[ii]
-        return clf, penalties[ii], accs[ii]
+def bisect_zero(f, a, b, eps=1e-6):
+    fa, fb = f(a), f(b)
+    if fa*fb < 0:
+        while fa*fb < 0 and b - a > eps:
+            m = 0.5*(a + b)
+            fm = f(m)
+            if fa*fm < 0:
+                b, fb = m, fm
+            else:
+                a, fa = m, fm
+        return m
     else:
-        return None, 0, 0.
+        return np.nan
+
+
+def sect_min(f, a, b, tol=1e-6):
+    phi = 0.5*(1. + 5**0.5)
+    c, d = b - (b - a) / phi, a + (b - a) / phi
+    while abs(c-d) > tol:
+        if f(c) < f(d):
+            b = d
+        else:
+            a = c
+        c, d = b - (b - a) / phi, a + (b - a) / phi
+    return 0.5*(a + b)
+
+
+def find_optimal_model(X_train, y_train, max_features=None, verbose=False):
+
+    def foo(x):
+        clf_ = LogisticRegression('l1', solver='liblinear', C=x, max_iter=100)
+        clf_.fit(X_train, y_train)
+        y_pred = clf_.predict(X_train)
+        acc_ = precision_score(y_train, y_pred, pos_label=0)
+        nzero = X_train.shape[1] - np.sum(clf_.coef_ == 0., axis=1)
+        if verbose:
+            print('c: {0:.3f}, acc: {1:.4f}, non zero coeffs: {2}'.format(x, acc_, nzero))
+        return acc_, clf_
+
+    if max_features:
+        best_penalty = bisect_zero(lambda x: np.sum(foo(x)[1].coef_ != 0.) - max_features, 1e-3, 1e3)
+    else:
+        best_penalty = sect_min(lambda x: -foo(x)[0], 1e-2, 1e2)
+
+    acc, clf = foo(best_penalty)
+    # dfm_ = pd.DataFrame(np.array(list(zip(penalties, accs, nonzero_coeffs))), columns=['pen', 'met', 'ncoe'])
+
+    # if max_features:
+    #     mask = (dfm_['ncoe'] <= max_features)
+    #     dfm = dfm_.loc[mask]
+    # else:
+    #     dfm = dfm_
+    #
+    # dfm.sort_values('met').copy()
+    #
+    # if dfm.shape[0] > 0:
+    #     ii = dfm.index[-1]
+    #     clf = clfs[ii]
+    #     return clf, dfm_
+    # else:
+    return clf, best_penalty, acc
 
 
 def produce_topk_model(clf, dft, features, target, verbose=False):
@@ -184,7 +219,7 @@ def produce_topk_model(clf, dft, features, target, verbose=False):
     # print(clf.predict_proba(dft[features])[:5, :])
     dft['proba_pos'] = pd.Series(p_pos, index=dft.index)
     # p_level_base = 1. - dft[target].sum()/dft.shape[0]
-    top_ps = np.arange(0.0, 1.0, 0.01)
+    top_ps = np.arange(0.01, 1.0, 0.01)
     precs = []
     recs = []
     for p_level in top_ps:
@@ -203,6 +238,8 @@ def produce_topk_model(clf, dft, features, target, verbose=False):
     # base_prec = sum(dft[target])/dft.shape[0]
 
     metrics_dict['prec_base'] = base_prec
+    if isinstance(clf, LogisticRegression):
+        metrics_dict['c_opt'] = clf.C
 
     y_pred = clf.predict(dft[features])
     y_prob = clf.predict_proba(dft[features])[:, 0]
@@ -224,7 +261,7 @@ def produce_topk_model(clf, dft, features, target, verbose=False):
     return metrics_dict
 
 
-def plot_prec_recall(metrics_dict, ax=None, title=None):
+def plot_prec_recall(metrics_dict, ax=None, title=None, fname=None):
 
     ax_init = ax
     sns.set_style('whitegrid')
@@ -256,13 +293,15 @@ def plot_prec_recall(metrics_dict, ax=None, title=None):
         rline = ax.plot(xcoords, recs, color='r', linewidth=linewidth,
                         alpha=alpha_level, label='recall')
         lines.append(rline)
-
+    ax.set_ylim(ymin=0)
     if not ax_init:
         ax.legend()
+    if fname:
+        plt.savefig(fname)
     return ax
 
 
-def plot_auc(metrics_dict, ax=None, title=None):
+def plot_auc(metrics_dict, ax=None, title=None, fname=None):
 
     ax_init = ax
     sns.set_style('whitegrid')
@@ -289,5 +328,155 @@ def plot_auc(metrics_dict, ax=None, title=None):
 
     if not ax_init:
         ax.legend(loc="lower right")
+
+    if fname:
+        plt.savefig(fname)
+
+    return ax
+
+
+def level_corr(df_, groupby_cols, target_col, average_col, step=0.02, percentile_flag=True,
+               ax=None, title=None, fname=None, verbose=False):
+    df = df_.copy()
+    ax_init = ax
+    sns.set_style('whitegrid')
+    alpha_level = 0.8
+    linewidth = 0.6
+    if verbose:
+        print('start: {0}'.format(step))
+
+    target_vec = df.groupby(groupby_cols).apply(lambda x: x[target_col].iloc[0])
+
+    levels = np.arange(step, 1.0 + step, step)
+    corrs = []
+    corrs_agg = []
+    distances_disc = []
+    n_claims = []
+    n_ints = []
+
+    for l in levels:
+        if verbose:
+            print('level: {0}'.format(l))
+        half_l = 0.5*l
+        if percentile_flag:
+            p_low = np.percentile(target_vec, 100*half_l)
+            p_hi = np.percentile(target_vec, 100*(1.0 - half_l))
+        else:
+            p_low = half_l
+            p_hi = 1.0 - half_l
+        mask_low = (df[target_col] <= p_low)
+        mask_hi = (df[target_col] >= p_hi)
+        mask = mask_low | mask_hi
+        df[target_col + 'b'] = 0.0
+        df.loc[mask_hi, target_col + 'b'] = 1.0
+        n_claims.append((l, sum(mask)))
+        n_ints.append((l, df.loc[mask].drop_duplicates((up, dn)).shape[0]))
+
+        if df.loc[mask].shape[0] > 2:
+            c = df.loc[mask, [target_col, average_col]].corr().values[0, 1]
+            corrs.append((l, c))
+
+        dft = df.loc[mask].groupby(groupby_cols).apply(lambda x: pd.Series([x[target_col].iloc[0],
+                                                                           x[average_col].mean()]))
+        if dft.shape[0] > 2:
+            corrs_agg.append((l, dft.corr().values[0, 1]))
+
+        if df.loc[mask].shape[0] > 2:
+            df['d'] = (df[target_col + 'b'] - df[average_col]).abs()
+            dist_score = df.loc[mask, 'd'].mean()
+            distances_disc.append((l, dist_score))
+
+    if not ax:
+        fig = plt.figure(figsize=(6, 6))
+        rect = [0.15, 0.15, 0.75, 0.75]
+        ax = fig.add_axes(rect)
+    if title:
+        ax.set_title(title)
+
+    dd = {target_col: r'$\pi_\alpha$',
+          average_col: r'$y_{i\alpha}$'
+          }
+    x1, y1 = np.array(corrs).T
+    pline = ax.plot(x1, y1, color='r', linewidth=linewidth,
+                    alpha=alpha_level, label=r'corr. ' + dd[target_col] + ' ' +  dd[average_col])
+
+    # x2, y2 = np.array(corrs_agg).T
+    # pline2 = ax.plot(x2, y2, color='r', linewidth=linewidth,
+    #                  alpha=alpha_level, label='corr {0} {1} aggr.'.format(dd[target_col], dd[average_col]))
+
+    x3, y3 = np.array(distances_disc).T
+    pline3 = ax.plot(x3, y3, color='g', linewidth=linewidth,
+                     alpha=alpha_level, label=r'mean $b_i\alpha$')
+    ax2 = ax.twinx()
+    # x4, y4 = np.array(n_claims).T
+    x4, y4 = np.array(n_ints).T
+    pline4 = ax2.plot(x4, y4, label='number of interactions')
+    ax2.set_yscale("log", nonposy='clip')
+
+    # lns = pline + pline2 + pline3 + pline4
+    lns = pline + pline3 + pline4
+    labs = [l.get_label() for l in lns]
+    ax.legend(lns, labs, loc='center right')
+    ax.set_ylim(ymin=0.0)
+    if fname:
+        plt.savefig(fname)
+    return ax
+
+
+def level_corr_one_tail(df_, groupby_cols, target_col, corr_cols, step=0.02,
+                        direct_sweep_order=True,
+                        ax=None, title=None, verbose=False):
+    df = df_.copy()
+    sns.set_style('whitegrid')
+    alpha_level = 0.8
+    linewidth = 0.6
+
+    target_vec = df.groupby(groupby_cols).apply(lambda x: x[target_col].iloc[0]).values
+    if verbose:
+        print(target_vec[:5])
+
+    levels = np.arange(0.0, 1.0+step, step)
+    corrs = []
+    n_claims = []
+    for level in levels:
+        if direct_sweep_order:
+            p = np.percentile(target_vec, 100*level)
+            mask = (df[target_col] <= p)
+        else:
+            p = np.percentile(target_vec, 100*(1. - level))
+            mask = (df[target_col] >= p)
+
+        if sum(mask) > 2:
+            c = df.loc[mask, corr_cols].corr().values[0, 1]
+            corrs.append((level, c))
+
+        if sum(mask) > 2:
+            n_claims.append((level, sum(mask)))
+
+    if not ax:
+        fig = plt.figure(figsize=(6, 6))
+        rect = [0.15, 0.15, 0.75, 0.75]
+        ax = fig.add_axes(rect)
+    if title:
+        ax.set_title(title)
+
+    lns = []
+    x1, y1 = np.array(corrs).T
+    pline = ax.plot(x1, y1, color='b', linewidth=linewidth,
+                    alpha=alpha_level, label='corr {0} {1}'.format(target_col, corr_cols[0], corr_cols[1]))
+    lns.append(pline)
+
+    if n_claims:
+        ax2 = ax.twinx()
+        x4, y4 = np.array(n_claims).T
+        pline4 = ax2.plot(x4, y4, label='number of interactions')
+        ax2.set_yscale("log", nonposy='clip')
+        lns.append(pline4)
+
+    lns = pline + pline4
+    labs = [l.get_label() for l in lns]
+    ax.legend(lns, labs)
+    ax.set_ylim(ymin=0.0)
+
     return ax
 
