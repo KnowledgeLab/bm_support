@@ -11,7 +11,6 @@ import random
 
 
 def main_multipart(head, window_sizes, metric_types, verbosity=False):
-    print('Window sizes: {0}', window_sizes)
     random.seed(13)
 
     df_pm_wid = pd.read_csv(expanduser('~/data/wos/cites/wosids.csv.gz'), index_col=0)
@@ -45,6 +44,7 @@ def main_multipart(head, window_sizes, metric_types, verbosity=False):
 
         dfr4[pm] = dfr4[pm].astype(int)
         dfr4[ye] = dfr4[ye].astype(int)
+        dfr4 = pd.merge(dfr4, dfy, on=[up, dn, ye, pm])
         dfr4 = dfr4.set_index([up, dn, ye, pm]).sort_index()
         print(dfr4.head())
         df_agg_redmod.append(dfr4)
@@ -55,21 +55,25 @@ def main_multipart(head, window_sizes, metric_types, verbosity=False):
         print(y, d.shape, d2.shape, d3.shape)
 
     output_type = ''.join([x[:2] for x in metric_types])
-    for w, df in zip(window_sizes, df_agg_redmod):
-        print('window size {0} reduced modularity: fractions of indices that are non one:'.format(w))
-        for c in df.columns:
-            print('{0} : {1:.2f} %'.format(c, 100 * sum(df[c] != 1) / df.shape[0]))
-        if head < 0:
-            df.to_csv(expanduser('~/data/wos/comm_metrics/redmodularity_metric_{0}_w{1}.csv.gz'.format(output_type, w)),
-                      compression='gzip')
-        else:
-            print(df.head())
-            df.to_csv(expanduser('~/data/wos/comm_metrics/redmodularity_metric_{0}_w{1}_tmp2.csv.gz'.format(output_type, w)),
-                      compression='gzip')
+    df = pd.concat(df_agg_redmod, axis=1)
+
+    for c in df.columns:
+        print('{0} : {1:.2f} %'.format(c, 100 * sum(df[c] != 1) / df.shape[0]))
+        print('{0} {1}'.format(c, df[c].dtype))
+    if head < 0:
+        df.to_csv(expanduser('~/data/wos/comm_metrics/redmodularity_metric_{0}.csv.gz'.format(output_type)),
+                  compression='gzip')
+    else:
+        print(df.head())
+        df.to_csv(expanduser('~/data/wos/comm_metrics/redmodularity_metric_{0}_tmp2.csv.gz'.format(output_type)),
+                  compression='gzip')
 
 
 def main(head, window_sizes, flag_dict, metric_type, verbosity=False):
-    print('Window sizes: {0}', window_sizes)
+    if verbosity:
+        print('Window sizes: {0}'.format(window_sizes))
+        print('flag_dict: {0}'.format(flag_dict))
+        print('metric type: {0}'.format(metric_type))
     random.seed(13)
     fraction_imporant_v_vertices = 0.5
     disjoint_uv = False
@@ -77,11 +81,11 @@ def main(head, window_sizes, flag_dict, metric_type, verbosity=False):
     df_pm_wid = pd.read_csv(expanduser('~/data/wos/cites/wosids.csv.gz'), index_col=0)
     dfy = pd.read_csv(expanduser('~/data/wos/pmids/updnyearpmid_all.csv.gz'), index_col=0)
 
-    if verbosity:
-        print('metric type: {0}'.format(metric_type))
     uv_dict, pm_wid_dict = get_mapping_data(metric_type, dfy, df_pm_wid)
 
     bipart_dict = get_mapping_data_reduced(metric_type, dfy, df_pm_wid)
+
+    print()
 
     if metric_type == 'affiliations' or metric_type == 'authors':
         use_wosids = False
@@ -95,7 +99,7 @@ def main(head, window_sizes, flag_dict, metric_type, verbosity=False):
     if verbosity:
         print('number of rows in dfy: {0}'.format(dfy.shape[0]))
         print('len pm_wid_dict {0}'.format(len(pm_wid_dict)))
-        print('len pm_aus_dict {0}'.format(len(uv_dict)))
+        print('len uv_dict {0}'.format(len(uv_dict)))
 
     if head > 0:
         dfy = dfy.head(head)
@@ -165,6 +169,8 @@ def main(head, window_sizes, flag_dict, metric_type, verbosity=False):
         # modularity reduced
         if flag_dict['redmod']:
             random.seed(13)
+            print('###')
+            print(len(uv_dict), len(pm_wid_dict), ye, window_size, use_wosids, disjoint_uv, dfy.shape)
             dfr4 = dfy.groupby([up, dn]).apply(lambda x: compute_modularity_index_gen(x, bipart_dict, ye,
                                                                                       window_size,
                                                                                       modularity_mode='u',
@@ -176,6 +182,7 @@ def main(head, window_sizes, flag_dict, metric_type, verbosity=False):
 
             dfr4[pm] = dfr4[pm].astype(int)
             dfr4[ye] = dfr4[ye].astype(int)
+            dfr4 = pd.merge(dfr4, dfy, on=[up, dn, ye, pm])
             dfr4 = dfr4.set_index([up, dn, ye, pm]).sort_index()
             print(dfr4.head())
             df_agg_redmod.append(dfr4)
@@ -228,19 +235,18 @@ def main(head, window_sizes, flag_dict, metric_type, verbosity=False):
                        compression='gzip')
 
     if flag_dict['redmod']:
-        for w, df in zip(window_sizes, df_agg_redmod):
-            # dft = pd.concat(df_agg_redmod, axis=1)
-            # print('mod concat shape: ', dft.shape)
-            print('window size {0} reduced modularity: fractions of indices that are non one:'.format(w))
-            for c in df.columns:
-                print('{0} : {1:.2f} %'.format(c, 100 * sum(df[c] != 1) / df.shape[0]))
-            if head < 0:
-                df.to_csv(expanduser('~/data/wos/comm_metrics/redmodularity_metric_{0}_w{1}.csv.gz'.format(metric_type, w)),
-                          compression='gzip')
-            else:
-                print(df.head())
-                df.to_csv(expanduser('~/data/wos/comm_metrics/redmodularity_metric_{0}_w{1}_tmp2.csv.gz'.format(metric_type, w)),
-                          compression='gzip')
+        dft = pd.concat(df_agg_redmod, axis=1)
+        print('redmod concat shape: ', dft.shape)
+        # print('window size {0} reduced modularity: fractions of indices that are non one:'.format(w))
+        for c in dft.columns:
+            print('{0} : {1:.2f} %'.format(c, 100 * sum(dft[c] != 1) / dft.shape[0]))
+        if head < 0:
+            dft.to_csv(expanduser('~/data/wos/comm_metrics/redmodularity_metric_{0}.csv.gz'.format(metric_type)),
+                       compression='gzip')
+        else:
+            print(dft.head())
+            dft.to_csv(expanduser('~/data/wos/comm_metrics/redmodularity_metric_{0}_tmp2.csv.gz'.format(metric_type)),
+                       compression='gzip')
 
 
 def main_linear(head, metric_type, verbosity=False):
@@ -319,11 +325,11 @@ if __name__ == "__main__":
                         default=(None, 1, 2, 3))
 
     parser.add_argument('--head',
-                        default='2000', type=int,
+                        default=2000, type=int,
                         help='take head rows')
 
     parser.add_argument('-f', '--flag',
-                        default='multi',
+                        default='supp',
                         help='flag if to use multi')
 
     parser.add_argument('-v', '--verbosity',

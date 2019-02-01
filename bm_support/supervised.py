@@ -266,7 +266,9 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
 
     # add co-citation (future and past), coauthorship and co-affiliation metrics
     metric_sources = ['authors', 'affiliations', 'future', 'past']
-    metric_types = ['support', 'affinity', 'linear']
+    metric_types = ['support', 'affinity', 'linear', 'redmodularity']
+    fpath_norm = '~/data/wos/cites/'
+    fpath_alt = '~/data/wos/comm_metrics/'
     # metric_types = ['support', 'affinity', 'modularity']
     if verbose:
         print('support, affiliation, modularity metrics')
@@ -274,10 +276,16 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
     for mt in metric_types:
         if mt == 'linear':
             metric_sources2 = metric_sources[:2]
+        elif mt == 'redmodularity':
+            metric_sources2 = metric_sources + ['afaupa', 'afaupafu']
         else:
             metric_sources2 = metric_sources
+        if mt == 'redmodularity':
+            fpath = fpath_alt
+        else:
+            fpath = fpath_norm
         for ms in metric_sources2:
-            if mt == 'affinity' or mt == 'modularity':
+            if mt == 'affinity' or mt == 'modularity' or mt == 'redmodularity':
                 merge_cols = [up, dn, ye, pm]
             elif mt == 'support':
                 merge_cols = [up, dn, ye]
@@ -285,8 +293,8 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
                 merge_cols = [up, dn, pm]
             else:
                 raise ValueError('unsupported metric type')
-            df_att = pd.read_csv(expanduser('~/data/wos/cites/{0}_metric_{1}.csv.gz'.format(mt, ms)))
-            if mt == 'modularity':
+            df_att = pd.read_csv(expanduser('{0}{1}_metric_{2}.csv.gz'.format(fpath, mt, ms)))
+            if mt == 'modularity' or mt == 'redmodularity':
                 cols = list(set(df_att.columns) - {up, dn, ye, pm})
                 rename_dict = {c: '{0}_{1}'.format(ms, c) for c in cols}
             elif mt == 'linear':

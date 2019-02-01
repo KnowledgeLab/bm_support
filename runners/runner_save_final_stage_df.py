@@ -5,12 +5,12 @@ from os.path import expanduser
 
 an_version = 12
 
-origin = 'gw'
-version = 11
-hash_int = 471980
-# origin = 'lit'
-# version = 8
-# hash_int = 502784
+# origin = 'gw'
+# version = 11
+# hash_int = 471980
+origin = 'lit'
+version = 8
+hash_int = 502784
 
 batchsize = 1
 cutoff_len = 1
