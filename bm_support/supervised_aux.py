@@ -5,7 +5,7 @@ from .supervised import problem_type_dict
 from .supervised import select_features_dict, logit_pvalue, linear_pvalue, report_metrics
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import precision_score, recall_score, roc_auc_score, roc_curve
+from sklearn.metrics import precision_score, recall_score, roc_auc_score, roc_curve, r2_score
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -172,16 +172,25 @@ def sect_min(f, a, b, tol=1e-6):
     return 0.5*(a + b)
 
 
-def find_optimal_model(X_train, y_train, max_features=None, verbose=False):
+def find_optimal_model(X_train, y_train, max_features=None, model_type=LogisticRegression,
+                       kwargs={'penalty': 'l1', 'solver': 'liblinear', 'max_iter': 100},
+                       penalty_name='C',
+                       verbose=False):
 
     def foo(x):
-        clf_ = LogisticRegression('l1', solver='liblinear', C=x, max_iter=100)
+        clf_ = model_type(**{**kwargs, **{penalty_name: x}})
         clf_.fit(X_train, y_train)
         y_pred = clf_.predict(X_train)
-        acc_ = precision_score(y_train, y_pred, pos_label=0)
-        nzero = X_train.shape[1] - np.sum(clf_.coef_ == 0., axis=1)
-        if verbose:
-            print('c: {0:.3f}, acc: {1:.4f}, non zero coeffs: {2}'.format(x, acc_, nzero))
+        if model_type == LogisticRegression:
+            acc_ = precision_score(y_train, y_pred, pos_label=0)
+            nzero = X_train.shape[1] - np.sum(clf_.coef_ == 0., axis=1)
+            if verbose:
+                print('c: {0:.3f}, acc: {1:.4f}, non zero coeffs: {2}'.format(x, acc_, nzero))
+        else:
+            acc_ = r2_score(y_train, y_pred)
+            if verbose:
+                print('c: {0:.3f}, acc: {1:.4f}'.format(x, acc_))
+
         return acc_, clf_
 
     if max_features:
@@ -190,21 +199,6 @@ def find_optimal_model(X_train, y_train, max_features=None, verbose=False):
         best_penalty = sect_min(lambda x: -foo(x)[0], 1e-2, 1e2)
 
     acc, clf = foo(best_penalty)
-    # dfm_ = pd.DataFrame(np.array(list(zip(penalties, accs, nonzero_coeffs))), columns=['pen', 'met', 'ncoe'])
-
-    # if max_features:
-    #     mask = (dfm_['ncoe'] <= max_features)
-    #     dfm = dfm_.loc[mask]
-    # else:
-    #     dfm = dfm_
-    #
-    # dfm.sort_values('met').copy()
-    #
-    # if dfm.shape[0] > 0:
-    #     ii = dfm.index[-1]
-    #     clf = clfs[ii]
-    #     return clf, dfm_
-    # else:
     return clf, best_penalty, acc
 
 

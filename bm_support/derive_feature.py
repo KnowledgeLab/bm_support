@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
 from datahelpers.constants import up, dn, pm, ye
-
+from scipy.stats import norm
 
 # TODO add exponential average
+
 
 def moving_average_windows(means, sizes, index, column_name, windows=(None, 1)):
 
@@ -42,8 +43,22 @@ def assign_positive_transition_flag(item, transition_batch_flag='good_transition
 
 
 def find_transition(item, time_col=ye, value_col='mean_rdist'):
+    # mns_long_shift_t1 = mns_long.groupby([up, dn]).apply(lambda x: pd.Series(x['mean_rdist'].values[:-1],
+    #                                                                          index=x[ye].values[1:]))
     # value_col should be sorted wrt to time_col
     s = item[value_col]
-    flags = [(False, False)] + [(u * v < 0, abs(v) < abs(u)) for v, u in zip(s.values[1:], s.values[:-1])]
-    r = pd.DataFrame(flags, index=item[time_col], columns=['sign_change', 'decrease'])
+    flags = [(False, False, 0, 0, np.nan)] + [(u * v < 0, abs(v) < abs(u), np.sign(abs(v) - abs(u)), abs(v) - abs(u), u)
+                                   for v, u in zip(s.values[1:], s.values[:-1])]
+    r = pd.DataFrame(flags, index=item[time_col], columns=['sign_change', 'decrease',
+                                                           'sign_diff_abs', 'diff_abs', 'mean_rdist_prev'])
+
     return r
+
+
+def ppf_smart(x, epsilon=1e-6):
+    if x < epsilon:
+        return norm.ppf(epsilon)
+    elif x > 1 - epsilon:
+        return norm.ppf(1-epsilon)
+    else:
+        return norm.ppf(x)

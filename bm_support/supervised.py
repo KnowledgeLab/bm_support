@@ -178,6 +178,9 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
 
     dfe[cexp] = dfe['mean'].apply(lambda x: norm.cdf(x))
     if verbose:
+        print('min score {0}, max score {1}'.format(df_exp_cut['score'].min(), df_exp_cut['score'].max()))
+        print('min mean {0}, max mean {1}'.format(dfe['mean'].min(), dfe['mean'].max()))
+        print('min cexp {0}, max cexp {1}'.format(dfe[cexp].min(), dfe[cexp].max()))
         print('size of experimental df {0}'.format(dfe.shape))
     dfe = dfe[o_columns + [cexp, 'std']]
     dfe2 = pd.merge(dfe, df_stats.reset_index(), on=o_columns, how='left')
@@ -1516,6 +1519,30 @@ def get_corrs(df, target_column, covariate_columns, threshold=0.03, mask=None,
     return corr_abs_thr, corr_df_thr
 
 
+def trim_corrs_by_family(cr, feature_dict_inv):
+    cr_df = cr.reset_index()
+    cr_name = cr.name
+    cr_df['family'] = cr_df['index'].apply(lambda x: feature_dict_inv[x])
+    mask_pos = (cr_df[cr_name] > 0)
+    cr_df_cut_pos = cr_df.loc[mask_pos].groupby('family').apply(lambda x:
+                                                                x.iloc[np.argmax(x[cr_name].values)].append(
+                                                                    pd.Series([x.shape[0]], ['len_members'])))
+    cr_df_cut_neg = cr_df.loc[~mask_pos].groupby('family').apply(lambda x:
+                                                                 x.iloc[np.argmin(x[cr_name].values)].append(
+                                                                     pd.Series([x.shape[0]], ['len_members'])))
+    cr_res = pd.concat([cr_df_cut_pos, cr_df_cut_neg]).set_index('index').sort_values(cr_name)
+    unique_family_size = cr_res.drop_duplicates('family').shape[0]
+    if unique_family_size != cr_res.shape[0]:
+        confused_families = cr_res.groupby('family').apply(lambda x: x.shape[0] > 1)
+        confused_families_mask = cr_res['family'].isin(confused_families[confused_families].index)
+        print('Warning, a family of features has correlation of different signs!')
+        print('size of extreme corrs dataset: {0}, size of unique families dataset {1}'.format(unique_family_size,
+                                                                                               cr_res.shape[0]))
+        print('Printing confused families:')
+        print(cr_res[confused_families_mask])
+    return cr_res[['family', cr_name, 'len_members']]
+
+
 def select_features_dict(df_train, df_test, target_column, feature_dict,
                          model_type='rf',
                          max_features_consider=8,
@@ -1741,4 +1768,4 @@ def linear_pvalue(model, X, y):
     except np.linalg.linalg.LinAlgError as e:
         se = np.zeros(X.shape[1])
         pvals = np.zeros(X.shape[1])
-    return pvals, full_co, se
+    return pvals.T, full_co.T, se.T

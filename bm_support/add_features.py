@@ -538,12 +538,16 @@ def generate_feature_groups(columns_filename, verbose=True):
     columns = [x for x in columns if x != '']
 
     dim1 = ['affiliations', 'authors', 'future', 'past']
+    dim2 = ['affiliations', 'authors', 'future', 'past', 'afaupa', 'afaupafu']
+
+    # rncomms, rncomponents, rcommrel, rcomm_size
     patterns = ['cpop', 'cden', 'ksst', 'nhi'] + \
                ['{0}_affind'.format(c) for c in dim1] + \
                ['{0}_suppind'.format(c) for c in dim1] + \
-               ['{0}_comm_size'.format(c) for c in dim1] + \
-               ['{0}_ncomms'.format(c) for c in dim1] + \
-               ['{0}_ncomponents'.format(c) for c in dim1] + \
+               ['{0}_rcomm_size'.format(c) for c in dim2] + \
+               ['{0}_rcommrel_size'.format(c) for c in dim2] + \
+               ['{0}_rncomms'.format(c) for c in dim2] + \
+               ['{0}_rncomponents'.format(c) for c in dim2] + \
                ['pre_authors', 'pre_affs']
 
     bipatterns = [('lincs', 'comm_size'), ('lincs', 'same_comm'),
@@ -698,6 +702,55 @@ def select_feature_families(an_version):
                 'authors_count', 'affiliations_count', 'obs_mu'
                 ]
 
+    full_new = [
+                'afaupa_rcomm_size',
+                'afaupa_rcommrel_size',
+                'afaupa_rncomms',
+                'afaupa_rncomponents',
+                'afaupafu_rcomm_size',
+                'afaupafu_rcommrel_size',
+                'afaupafu_rncomms',
+                'afaupafu_rncomponents',
+                'affiliations_affind',
+                'affiliations_count',
+                'affiliations_rcomm_size',
+                'affiliations_rcommrel_size',
+                'affiliations_rncomms',
+                'affiliations_rncomponents',
+                'affiliations_suppind',
+                'ai',
+                'ar',
+                'authors_affind',
+                'authors_count',
+                'authors_rcomm_size',
+                'authors_rcommrel_size',
+                'authors_rncomms',
+                'authors_rncomponents',
+                'authors_suppind',
+                'cden',
+                'citations',
+                'cite_count',
+                'cpop',
+                'delta_year',
+                'ksst',
+                'lincscomm_size',
+                'lincssame_comm',
+                'litgwcomm_size',
+                'litgwdyn_eff_comm_size',
+                'litgwdyn_same_comm',
+                'litgwsame_comm',
+                'nhi',
+                'obs_mu',
+                'past_affind',
+                'past_rcomm_size',
+                'past_rcommrel_size',
+                'past_rncomms',
+                'past_rncomponents',
+                'past_suppind',
+                'pre_affs',
+                'pre_authors',
+                'time']
+
     version_selector = dict()
 
     version_selector['full'] = full_families
@@ -709,6 +762,7 @@ def select_feature_families(an_version):
     version_selector['indiv'] = indiv_families
     version_selector['nfull'] = full_families_new
     version_selector['nfull_nocomm'] = full_nocomm
+    version_selector['full_version'] = full_new
 
     an_version_selector = {15: 'full', 16: 'communities',
                            17: 'indep', 18: 'denindep',
@@ -716,7 +770,8 @@ def select_feature_families(an_version):
                            20: 'denindep_litgw',
                            21: 'indiv',
                            22: 'nfull',
-                           23: 'nfull_nocomm'}
+                           23: 'nfull_nocomm',
+                           30: 'full_version'}
 
     return version_selector[an_version_selector[an_version]]
 
