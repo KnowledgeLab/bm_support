@@ -88,7 +88,6 @@ def select_t0(df, t0=True, acolumns=(up, dn), t_column=ye):
     dfz = df[all_cols].drop_duplicates(all_cols).sort_values(all_cols)
     dfz = dfz.groupby(acolumns).apply(lambda x: pd.DataFrame(index=(x[ye].values[:1]
                                                              if t0 else x[ye].values[1:])).rename_axis(t_column))
-    # dfz.index.rename('t_column
     dfz = dfz.reset_index()
     df2 = pd.merge(df, dfz, how='inner', on=all_cols)
     return df2

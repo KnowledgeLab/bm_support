@@ -198,6 +198,15 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
 
     dft = df_claims.merge(dfe2[columns], on=merge_on, how='inner')
 
+    if verbose:
+        print('###')
+        print('claims: before: {0} after: {1}  fraction: {2:.4f}'.format(df_claims.shape[0], dft.shape[0],
+                                                                         dft.shape[0]/df_claims.shape[0]))
+        n_ints = df_claims.drop_duplicates([up, dn]).shape[0]
+        n_ints_after = dft.drop_duplicates([up, dn]).shape[0]
+        print('interactions: before: {0} after: {1}  fraction: {2:.4f}'.format(n_ints, n_ints_after,
+                                                                               n_ints_after/n_ints))
+
     # add static communities
 
     types_comm = ['lincs', 'litgw']
@@ -1696,7 +1705,7 @@ def report_metrics_(y_test, y_pred, mode_scores=None, metric_uniform_exponent=0.
         report['macro']['recall'] = recall_score(y_test, y_pred, average='macro')
         report['macro']['f1'] = f1_score(y_test, y_pred, average='macro')
 
-        nclasses = report['vector']['precision'].shape[0]
+        nclasses = len(set(y_test))
 
         report['exponent'] = dict()
         report['exponent'] = {k: np.sum(v ** metric_uniform_exponent)/nclasses for k, v in report['vector'].items()}

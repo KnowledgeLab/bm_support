@@ -2,7 +2,7 @@ from numpy import array, sqrt, log, exp, pi, histogram, diag, abs, max, floor, c
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 from functools import partial
-# this package find optimal lognormal fit from q frequentist point of view
+# this package find optimal lognormal fit from a frequentist point of view
 # can be altered to fit any function
 
 
