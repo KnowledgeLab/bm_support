@@ -175,14 +175,28 @@ def main(head, window_sizes, flag_dict, metric_type, verbosity=False):
                                                                                       window_size,
                                                                                       modularity_mode='u',
                                                                                       verbose=verbosity))
-            print(dfr4.shape)
             dfr4 = dfr4.reset_index()
 
             dfr4 = dfr4.drop(['level_2'], axis=1)
 
             dfr4[pm] = dfr4[pm].astype(int)
             dfr4[ye] = dfr4[ye].astype(int)
+            dfr_granular = dfr4.rename(columns={ye: 'ylook'})
+            dfr_granular = pd.merge(dfr_granular, dfy[[up, dn, pm, ye]], on=[up, dn, pm], how='left')
+            print('### dfr_granular shape is {0}'.format(dfr_granular.shape[0]))
+            print('### dfr4 shape was {0}'.format(dfr4.shape[0]))
+
+            if head < 0:
+                fn = '~/data/wos/comm_metrics/redmodularity_metric_{0}_w{1}.csv.gz'.format(metric_type,
+                                                                                           window_size)
+            else:
+                fn = '~/data/wos/comm_metrics/redmodularity_metric_{0}_w{1}_tmp.csv.gz'.format(metric_type,
+                                                                                               window_size)
+            fn = expanduser(fn)
+            dfr_granular.to_csv(fn, compression='gzip')
+
             dfr4 = pd.merge(dfr4, dfy, on=[up, dn, ye, pm])
+            print('### dfr4 shape became {0}'.format(dfr4.shape[0]))
             dfr4 = dfr4.set_index([up, dn, ye, pm]).sort_index()
             print(dfr4.head())
             df_agg_redmod.append(dfr4)

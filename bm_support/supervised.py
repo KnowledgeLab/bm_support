@@ -1472,7 +1472,7 @@ def logreg_driver(origin, version, batchsize, cutoff_len, a, b, hash_int, max_de
 
 
 def get_corrs(df, target_column, covariate_columns, threshold=0.03, mask=None,
-              filename=None, filename_abs=None, verbose=False):
+              filename=None, filename_abs=None, dropnas=True, verbose=False):
     df_ = df.copy()
     if mask is not None:
         df_ = df_[mask].copy()
@@ -1493,8 +1493,9 @@ def get_corrs(df, target_column, covariate_columns, threshold=0.03, mask=None,
     corr_df = df_[all_cols].corr()
     not_na_mask = corr_df[target_column].notnull()
     not_na_columns = list(not_na_mask[not_na_mask].index)
+    if not dropnas:
+        not_na_columns = list(corr_df[target_column].index)
     corr_df_abs = corr_df.abs()
-    # print(corr_df_abs[target_column].sort_values())
 
     reduced_columns = []
     if dict_flag:

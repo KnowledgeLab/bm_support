@@ -145,6 +145,7 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
                      min_len=-1,
                      max_len=None,
                      define_visible_prior=False,
+                     community_refutation_df=None,
                      verbose=False):
 
     mask_len_ = (df.groupby(ni).apply(lambda x: x.shape[0]) > min_len)
@@ -269,6 +270,8 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
                       for c in columns_normalize]
             print('. '.join(minmax))
 
+    if community_refutation_df is not None:
+        dft = pd.merge(dft, community_refutation_df, how='left', on=[up, dn, pm])
     return dft
 
 

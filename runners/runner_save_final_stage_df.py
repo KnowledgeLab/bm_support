@@ -1,3 +1,4 @@
+from pandas import read_csv
 from datahelpers.constants import ye, ai, ps, up, dn, ar, ni, dist, rdist, pm, ct, affs, aus
 from bm_support.supervised import generate_samples
 from bm_support.add_features import prepare_final_df
@@ -60,11 +61,16 @@ upper_exp, lower_exp = 1 - eps, eps
 thrs = [-1e-8, lower_exp, upper_exp, 1.0001e0]
 aff_dict_fname = expanduser('~/data/wos/affs_disambi/pm2id_dict.pgz')
 
+fpath = '~/data/kl/comm_metrics/{0}_{1}_comm_window_ave.csv.gz'.format(origin, ps)
+
+df_comm_refute = read_csv(fpath)
+
 df2_ = prepare_final_df(df, normalize=True, columns_normalize=cols_norm,
                         columns_normalize_by_interaction=cols_norm_by_int,
                         quantize_intervals=thrs, aff_dict_fname=aff_dict_fname,
                         masks=masks, cutoff=None,
                         add_cite_fits=True, define_visible_prior=True,
+                        community_refutation_df=df_comm_refute,
                         verbose=True)
 
 
@@ -72,4 +78,4 @@ print('df2_ size {0}, df2_ unique [up, dn, pm] {1}'.format(df2_.shape[0],
                                                            df2_.drop_duplicates([up, dn, pm]).shape[0]))
 df2_ = df2_.drop_duplicates([up, dn, pm])
 
-# df2_.to_hdf(expanduser('~/data/kl/final/{0}_{1}_{2}.h5'.format(origin, version, an_version)), key='df', complevel=9)
+df2_.to_hdf(expanduser('~/data/kl/final/{0}_{1}_{2}.h5'.format(origin, version, an_version)), key='df', complevel=9)
