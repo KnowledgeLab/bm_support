@@ -85,8 +85,6 @@ def main(head, window_sizes, flag_dict, metric_type, verbosity=False):
 
     bipart_dict = get_mapping_data_reduced(metric_type, dfy, df_pm_wid)
 
-    print()
-
     if metric_type == 'affiliations' or metric_type == 'authors':
         use_wosids = False
         fraction_imporant_v_vertices = 0.5

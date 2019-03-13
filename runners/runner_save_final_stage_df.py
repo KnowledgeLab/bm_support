@@ -61,7 +61,7 @@ upper_exp, lower_exp = 1 - eps, eps
 thrs = [-1e-8, lower_exp, upper_exp, 1.0001e0]
 aff_dict_fname = expanduser('~/data/wos/affs_disambi/pm2id_dict.pgz')
 
-fpath = '~/data/kl/comm_metrics/{0}_{1}_comm_window_ave.csv.gz'.format(origin, ps)
+fpath = expanduser('~/data/kl/comm_metrics/{0}_comm_window_ave.csv.gz'.format(ps))
 
 df_comm_refute = read_csv(fpath)
 

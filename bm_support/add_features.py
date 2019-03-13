@@ -542,6 +542,7 @@ def generate_feature_groups(columns_filename, verbose=True):
 
     dim1 = ['affiliations', 'authors', 'future', 'past']
     dim2 = ['affiliations', 'authors', 'future', 'past', 'afaupa', 'afaupafu']
+    dim3 = ['affiliations', 'authors', 'past']
 
     # rncomms, rncomponents, rcommrel, rcomm_size
     patterns = ['cpop', 'cden', 'ksst', 'nhi'] + \
@@ -551,12 +552,14 @@ def generate_feature_groups(columns_filename, verbose=True):
                ['{0}_rcommrel_size'.format(c) for c in dim2] + \
                ['{0}_rncomms'.format(c) for c in dim2] + \
                ['{0}_rncomponents'.format(c) for c in dim2] + \
+               ['pos_comm_ave_{0}'.format(c) for c in dim3] + \
                ['pre_authors', 'pre_affs']
 
     bipatterns = [('lincs', 'comm_size'), ('lincs', 'same_comm'),
                   ('litgw', 'dyn_eff_comm_size'), ('litgw', 'dyn_same_comm'),
                   ('litgw', 'comm_size'), ('litgw', 'same_comm')]
 
+    print('### Patterns')
     print(patterns)
 
     col_families = {pat: [x for x in columns if pat in x] for pat in patterns}
@@ -575,9 +578,9 @@ def generate_feature_groups(columns_filename, verbose=True):
     col_families['time'] = ['year_off', 'year_off2']
     col_families['authors_count'] = ['authors_count']
     col_families['affiliations_count'] = ['affiliations_count']
+    col_families['prev_rdist'] = ['prev_rdist']
+    col_families['prev_rdist_abs'] = ['prev_rdist_abs']
     col_families['obs_mu'] = ['obs_mu']
-
-    # col_families['cden'].append('pop_density')
 
     col_families = {**col_families, **col_families_basic, **col_families_prefix_suffix}
 
@@ -752,7 +755,14 @@ def select_feature_families(an_version):
                 'past_suppind',
                 'pre_affs',
                 'pre_authors',
-                'time']
+                'time',
+                'pos_comm_ave_affiliations',
+                'pos_comm_ave_authors',
+                'pos_comm_ave_past',
+                'obs_mu',
+                'prev_rdist',
+                'prev_rdist_abs'
+    ]
 
     version_selector = dict()
 

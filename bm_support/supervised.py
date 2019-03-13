@@ -1472,7 +1472,9 @@ def logreg_driver(origin, version, batchsize, cutoff_len, a, b, hash_int, max_de
 
 
 def get_corrs(df, target_column, covariate_columns, threshold=0.03, mask=None,
-              filename=None, filename_abs=None, dropnas=True, verbose=False):
+              filename=None, filename_abs=None, dropnas=True, individual_na=False,
+              verbose=False):
+
     df_ = df.copy()
     if mask is not None:
         df_ = df_[mask].copy()
@@ -1490,33 +1492,46 @@ def get_corrs(df, target_column, covariate_columns, threshold=0.03, mask=None,
         dict_flag = False
 
     all_cols = list(set(covariate_columns) | {target_column})
-    corr_df = df_[all_cols].corr()
-    not_na_mask = corr_df[target_column].notnull()
-    not_na_columns = list(not_na_mask[not_na_mask].index)
-    if not dropnas:
-        not_na_columns = list(corr_df[target_column].index)
-    corr_df_abs = corr_df.abs()
-
-    reduced_columns = []
-    if dict_flag:
-        for k, v in covariate_columns_dict.items():
-            cur_cols = list(set(not_na_columns) & set(v))
-            if len(cur_cols) > 1:
-                candidates = corr_df.loc[cur_cols, target_column].sort_values(ascending=False).iloc[[0, -1]]
+    if individual_na:
+        corrs = []
+        for c in covariate_columns:
+            if c in df.columns:
+                mask = df_[c].notnull()
+                corr_ = df_.loc[mask, [c, target_column]].corr().values[0, 1]
+                corrs.append(corr_)
             else:
-                candidates = corr_df.loc[cur_cols, target_column]
-            # print(list(candidates.index))
-            reduced_columns.extend(list(candidates.index))
+                corrs.append(np.nan)
+        corr_df = pd.Series(corrs, index=covariate_columns, name=target_column)
+        corr_abs_thr = corr_df[corr_df.abs() > threshold].abs().sort_values(ascending=False)
+        corr_df_thr = corr_df[corr_df.abs() > threshold].sort_values(ascending=False)
     else:
-        reduced_columns = list(set(covariate_columns) & set(not_na_columns))
+        corr_df = df_[all_cols].corr()
+        not_na_mask = corr_df[target_column].notnull()
+        not_na_columns = list(not_na_mask[not_na_mask].index)
+        if not dropnas:
+            not_na_columns = list(corr_df[target_column].index)
+        corr_df_abs = corr_df.abs()
 
-    # print(reduced_columns)
-    above_thr = set(corr_df_abs[corr_df_abs[target_column] > threshold].index)
+        reduced_columns = []
+        if dict_flag:
+            for k, v in covariate_columns_dict.items():
+                cur_cols = list(set(not_na_columns) & set(v))
+                if len(cur_cols) > 1:
+                    candidates = corr_df.loc[cur_cols, target_column].sort_values(ascending=False).iloc[[0, -1]]
+                else:
+                    candidates = corr_df.loc[cur_cols, target_column]
+                # print(list(candidates.index))
+                reduced_columns.extend(list(candidates.index))
+        else:
+            reduced_columns = list(set(covariate_columns) & set(not_na_columns))
 
-    corr_abs_thr = corr_df_abs.loc[list(set(reduced_columns) & above_thr),
-                                   target_column].sort_values(ascending=False)
-    corr_df_thr = corr_df.loc[list(set(reduced_columns) & above_thr),
-                              target_column].sort_values(ascending=False)
+        # print(reduced_columns)
+        above_thr = set(corr_df_abs[corr_df_abs[target_column] > threshold].index)
+
+        corr_abs_thr = corr_df_abs.loc[list(set(reduced_columns) & above_thr),
+                                       target_column].sort_values(ascending=False)
+        corr_df_thr = corr_df.loc[list(set(reduced_columns) & above_thr),
+                                  target_column].sort_values(ascending=False)
 
     if filename:
         corr_df_thr.to_csv(filename)
@@ -1530,27 +1545,33 @@ def get_corrs(df, target_column, covariate_columns, threshold=0.03, mask=None,
 
 
 def trim_corrs_by_family(cr, feature_dict_inv):
-    cr_df = cr.reset_index()
     cr_name = cr.name
-    cr_df['family'] = cr_df['index'].apply(lambda x: feature_dict_inv[x])
-    mask_pos = (cr_df[cr_name] > 0)
-    cr_df_cut_pos = cr_df.loc[mask_pos].groupby('family').apply(lambda x:
-                                                                x.iloc[np.argmax(x[cr_name].values)].append(
-                                                                    pd.Series([x.shape[0]], ['len_members'])))
-    cr_df_cut_neg = cr_df.loc[~mask_pos].groupby('family').apply(lambda x:
-                                                                 x.iloc[np.argmin(x[cr_name].values)].append(
-                                                                     pd.Series([x.shape[0]], ['len_members'])))
-    cr_res = pd.concat([cr_df_cut_pos, cr_df_cut_neg]).set_index('index').sort_values(cr_name)
-    unique_family_size = cr_res.drop_duplicates('family').shape[0]
-    if unique_family_size != cr_res.shape[0]:
-        confused_families = cr_res.groupby('family').apply(lambda x: x.shape[0] > 1)
-        confused_families_mask = cr_res['family'].isin(confused_families[confused_families].index)
-        print('Warning, a family of features has correlation of different signs!')
-        print('size of extreme corrs dataset: {0}, size of unique families dataset {1}'.format(unique_family_size,
-                                                                                               cr_res.shape[0]))
-        print('Printing confused families:')
-        print(cr_res[confused_families_mask])
-    return cr_res[['family', cr_name, 'len_members']]
+    if cr.shape[0] > 0:
+        cr_df = cr.reset_index()
+        cr_df['family'] = cr_df['index'].apply(lambda x: feature_dict_inv[x])
+        mask_pos = (cr_df[cr_name] > 0)
+        cr_df_cut_pos = cr_df.loc[mask_pos].groupby('family').apply(lambda x:
+                                                                    x.iloc[np.argmax(x[cr_name].values)].append(
+                                                                        pd.Series([x.shape[0]], ['len_members'])))
+        cr_df_cut_neg = cr_df.loc[~mask_pos].groupby('family').apply(lambda x:
+                                                                     x.iloc[np.argmin(x[cr_name].values)].append(
+                                                                         pd.Series([x.shape[0]], ['len_members'])))
+        if cr_df_cut_neg.shape[0] > 0 or cr_df_cut_pos.shape[0] > 0:
+            cr_res = pd.concat([cr_df_cut_pos, cr_df_cut_neg]).set_index('index').sort_values(cr_name)
+            unique_family_size = cr_res.drop_duplicates('family').shape[0]
+            if unique_family_size != cr_res.shape[0]:
+                confused_families = cr_res.groupby('family').apply(lambda x: x.shape[0] > 1)
+                confused_families_mask = cr_res['family'].isin(confused_families[confused_families].index)
+                print('Warning, a family of features has correlation of different signs!')
+                print('size of extreme corrs dataset: {0}, size of unique families dataset {1}'.format(unique_family_size,
+                                                                                                       cr_res.shape[0]))
+                print('Printing confused families:')
+                print(cr_res[confused_families_mask])
+            return cr_res[['family', cr_name, 'len_members']]
+        else:
+            return pd.DataFrame(columns=['family', cr_name, 'len_members'])
+    else:
+        return pd.DataFrame(columns=['family', cr_name, 'len_members'])
 
 
 def select_features_dict(df_train, df_test, target_column, feature_dict,

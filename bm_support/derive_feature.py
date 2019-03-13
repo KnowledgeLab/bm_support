@@ -206,9 +206,25 @@ def derive_refutes_community_features(df, fpath, windows=(2, 3, None),
 
             df_agg.append(df_)
             # # merge work_var average onto publications by up, dn, publication
-            # dfw = dfw.merge(df_metric_claims[[up, dn, pm, comm_ave_col]], on=[up, dn, pm], how='left')
     # dfr = pd.concat(df_agg)
     dfm = df_agg[0].copy()
     for df_ in df_agg[1:]:
         dfm = dfm.merge(df_, on=[up, dn, pm])
     return dfm
+
+
+def clean_nas(df, feats, verbose=False):
+    masks = []
+    cfeats = list(set(feats).intersection(set(df.columns)))
+    for c in cfeats:
+        mask = df[c].notnull()
+        masks.append(mask)
+        if verbose:
+            if sum(mask) != mask.shape[0]:
+                print(c, sum(mask))
+
+    mask_agg = masks[0]
+    for m in masks[1:]:
+        mask_agg &= m
+    dfr = df.loc[mask_agg].copy()
+    return dfr
