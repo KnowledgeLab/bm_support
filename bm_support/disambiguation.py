@@ -218,7 +218,7 @@ def tokenize_phrase(s, boring_words=[]):
     clean_words = [w for w in words if w not in boring_words]
 
     # tokenizer = RegexpTokenizer(r'\w+')
-    #TOD replace punctuateion in general
+    # TODO replace punctuation in general
     clean_words = [cw.replace('.', '').replace('"', '').replace('\'', '') for cw in clean_words]
     return clean_words
 

@@ -5,7 +5,7 @@ from sklearn.preprocessing import MinMaxScaler
 from datahelpers.dftools import agg_file_info
 from os import listdir
 from os.path import isfile, join, expanduser
-from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, dist, rdist, pm, ct, affs, aus, bdist
+from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, cexp, qcexp, dist, rdist, pm, ct, affs, aus, bdist
 from datahelpers.dftools import select_appropriate_datapoints, add_column_from_file
 import Levenshtein as lev
 from functools import partial
@@ -142,19 +142,17 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
                      suppress_affs=False,
                      masks=None,
                      add_cite_fits=False,
-                     min_len=-1,
-                     max_len=None,
                      define_visible_prior=False,
                      community_refutation_df=None,
                      verbose=False):
 
-    mask_len_ = (df.groupby(ni).apply(lambda x: x.shape[0]) > min_len)
-    mask_len = df[ni].isin(mask_len_[mask_len_].index)
-    df = df[mask_len]
-    if max_len:
-        mask_len_ = (df.groupby(ni).apply(lambda x: x.shape[0]) < max_len)
-        mask_len = df[ni].isin(mask_len_[mask_len_].index)
-        df = df[mask_len]
+    # mask_len_ = (df.groupby([up, dn]).apply(lambda x: x.shape[0]) > min_len)
+    # mask_len = df[ni].isin(mask_len_[mask_len_].index)
+    # df = df[mask_len]
+    # if max_len:
+    #     mask_len_ = (df.groupby(ni).apply(lambda x: x.shape[0]) < max_len)
+    #     mask_len = df[ni].isin(mask_len_[mask_len_].index)
+    #     df = df[mask_len]
 
     df_selected = mask_out(df, cutoff, masks, verbose)
 
@@ -170,7 +168,7 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
     pm_aus_map = {k: list(set(v)) for k, v in pm_aus_map.items()}
 
     # for each new_index ni (interaction) calculate authors herfindahl index
-    aus_feature = df_selected.groupby(ni).apply(lambda x: calc_normed_hi(x, pm_aus_map, (pm, ye)))
+    aus_feature = df_selected.groupby([up, dn]).apply(lambda x: calc_normed_hi(x, pm_aus_map, (pm, ye)))
     aus_feature = aus_feature.rename(columns={0: pm, 1: 'pre_' + aus, 2: 'nhi_' + aus})
     f_cols = ['pre_' + aus, 'nhi_' + aus]
 
@@ -186,7 +184,7 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
             pm_clusters = cluster_affiliations(df_wos, pmids)
 
         pm_clusters = {k: list(set(v)) for k, v in pm_clusters.items()}
-        affs_feature = df_selected.groupby(ni).apply(lambda x: calc_normed_hi(x, pm_clusters, (pm, ye)))
+        affs_feature = df_selected.groupby([up, dn]).apply(lambda x: calc_normed_hi(x, pm_clusters, (pm, ye)))
         affs_feature = affs_feature.rename(columns={0: pm, 1: 'pre_' + affs, 2: 'nhi_' + affs})
         aus_feature = affs_feature.merge(aus_feature[['pre_' + aus, 'nhi_' + aus]],
                                          left_index=True, right_index=True)
@@ -195,7 +193,7 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
     df_selected = df_selected.merge(aus_feature[f_cols],
                                     left_index=True, right_index=True)
 
-    df_selected[ye + '_off'] = df_selected.groupby(ni, as_index=False,
+    df_selected[ye + '_off'] = df_selected.groupby([up, dn], as_index=False,
                                                    group_keys=False).apply(lambda x: x[ye] - x[ye].min())
     df_selected[ye + '_off2'] = df_selected[ye + '_off']**2
 
@@ -263,7 +261,7 @@ def prepare_final_df(df, normalize=False, columns_normalize=None, columns_normal
             dft = normalize_columns(dft, columns_normalize)
 
         for c in columns_normalize_by_interaction:
-            dft[c] = dft.groupby(ni, as_index=False, group_keys=False).apply(lambda x: groupby_normalize(x[c]))
+            dft[c] = dft.groupby([up, dn], as_index=False, group_keys=False).apply(lambda x: groupby_normalize(x[c]))
 
         if verbose:
             minmax = ['{0} min: {1:.2f}; max {2:.2f}'.format(c, dft[c].min(), dft[c].max())
@@ -580,7 +578,7 @@ def generate_feature_groups(columns_filename, verbose=True):
     col_families['affiliations_count'] = ['affiliations_count']
     col_families['prev_rdist'] = ['prev_rdist']
     col_families['prev_rdist_abs'] = ['prev_rdist_abs']
-    col_families['obs_mu'] = ['obs_mu']
+    # col_families['obs_mu'] = ['obs_mu']
 
     col_families = {**col_families, **col_families_basic, **col_families_prefix_suffix}
 
@@ -913,7 +911,6 @@ def transform_last_stage(df, trial_features, origin, len_thr=2, normalize=False,
     mask_lit = (df[up] == 7157) & (df[dn] == 1026)
 
     for c in trial_features:
-        # print(c)
         masks.append(df[c].notnull())
 
     mask_notnull = pd.Series([True]*df.shape[0], index=df.index)

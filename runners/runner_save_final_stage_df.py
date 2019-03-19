@@ -6,12 +6,12 @@ from os.path import expanduser
 
 an_version = 12
 
-origin = 'gw'
-version = 11
-hash_int = 471980
-# origin = 'lit'
-# version = 8
-# hash_int = 502784
+# origin = 'gw'
+# version = 11
+# hash_int = 471980
+origin = 'lit'
+version = 8
+hash_int = 502784
 
 batchsize = 1
 cutoff_len = 1
@@ -68,7 +68,7 @@ df_comm_refute = read_csv(fpath)
 df2_ = prepare_final_df(df, normalize=True, columns_normalize=cols_norm,
                         columns_normalize_by_interaction=cols_norm_by_int,
                         quantize_intervals=thrs, aff_dict_fname=aff_dict_fname,
-                        masks=masks, cutoff=None,
+                        masks=masks,
                         add_cite_fits=True, define_visible_prior=True,
                         community_refutation_df=df_comm_refute,
                         verbose=True)
