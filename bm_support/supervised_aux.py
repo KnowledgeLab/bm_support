@@ -5,7 +5,7 @@ from .supervised import problem_type_dict
 from .supervised import select_features_dict, logit_pvalue, linear_pvalue, report_metrics
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import precision_score, recall_score, roc_auc_score, roc_curve, r2_score
+from sklearn.metrics import precision_score, recall_score, roc_auc_score, roc_curve, r2_score, accuracy_score
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -175,26 +175,37 @@ def sect_min(f, a, b, tol=1e-6):
 def find_optimal_model(X_train, y_train, max_features=None, model_type=LogisticRegression,
                        kwargs={'penalty': 'l1', 'solver': 'liblinear', 'max_iter': 100},
                        penalty_name='C',
+                       metric_type_foo=precision_score,
+                       pos_label=1,
+                       find_max=False,
+                       cbounds=(1e-6, 1e3),
                        verbose=False):
 
     def foo(x):
         clf_ = model_type(**{**kwargs, **{penalty_name: x}})
         clf_.fit(X_train, y_train)
-        y_pred = clf_.predict(X_train)
+        if metric_type_foo == roc_auc_score:
+            y_pred = clf_.predict_proba(X_train)[:, pos_label]
+        else:
+            y_pred = clf_.predict(X_train)
         if model_type == LogisticRegression:
-            acc_ = precision_score(y_train, y_pred, pos_label=0)
+            if metric_type_foo == precision_score or metric_type_foo == recall_score:
+                metric2opt = metric_type_foo(y_train, y_pred, pos_label=pos_label)
+            else:
+                metric2opt = metric_type_foo(y_train, y_pred)
             nzero = X_train.shape[1] - np.sum(clf_.coef_ == 0., axis=1)
             if verbose:
-                print('c: {0:.3f}, acc: {1:.4f}, non zero coeffs: {2}'.format(x, acc_, nzero))
+                print('c: {0:.3f}, metric: {1:.4f}, non zero coeffs: {2}'.format(x, metric2opt, nzero))
         else:
-            acc_ = r2_score(y_train, y_pred)
+            metric2opt = r2_score(y_train, y_pred)
             if verbose:
-                print('c: {0:.3f}, acc: {1:.4f}'.format(x, acc_))
+                print('c: {0:.3f}, metric: {1:.4f}'.format(x, metric2opt))
 
-        return acc_, clf_
+        return metric2opt, clf_
 
     if max_features:
-        best_penalty = bisect_zero(lambda x: np.sum(foo(x)[1].coef_ != 0.) - max_features, 1e-3, 1e3)
+        best_penalty = bisect_zero(lambda x: np.sum(foo(x)[1].coef_ != 0.) - max_features,
+                                   cbounds[0], cbounds[1])
     else:
         best_penalty = sect_min(lambda x: -foo(x)[0], 1e-2, 1e2)
 
@@ -202,57 +213,107 @@ def find_optimal_model(X_train, y_train, max_features=None, model_type=LogisticR
     return clf, best_penalty, acc
 
 
-def produce_topk_model(clf, dft, features, target, verbose=False):
-    dft = dft.copy()
+# def produce_topk_model(clf, dft, features, target, pos_label=1, verbose=False):
+#     dft = dft.copy()
+#     y_test = dft[target]
+#     if verbose:
+#         print('Freq of 1s: {0}'.format(sum(dft[target])/dft.shape[0]))
+#     p_pos = clf.predict_proba(dft[features])[:, pos_label]
+#     dft['proba_pos'] = pd.Series(p_pos, index=dft.index)
+#     # p_level_base = 1. - dft[target].sum()/dft.shape[0]
+#     top_ps = np.arange(0.01, 1.0, 0.01)
+#     precs = []
+#     recs = []
+#     for p_level in top_ps:
+#         p_thr = np.percentile(p_pos, 100*p_level)
+#         # if pos_label == 0:
+#         #     y_pred = 1. - (dft['proba_pos'] >= p_thr).astype(int)
+#         # else:
+#         y_pred = (dft['proba_pos'] >= p_thr).astype(int)
+#         # y_pred = (dft['proba_pos'] > p_thr).astype(int)
+#         # print(p_level, p_thr, sum(1. - y_pred))
+#         precs.append(precision_score(y_test, y_pred, pos_label=pos_label))
+#         recs.append(recall_score(y_test, y_pred, pos_label=pos_label))
+#
+#     metrics_dict = {'level': top_ps, 'prec': precs, 'rec': recs}
+#
+#     if pos_label == 0:
+#         base_prec = 1.0 - sum(dft[target])/dft.shape[0]
+#     else:
+#         base_prec = sum(dft[target])/dft.shape[0]
+#
+#     metrics_dict['prec_base'] = base_prec
+#     if isinstance(clf, LogisticRegression):
+#         metrics_dict['c_opt'] = clf.C
+#
+#     y_pred = clf.predict(dft[features])
+#     y_prob = clf.predict_proba(dft[features])[:, pos_label]
+#     # y_prob = clf.predict_proba(dft[features])[:, 1]
+#
+#     metrics_dict['prec0'] = precision_score(y_test, y_pred, pos_label=pos_label)
+#     metrics_dict['rec0'] = recall_score(y_test, y_pred, pos_label=pos_label)
+#     fpr, tpr, thresholds = roc_curve(y_test, y_prob, pos_label=pos_label)
+#
+#     # metrics_dict['prec0'] = precision_score(y_test, y_pred)
+#     # metrics_dict['rec0'] = recall_score(y_test, y_pred)
+#     # fpr, tpr, thresholds = roc_curve(y_test, y_prob)
+#
+#     metrics_dict['roc_curve'] = fpr, tpr, thresholds
+#
+#     metrics_dict['auc'] = roc_auc_score(y_test, y_prob)
+#     metrics_dict['corr'] = np.corrcoef(y_test, y_prob)[0, 1]
+#
+#     return metrics_dict
+
+
+def produce_topk_model(clf, dft, features, target, pos_label=1, verbose=False):
     y_test = dft[target]
+    y_prob = clf.predict_proba(dft[features])[:, 1]
+    return produce_topk_model_(y_test, y_prob, pos_label, verbose)
+
+
+def produce_topk_model_(y_test, y_prob, pos_label=1, verbose=False):
+    # y_test vector of {0, 1}
+    # y_prob vector P{c_i == 1}
+    # in order to produce metrics for 0 classification, flip y_test and y_prob
+    if pos_label == 0:
+        y_test, y_prob = map(lambda x: 1. - x.copy(), [y_test, y_prob])
     if verbose:
-        print('Freq of 1s: {0}'.format(sum(dft[target])/dft.shape[0]))
-    p_pos = clf.predict_proba(dft[features])[:, 0]
-    # p_pos = clf.predict_proba(dft[features])[:, 1]
-    # print(clf.predict_proba(dft[features]).shape)
-    # print(clf.predict_proba(dft[features])[:5, :])
-    dft['proba_pos'] = pd.Series(p_pos, index=dft.index)
-    # p_level_base = 1. - dft[target].sum()/dft.shape[0]
+        print('Freq of 1s: {0}'.format(y_test.mean()))
     top_ps = np.arange(0.01, 1.0, 0.01)
     precs = []
     recs = []
     for p_level in top_ps:
-        p_thr = np.percentile(p_pos, 100*(1-p_level))
-        y_pred = 1. - (dft['proba_pos'] >= p_thr).astype(int)
-        # y_pred = (dft['proba_pos'] > p_thr).astype(int)
-        # print(p_level, p_thr, sum(1. - y_pred))
-        precs.append(precision_score(y_test, y_pred, pos_label=0))
-        recs.append(recall_score(y_test, y_pred, pos_label=0))
-        # precs.append(precision_score(y_test, y_pred))
-        # recs.append(recall_score(y_test, y_pred))
+        p_thr = np.percentile(y_prob, 100*p_level)
+        y_pred = (y_prob >= p_thr).astype(int)
+        precs.append(precision_score(y_test, y_pred))
+        recs.append(recall_score(y_test, y_pred))
+
+    y_pred = (y_prob > 0.5).astype(int)
 
     metrics_dict = {'level': top_ps, 'prec': precs, 'rec': recs}
 
-    base_prec = 1.0 - sum(dft[target])/dft.shape[0]
-    # base_prec = sum(dft[target])/dft.shape[0]
+    base_prec = y_test.mean()
 
     metrics_dict['prec_base'] = base_prec
-    if isinstance(clf, LogisticRegression):
-        metrics_dict['c_opt'] = clf.C
 
-    y_pred = clf.predict(dft[features])
-    y_prob = clf.predict_proba(dft[features])[:, 0]
-    # y_prob = clf.predict_proba(dft[features])[:, 1]
-
-    metrics_dict['prec0'] = precision_score(y_test, y_pred, pos_label=0)
-    metrics_dict['rec0'] = recall_score(y_test, y_pred, pos_label=0)
-    fpr, tpr, thresholds = roc_curve(y_test, y_prob, pos_label=0)
-
-    # metrics_dict['prec0'] = precision_score(y_test, y_pred)
-    # metrics_dict['rec0'] = recall_score(y_test, y_pred)
-    # fpr, tpr, thresholds = roc_curve(y_test, y_prob)
+    metrics_dict['prec0'] = precision_score(y_test, y_pred)
+    metrics_dict['rec0'] = recall_score(y_test, y_pred)
+    fpr, tpr, thresholds = roc_curve(y_test, y_prob)
 
     metrics_dict['roc_curve'] = fpr, tpr, thresholds
 
-    metrics_dict['auc'] = roc_auc_score(y_test, 1.-y_prob)
-    # metrics_dict['auc'] = roc_auc_score(y_test, y_prob)
-
+    metrics_dict['auc'] = roc_auc_score(y_test, y_prob)
+    metrics_dict['corr'] = np.corrcoef(y_test, y_prob)[0, 1]
     return metrics_dict
+
+
+def extract_scalar_metric_from_report(reports_agg, mname, columns):
+    metrics = {k: np.array([[report[mname] for c, report in fold_report] for fold_report in reports])
+               for k, reports in reports_agg.items()}
+    metrics_means = {k: dict(zip(columns, item.mean(axis=0))) for k, item in metrics.items()}
+    metrics_means_cut = {k: {kk: np.round(v, 4) for kk, v in item.items()} for k, item in metrics_means.items()}
+    return metrics_means_cut
 
 
 def plot_prec_recall(metrics_dict, ax=None, title=None, fname=None):
@@ -299,20 +360,34 @@ def plot_auc(metrics_dict, ax=None, title=None, fname=None):
 
     ax_init = ax
     sns.set_style('whitegrid')
-    alpha_level = 0.8
+    alpha_level = 0.3
     linewidth = 0.6
 
     if not ax:
         fig = plt.figure(figsize=(6, 6))
         rect = [0.15, 0.15, 0.75, 0.75]
         ax = fig.add_axes(rect)
+    else:
+        leg = ax.get_legend()
+        lines = leg.get_lines()
+        texts = [t.get_text() for t in leg.get_texts()]
+
     if title:
         ax.set_title(title)
 
     if 'roc_curve' in metrics_dict.keys():
         fpr, tpr, thresholds = metrics_dict['roc_curve']
-        ax.plot(fpr, tpr,  linewidth=2*linewidth, alpha=alpha_level,
-                label='AUC={0:.3f}'.format(metrics_dict['auc']))
+        if ax_init:
+            line = ax.plot(fpr, tpr,  linewidth=2*linewidth, alpha=alpha_level)
+        else:
+            line = ax.plot(fpr, tpr, linewidth=2 * linewidth, alpha=alpha_level,
+                           label='AUC={0:.3f}'.format(metrics_dict['auc']))
+        if ax_init:
+            lines += line
+            texts += ['AUC={0:.3f}'.format(metrics_dict['auc'])]
+            ax.legend(lines, texts)
+
+        # ax.legend(lines, texts)
         ax.plot([0, 1], [0, 1], 'r--', linewidth=2*linewidth)
         ax.set_xlim([0.0, 1.0])
         ax.set_ylim([0.0, 1.05])

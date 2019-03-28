@@ -1049,7 +1049,7 @@ def invert_bayes(df_input, clf, feature_columns, p_min=1e-2, verbose=False, debu
         arr_probs = debug
     else:
         if isinstance(clf, list):
-            p_min = np.float(5e-1/ clf[0].n_estimators)
+            p_min = np.float(5e-1/clf[0].n_estimators)
             probs = [rfm.predict_proba(df[feature_columns])[np.newaxis, ...] for rfm in clf]
             arr_probs = np.concatenate(probs, axis=0)
             arr_probs2 = clean_zeros(arr_probs, p_min, 2)

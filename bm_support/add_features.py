@@ -40,11 +40,22 @@ def groupby_normalize(data):
     return pd.Series(data_rel, index=data.index)
 
 
-def normalize_columns(df, columns):
+def normalize_columns(df, columns, scaler=None):
     df2 = df.copy()
-    sc = MinMaxScaler()
-    df2[columns] = sc.fit_transform(df[columns])
+    if not scaler:
+        scaler = MinMaxScaler()
+        scaler.fit(df[columns])
+    df2[columns] = scaler.transform(df[columns])
     return df2
+
+
+def normalize_columns_with_scaler(df, columns, scaler=None):
+    df2 = df.copy()
+    if not scaler:
+        scaler = MinMaxScaler()
+        scaler.fit(df[columns])
+    df2[columns] = scaler.transform(df[columns])
+    return df2, scaler
 
 
 def mask_out(df, cutoff=None, extra_masks=None, verbose=False):
