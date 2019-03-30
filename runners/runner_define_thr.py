@@ -22,7 +22,7 @@ def yield_kl_dist(a, n, grid, precomp_dict=None, pa=1, pb=1):
         pk_ = np.array([pk(x) for x in grid])
         ent = entropy(pk_, uniform.pdf)
     if isnan(ent) or isinf(ent):
-        print(a, n, pa + a, pb + n - a, ent)
+        print('yield_kl_dist: ', a, n, pa + a, pb + n - a, ent)
     return ent
 
 
@@ -62,7 +62,7 @@ def set_closest_max(x):
     xm = x / 10**round_ind
     x_up = round(xm + 0.5, 0)
     delta = x_up / xm - 1
-    print(round_ind, delta, x_up, xm)
+    print('In set_closest_max() round_ind {}, delta {}, x_up {}, xm {}'.format(round_ind, delta, x_up, xm))
     if delta < 0.2:
         x_ans = x_up * 10 ** round_ind
     else:
@@ -89,12 +89,12 @@ def plot_thr_dt(df, fname=None):
                     'n positive', 'n negative'], loc='upper center')
 
     ax_max = max([df.ps.max(), df.neg.max()])
-    print(ax_max, set_closest_max(ax_max))
+    # print(ax_max, set_closest_max(ax_max))
     ax_max2 = max([df.n_ps.max(), df.n_neg.max()])
     ax.set_ylim([0, set_closest_max(ax_max)])
     ax2.set_ylim([0, set_closest_max(ax_max2)])
     if fname:
-        plt.savefig(fname)
+        x = plt.savefig(fname)
     plt.close()
 
 
@@ -123,13 +123,18 @@ def get_dists(beta_data_df, foo, gridn=100, alpha0=0.5, beta0=0.5, verbose=False
     delta = 1. / gridn
     grid = np.arange(0.0, 1., delta)
 
+    prev_item = -1, -1, -1, -1, -1
     for j, item in beta_data_df.iterrows():
         thr, k, n, k2, n2 = item[['thr', 'k', 'n', 'k_ambi', 'n_ambi']]
-        pdfs = [beta(alpha0 + k, beta0 + n - k).pdf, beta(alpha0 + k2, beta0 + n2 - k2).pdf]
-        dist = foo(*pdfs, grid)
-        if verbose:
-            print('{0}/{1}:  d (pos, ambi) = {2:.3f}'.format(j, beta_data_df.shape[0], dist))
+        if k == prev_item[1] and n == prev_item[2]:
+            dist = dists[-1]
+        else:
+            pdfs = [beta(alpha0 + k, beta0 + n - k).pdf, beta(alpha0 + k2, beta0 + n2 - k2).pdf]
+            dist = foo(*pdfs, grid)
+            if verbose:
+                print('{0}/{1}:  d (pos, ambi) = {2:.3f}'.format(j, beta_data_df.shape[0], dist))
         dists.append(dist)
+        prev_item = thr, k, n, k2, n2
     s = pd.Series(dists, index=beta_data_df.index)
     beta_data_df['dist'] = s
     return beta_data_df
@@ -164,22 +169,28 @@ for key, df_ in df_dict.items():
     print(key, df_.shape)
 
 
-wdist_grid = 100
-thr_min = 1e-2
-thr_max = 1e-2
-thr_delta = 5e-3
+wdist_grid = 1000
+thr_min = 2e-2
+thr_max = 4e-1
+thr_delta = 2e-3
 
 for k, df in df_dict.items():
     print(k, df.shape)
     df_info = get_thr_study(df, thr_delta, thr_min, thr_max)
-    df_info = get_dists(df_info, get_wdist, wdist_grid, True)
+    # print(df_info)
+    df_info = get_dists(df_info, get_wdist, wdist_grid, verbose=True)
+    # print(df_info)
     df_info = df_info.rename(columns={'dist': 'ps', 'n': 'n_ps'})
+    # print(df_info)
 
     df_info2 = get_thr_study(df, thr_delta, thr_min, thr_max, positive_flag=False)
-    df_info2 = get_dists(df_info2, get_wdist, wdist_grid, True)
+    # print(df_info2)
+    df_info2 = get_dists(df_info2, get_wdist, wdist_grid, verbose=True)
+    # print(df_info2)
     df_info2 = df_info2.rename(columns={'dist': 'neg', 'n': 'n_neg'})
+    # print(df_info2)
     dfr = pd.merge(df_info[['thr', 'ps', 'n_ps']], df_info2[['thr', 'neg', 'n_neg']], on='thr')
-    print(dfr)
+    # print(dfr)
     fname = expanduser('~/data/kl/figs/{0}_thr_bdist_t.pdf'.format(k))
     plot_thr_dt(dfr, fname)
     df_info.to_csv(expanduser('~/data/kl/threshold/{0}_thr_t.csv'.format(k)))
