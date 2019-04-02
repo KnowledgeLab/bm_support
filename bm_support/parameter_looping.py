@@ -20,6 +20,7 @@ from bm_support.supervised import simple_oversample
 from bm_support.beta_est import produce_beta_est, produce_claim_valid
 from bm_support.beta_est import produce_beta_interaction_est, produce_interaction_est_weighted
 from bm_support.beta_est import produce_interaction_plain
+import sys
 
 
 def pop_fold(dfs, k):
@@ -31,13 +32,56 @@ def pop_fold(dfs, k):
         return None
 
 
+def run_experiments(df_dict, available_features, feature_selector,
+                    origins, data_modes, len_thrs, feature_sets,
+                    model_flag='rf', model_pars={},
+                    oversampling_flag=False, n_folds=3, n_trials=10, seed0=13,
+                    pos_label=1,
+                    verbose=False):
+    df_rep5 = []
+    rdict = {}
+    for origin in origins:
+        rdict[origin] = {}
+        df_rep4 = []
+        for data_mode in data_modes:
+            rdict[origin][data_mode] = {}
+            df_rep3 = []
+            for len_thr in len_thrs:
+                rdict[origin][data_mode][len_thr] = {}
+                df_rep2 = []
+                for feature_set in feature_sets:
+                    df_rep, dict_reps = run_experiment(df_dict, available_features,
+                                                       feature_selector,
+                                                       origin, data_mode, len_thr, feature_set,
+                                                       model_flag, model_pars,
+                                                       oversampling_flag, n_folds, n_trials, seed0,
+                                                       pos_label, verbose)
+                    df_rep2.append(df_rep)
+                    rdict[origin][data_mode][len_thr][feature_set] = dict_reps
+
+                df_rep2 = merge_dfs('feature_set', feature_sets, df_rep2)
+
+                df_rep3.append(df_rep2)
+            df_rep3 = merge_dfs('len_thr', len_thrs, df_rep3)
+
+            df_rep4.append(df_rep3)
+        df_rep4 = merge_dfs('data_mode', data_modes, df_rep4)
+
+        df_rep5.append(df_rep4)
+    df_rep_final = merge_dfs('origin', origins, df_rep5)
+    return df_rep_final, rdict
+
+
 def run_experiment(df_dict, available_features, feature_selector, origin='gw', data_mode='t0', len_thr=0,
                    feature_set='claim',
                    model_flag='rf', model_pars={},
                    oversampling_flag=False, n_folds=3, n_trials=10, seed0=13,
+                   pos_label=1,
                    verbose=False):
     """
     :param df_dict:
+    :param available_features:
+    :param feature_selector:
     :param origin: gw or lit
     :param data_mode: t0, gt or all
     :param len_thr: 0, 1, 3,
@@ -48,7 +92,8 @@ def run_experiment(df_dict, available_features, feature_selector, origin='gw', d
     :param n_folds: number of folds for validation
     :param n_trials:
     :param seed0: defines sampling for k folds
-    :verbose
+    :param pos_label:
+    :param verbose:
     :return:
     """
 
@@ -60,32 +105,55 @@ def run_experiment(df_dict, available_features, feature_selector, origin='gw', d
         updn_cnt = dfz.groupby([up, dn]).apply(lambda x: x.shape[0])
         good_updns = updn_cnt[updn_cnt > len_thr]
         dfz = dfz.merge(pd.DataFrame(good_updns), left_on=[up, dn], right_index=True)
+    if dfz[bdist].unique().shape[0] < 2:
+        print('{} {} {} {}'.format(origin, data_mode, len_thr, feature_set))
+        print('less then two unique values of bdist: returning empty df, empty dict')
+        return pd.DataFrame(), dict()
 
-    nmax = 5000
+    nmax = 50000
 
     rns = RandomState(seed0)
     seeds = rns.randint(nmax, size=n_trials)
-    agg = []
+    dict_samples = {}
+    df_reps = []
+
     for seed in seeds:
-        dfs = sample_by_length(dfz, (up, dn), head=10, seed=seed, frac_test=[1] * n_folds, verbose=verbose)
+        if dfz[bdist].unique().shape[0] < 2:
+            print('{} {} {} {}'.format(origin, data_mode, len_thr, feature_set))
+            print('less then two unique values of bdist')
+            sys.exit()
+        dfs, flag = sample_by_length(dfz, (up, dn), head=10, seed=seed, frac_test=[1] * n_folds, verbose=verbose)
+        while not flag:
+            seed_new = rns.randint(nmax, size=1)[0]
+            print('{} {} {} {}'.format(origin, data_mode, len_thr, feature_set))
+            print('bad k-fold generated from seed {0}, trying new_seed: {1}'.format(seed, seed_new))
+            dfs, flag = sample_by_length(dfz, (up, dn), head=10, seed=seed_new,
+                                         frac_test=[1] * n_folds, verbose=verbose)
+
         if verbose:
             print('seed {0}: sizes {1} from {2}'.format(seed, [x.shape[0] for x in dfs], dfz.shape[0]))
-        r = loop_through_kfolds(dfs, available_features, feature_selector, feature_set, model_flag, model_pars,
-                              oversampling_flag, seed, verbose)
-        agg.append(r)
-    return r
+        df_rep, dict_reps = loop_through_kfolds(dfs, available_features,
+                                                feature_selector, feature_set,
+                                                model_flag, model_pars,
+                                                oversampling_flag, seed, pos_label, verbose)
+
+        dict_samples[seed] = dict_reps
+        df_reps.append(df_rep)
+    df_rep_out = merge_dfs('seed', seeds, df_reps)
+    return df_rep_out, dict_samples
 
 
 def loop_through_kfolds(dfs, available_features, feature_selector,
                         feature_set='claim', model_flag='rf', model_pars={},
-                        oversampling_flag=False, seed=11, verbose=False):
+                        oversampling_flag=False, seed=11,
+                        pos_label=1, verbose=False):
     df_reps = []
     dict_reps = []
     case_features = sorted(set(available_features) & set(feature_selector[feature_set]))
     for j in range(len(dfs)):
         df_train, df_test = pop_fold(dfs, j)
         df_rep, dict_rep = model_eval(df_train, df_test, case_features, model_flag,
-                                      model_pars, oversampling_flag, seed, verbose)
+                                      model_pars, oversampling_flag, seed, pos_label, verbose)
         df_reps.append(df_rep)
         dict_reps.append(dict_rep)
 
@@ -95,10 +163,16 @@ def loop_through_kfolds(dfs, available_features, feature_selector,
 
 
 def model_eval(df_train, df_test, case_features, model_flag, model_pars,
-               oversampling_flag=False, seed=11, verbose=False):
+               oversampling_flag=False, seed=11, pos_label=1, verbose=False):
+
+    if verbose:
+        print('model_flag {0}'.format(model_flag))
+        print('oversampling_flag {0}'.format(oversampling_flag))
+        print('{}, {} {:.3f} {:.3f} {}'.format(df_train.shape, df_test.shape,
+                                               df_test[bdist].mean(), df_train[bdist].mean(),
+                                               len(case_features)))
 
     scalar_metrics = ['corr', 'auc', 'prec0', 'rec0']
-    pos_label = 1
 
     case_features_red = [c for c in case_features if sum(df_train[c].isnull()) == 0]
 
@@ -114,6 +188,8 @@ def model_eval(df_train, df_test, case_features, model_flag, model_pars,
     if model_flag == 'rf':
         if not model_pars:
             model_pars = {'min_samples_leaf': 10, 'max_depth': 6, 'random_state': seed}
+        else:
+            model_pars['random_state'] = seed
         clf = RandomForestClassifier(**model_pars)
         clf = clf.fit(X_train, y_train)
     elif model_flag == 'lr':
@@ -153,7 +229,8 @@ def produce_interaction_metrics(df_train, df_test, verbose=False):
     all_cols += ['plain_pi', 'plain_pi_weighted']
     iy_test = df_test[[up, dn, 'bint']].drop_duplicates([up, dn]).set_index([up, dn]).sort_index()['bint']
 
-    irs = [(c, produce_topk_model_(iy_test, iy_prob, pos_label=pos_label)) for c, iy_prob in zip(all_cols, iy_probs)]
+    irs = {c: produce_topk_model_(iy_test, iy_prob, pos_label=pos_label)
+           for c, iy_prob in zip(all_cols, iy_probs)}
     return irs
 
 
@@ -169,8 +246,8 @@ def merge_dfs(column, values, dfs):
 
 
 def report_vec2df(irs, scalar_metrics):
-    dfs = [mdict2df(dd, scalar_metrics) for _, dd in irs]
-    vals = [v for v, _ in irs]
-    df = merge_dfs('estimator', vals, dfs)
+    keys = sorted(irs.keys())
+    dfs = [mdict2df(irs[k], scalar_metrics) for k in keys]
+    df = merge_dfs('estimator', keys, dfs)
     return df
 

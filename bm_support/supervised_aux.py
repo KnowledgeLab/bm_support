@@ -308,10 +308,18 @@ def produce_topk_model_(y_test, y_prob, pos_label=1, verbose=False):
     return metrics_dict
 
 
-def extract_scalar_metric_from_report(reports_agg, mname, columns):
-    metrics = {k: np.array([[report[mname] for c, report in fold_report] for fold_report in reports])
-               for k, reports in reports_agg.items()}
-    metrics_means = {k: dict(zip(columns, item.mean(axis=0))) for k, item in metrics.items()}
+def extract_scalar_metric_from_report(reports_agg, mname):
+    level0_keys = sorted(reports_agg.keys())
+    columns = sorted(set([x for x, _ in reports_agg[level0_keys[0]]]))
+    metrics = {}
+    for k in level0_keys:
+        reps = reports_agg[k]
+        metrics[k] = {}
+        for c in columns:
+            creps = [r for cname, r in reps if cname == c]
+            metrics[k][c] = np.array([cr[mname] for cr in creps])
+
+    metrics_means = {k: {kk: iitem.mean(axis=0) for kk, iitem in item.items()} for k, item in metrics.items()}
     metrics_means_cut = {k: {kk: np.round(v, 4) for kk, v in item.items()} for k, item in metrics_means.items()}
     return metrics_means_cut
 
@@ -356,7 +364,7 @@ def plot_prec_recall(metrics_dict, ax=None, title=None, fname=None):
     return ax
 
 
-def plot_auc(metrics_dict, ax=None, title=None, fname=None):
+def plot_auc(metrics_dict, ax=None, title=None, fname=None, show_legend=False):
 
     ax_init = ax
     sns.set_style('whitegrid')
@@ -368,9 +376,10 @@ def plot_auc(metrics_dict, ax=None, title=None, fname=None):
         rect = [0.15, 0.15, 0.75, 0.75]
         ax = fig.add_axes(rect)
     else:
-        leg = ax.get_legend()
-        lines = leg.get_lines()
-        texts = [t.get_text() for t in leg.get_texts()]
+        if show_legend:
+            leg = ax.get_legend()
+            lines = leg.get_lines()
+            texts = [t.get_text() for t in leg.get_texts()]
 
     if title:
         ax.set_title(title)
@@ -382,10 +391,12 @@ def plot_auc(metrics_dict, ax=None, title=None, fname=None):
         else:
             line = ax.plot(fpr, tpr, linewidth=2 * linewidth, alpha=alpha_level,
                            label='AUC={0:.3f}'.format(metrics_dict['auc']))
-        if ax_init:
+        if ax_init and show_legend:
             lines += line
             texts += ['AUC={0:.3f}'.format(metrics_dict['auc'])]
-            ax.legend(lines, texts)
+
+            if show_legend:
+                ax.legend(lines, texts)
 
         # ax.legend(lines, texts)
         ax.plot([0, 1], [0, 1], 'r--', linewidth=2*linewidth)
@@ -395,7 +406,8 @@ def plot_auc(metrics_dict, ax=None, title=None, fname=None):
         ax.set_ylabel('True Positive Rate')
         ax.set_title('ROC')
 
-    if not ax_init:
+    if not ax_init and show_legend:
+    # if not ax_init:
         ax.legend(loc="lower right")
 
     if fname:

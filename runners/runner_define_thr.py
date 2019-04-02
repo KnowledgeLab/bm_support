@@ -75,12 +75,12 @@ def plot_thr_dt(df, fname=None):
     rect = [0.15, 0.15, 0.75, 0.75]
     ax = fig.add_axes(rect)
 
-    l1 = ax.plot(df.thr, df.ps, color='b', alpha=0.8)
-    l2 = ax.plot(df.thr, df.neg, color='g', alpha=0.8)
+    l1 = ax.plot(df.thr, df.dist_pos, color='b', alpha=0.8)
+    l2 = ax.plot(df.thr, df.dist_neg, color='g', alpha=0.8)
     ax.set_ylabel('distance')
     ax.set_xlabel('threshold')
     ax2 = ax.twinx()
-    l3 = ax2.plot(df.thr, df.n_ps, color='b', alpha=0.8, linestyle=':')
+    l3 = ax2.plot(df.thr, df.n_pos, color='b', alpha=0.8, linestyle=':')
     l4 = ax2.plot(df.thr, df.n_neg, color='g', alpha=0.8, linestyle=':')
     ax2.set_ylabel('number')
 
@@ -88,9 +88,9 @@ def plot_thr_dt(df, fname=None):
     ax.legend(lns, ['positive to ambivalent', 'negative to ambivalent',
                     'n positive', 'n negative'], loc='upper center')
 
-    ax_max = max([df.ps.max(), df.neg.max()])
+    ax_max = max([df.dist_pos.max(), df.dist_neg.max()])
     # print(ax_max, set_closest_max(ax_max))
-    ax_max2 = max([df.n_ps.max(), df.n_neg.max()])
+    ax_max2 = max([df.n_pos.max(), df.n_neg.max()])
     ax.set_ylim([0, set_closest_max(ax_max)])
     ax2.set_ylim([0, set_closest_max(ax_max2)])
     if fname:
@@ -172,6 +172,7 @@ for key, df_ in df_dict.items():
 wdist_grid = 1000
 thr_min = 2e-2
 thr_max = 4e-1
+thr_max = 2.4e-2
 thr_delta = 2e-3
 
 for k, df in df_dict.items():
@@ -180,17 +181,18 @@ for k, df in df_dict.items():
     # print(df_info)
     df_info = get_dists(df_info, get_wdist, wdist_grid, verbose=True)
     # print(df_info)
-    df_info = df_info.rename(columns={'dist': 'ps', 'n': 'n_ps'})
+    # df_info = df_info.rename(columns={'dist': 'ps', 'n': 'n_ps', 'k': 'k_ps'})
     # print(df_info)
 
     df_info2 = get_thr_study(df, thr_delta, thr_min, thr_max, positive_flag=False)
     # print(df_info2)
     df_info2 = get_dists(df_info2, get_wdist, wdist_grid, verbose=True)
     # print(df_info2)
-    df_info2 = df_info2.rename(columns={'dist': 'neg', 'n': 'n_neg'})
+    # df_info2 = df_info2.rename(columns={'dist': 'neg', 'n': 'n_neg'})
     # print(df_info2)
-    dfr = pd.merge(df_info[['thr', 'ps', 'n_ps']], df_info2[['thr', 'neg', 'n_neg']], on='thr')
+    dfr = pd.merge(df_info[['thr', 'dist', 'k', 'n']], df_info2[['thr', 'dist', 'k', 'n']], on='thr',
+                   suffixes=['_pos', '_neg'])
     # print(dfr)
     fname = expanduser('~/data/kl/figs/{0}_thr_bdist_t.pdf'.format(k))
     plot_thr_dt(dfr, fname)
-    df_info.to_csv(expanduser('~/data/kl/threshold/{0}_thr_t.csv'.format(k)))
+    dfr.to_csv(expanduser('~/data/kl/threshold/{0}_thr_t.csv'.format(k)))

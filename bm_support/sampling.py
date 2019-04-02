@@ -1,6 +1,6 @@
 from copy import deepcopy
 import numpy as np
-from datahelpers.constants import iden, ye, ai, ps, up, dn
+from datahelpers.constants import iden, ye, ai, ps, up, dn, bdist
 from numpy.random import RandomState
 from sklearn.linear_model import LinearRegression
 from collections import Iterable
@@ -50,7 +50,7 @@ def inv_cdf(y, norm, beta, xmin):
     return (y * (beta + 1) / norm + xmin ** (beta + 1)) ** (1. / (beta + 1))
 
 
-def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4, verbose=False):
+def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4, target_name=bdist, verbose=False):
     counts = df.groupby(agg_columns).apply(lambda x: x.shape[0])
 
     vcs = counts.value_counts()
@@ -84,7 +84,9 @@ def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4, 
         keys_fold = [pd.DataFrame([x for sublist in dd.values() for x in sublist], columns=agg_columns)
                      for dd in dict_kfold]
         dfs = [df.merge(keys, how='inner', on=agg_columns) for keys in keys_fold]
-        return dfs
+        powers = [df[target_name].unique().shape[0] for df in dfs]
+        flag_good_strat = all([p == 2 for p in powers])
+        return dfs, flag_good_strat
     else:
 
         dict_train, dict_test = sample_from_heap_dict(heap_dict, inv_cdf, rns, kwargs, frac_test)
