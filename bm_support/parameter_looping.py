@@ -36,7 +36,7 @@ def run_experiments(df_dict, available_features, feature_selector,
                     origins, data_modes, len_thrs, feature_sets,
                     model_flag='rf', model_pars={},
                     oversampling_flag=False, n_folds=3, n_trials=10, seed0=13,
-                    pos_label=1,
+                    pos_label=1, dump_batches=True,
                     verbose=False):
     df_rep5 = []
     rdict = {}
@@ -69,6 +69,8 @@ def run_experiments(df_dict, available_features, feature_selector,
 
         df_rep5.append(df_rep4)
     df_rep_final = merge_dfs('origin', origins, df_rep5)
+    if dump_batches:
+        df_rep_final.to_csv(expanduser('~/tmp/dump_reports.csv'))
     return df_rep_final, rdict
 
 
@@ -140,6 +142,8 @@ def run_experiment(df_dict, available_features, feature_selector, origin='gw', d
         dict_samples[seed] = dict_reps
         df_reps.append(df_rep)
     df_rep_out = merge_dfs('seed', seeds, df_reps)
+    df_rep_out['size'] = dfz.shape[0]
+    df_rep_out['n_pos'] = dfz[bdist].sum()
     return df_rep_out, dict_samples
 
 

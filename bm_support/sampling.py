@@ -51,7 +51,7 @@ def inv_cdf(y, norm, beta, xmin):
 
 
 def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4, target_name=bdist, verbose=False):
-    counts = df.groupby(agg_columns).apply(lambda x: x.shape[0])
+    counts = df.groupby(list(agg_columns)).apply(lambda x: x.shape[0])
 
     vcs = counts.value_counts()
     # we assume counts have a power law distribution

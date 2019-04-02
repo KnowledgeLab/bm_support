@@ -49,6 +49,8 @@ from bm_support.beta_est import produce_interaction_plain
 
 from bm_support.derive_feature import select_t0, attach_transition_metrics
 import matplotlib.pyplot as plt
+from bm_support.parameter_looping import run_experiment, run_experiments
+
 
 selectors = ['claim', 'batch']
 
@@ -156,8 +158,6 @@ for k, df_ in df_base.items():
 
 df_derived = []
 df_dict = {}
-
-
 for key, dftmp in df_base.items():
     print('key {0}'.format(key))
     up_thr, dn_thr = thr_dict[key]
@@ -181,7 +181,7 @@ for key, dftmp in df_base.items():
     print('t0 df size: {0}'.format(dft_t0.shape[0]))
     for c in refute_columns:
         dft_t0[c] = 0.0
-    df_dict[key]['t0'] = dft_t0
+    df_dict[key + '_t0'] = dft_t0
     dfn = attach_transition_metrics(df_, 'bdist')
 
     # dfn = attach_transition_metrics(df_, 'rdist')
@@ -192,7 +192,36 @@ for key, dftmp in df_base.items():
     # dfn2_ = dft_gt.loc[dft_gt['sign_diff_abs_bdist'] != 0]
     dfn2_ = dft_gt
     # filter out interesting part
-    df_dict[key]['gt'] = dfn2_
+    df_dict[key + '_gtdiff'] = dfn2_
     print('gt df size: {0}'.format(dfn2_.shape[0]))
+
+
+targets = ['bdist']
+
+df_valid = {'gw': {}, 'lit': {}}
+for target in targets:
+    print('*** {0}'.format(target))
+    for k, df in df_dict.items():
+        kk = k.split('_')
+        df_valid[kk[0]][kk[1]] = df
+
+
+seed = 11
+model_pars = {'min_samples_leaf': 10, 'max_depth': 6, 'random_state': seed, 'n_estimators': 20}
+
+df_reps, rdict = run_experiments(df_valid, trial_features, feat_selector,
+                                 # ['gw', 'lit'], ['gtdiff', 'all', 't0'], [0, 2], ['batch', 'claim'], 'rf',
+                                 ['gw'], ['gtdiff'], [0], ['batch'], 'rf',
+                                 model_pars=model_pars, n_folds=3, n_trials=2, seed0=7, verbose=True)
+
+
+report_path = expanduser('~/data/kl/reports')
+
+df_reps.to_csv(join(report_path, 'pred_interaction_reports.csv'))
+
+with gzip.open(join(report_path, 'pred_interaction_reports.pgz'), 'wb') as fp:
+    pickle.dump(rdict, fp)
+
+
 
 
