@@ -3,53 +3,14 @@ from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp,
 from os.path import expanduser, join
 import pandas as pd
 from bm_support.add_features import generate_feature_groups
-from bm_support.add_features import normalize_columns, normalize_columns_with_scaler
 from bm_support.add_features import select_feature_families, transform_last_stage
-from bm_support.supervised_aux import study_sample, metric_selector
-from functools import partial
-from multiprocessing import Pool
 from copy import deepcopy
-import warnings
-from numpy.random import RandomState
 import gzip
 import pickle
-import argparse
-import numpy as np
-from numpy.random import RandomState
-from bm_support.sampling import sample_by_length
-from datahelpers.dftools import keep_longer_histories
-from sklearn.metrics import roc_auc_score, roc_curve, accuracy_score, precision_score, recall_score,\
-    f1_score, classification_report, confusion_matrix, balanced_accuracy_score
-from itertools import combinations, product
-from bm_support.supervised import report_metrics_, train_massif, train_massif_clean, clean_zeros
-from bm_support.supervised import invert_bayes, aggregate_over_claims_new, aggregate_over_claims_comm
-from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier, export_graphviz
-from sklearn.ensemble import RandomForestClassifier
-from bm_support.supervised_aux import simple_stratify
-from numpy.random import RandomState
-from bm_support.supervised_aux import find_optimal_model, produce_topk_model, produce_topk_model_
-from bm_support.supervised_aux import plot_prec_recall, plot_auc, level_corr
-from bm_support.supervised_aux import level_corr_one_tail, extract_scalar_metric_from_report
-from bm_support.supervised import simple_oversample
-from bm_support.supervised import get_corrs
-from pprint import pprint
-from IPython.display import Image
-import seaborn as sns
-
-from bm_support.beta_est import produce_beta_est, produce_claim_valid
-from bm_support.beta_est import produce_beta_interaction_est, produce_interaction_est_weighted
-from bm_support.beta_est import produce_mu_est, produce_mu_est2, produce_thrs
-from bm_support.supervised import trim_corrs_by_family
-from bm_support.supervised import get_corrs
-import seaborn as sns
 import json
-from functools import reduce
-from bm_support.beta_est import produce_interaction_plain
 
 from bm_support.derive_feature import select_t0, attach_transition_metrics
-import matplotlib.pyplot as plt
-from bm_support.parameter_looping import run_experiment, run_experiments
+from bm_support.parameter_looping import run_experiments
 
 
 selectors = ['claim', 'batch']
@@ -206,20 +167,21 @@ for target in targets:
         df_valid[kk[0]][kk[1]] = df
 
 
+estimator_type = 'rf'
 seed = 11
 model_pars = {'min_samples_leaf': 10, 'max_depth': 6, 'random_state': seed, 'n_estimators': 20}
 
 df_reps, rdict = run_experiments(df_valid, trial_features, feat_selector,
-                                 # ['gw', 'lit'], ['gtdiff', 'all', 't0'], [0, 2], ['batch', 'claim'], 'rf',
-                                 ['gw'], ['gtdiff'], [0], ['batch'], 'rf',
-                                 model_pars=model_pars, n_folds=3, n_trials=2, seed0=7, verbose=True)
+                                 ['gw', 'lit'], ['gtdiff', 'all', 't0'], [0], ['batch', 'claim'], estimator_type,
+                                 # ['gw'], ['gtdiff'], [0], ['batch'], 'rf',
+                                 model_pars=model_pars, n_folds=3, n_trials=10, seed0=7, verbose=True)
 
 
 report_path = expanduser('~/data/kl/reports')
 
-df_reps.to_csv(join(report_path, 'pred_interaction_reports.csv'))
+df_reps.to_csv(join(report_path, 'pred_interaction_reports_{}.csv'.format(estimator_type)))
 
-with gzip.open(join(report_path, 'pred_interaction_reports.pgz'), 'wb') as fp:
+with gzip.open(join(report_path, 'pred_interaction_reports_{}.pgz'.format(estimator_type)), 'wb') as fp:
     pickle.dump(rdict, fp)
 
 
