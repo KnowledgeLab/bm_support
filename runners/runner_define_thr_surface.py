@@ -116,7 +116,7 @@ for k, df in df_dict.items():
             par_lo, par_hi, par_mid = get_thr_study_2tail(df, (hi_thr, low_thr))
             lo_mid = get_dist(par_lo, par_mid, get_wdist)
             hi_mid = get_dist(par_hi, par_mid, get_wdist)
-            lo_hi = get_dist(par_hi, par_mid, get_wdist)
+            lo_hi = get_dist(par_lo, par_hi, get_wdist)
             data_agg += [(k, hi_thr, low_thr, lo_mid, hi_mid, lo_hi)]
             # we want to track the progress
             dfr = pd.DataFrame(data_agg, columns=['origin', 'hi_thr', 'lo_thr',
