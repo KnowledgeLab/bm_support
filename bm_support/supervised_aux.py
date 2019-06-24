@@ -1,16 +1,19 @@
 from numpy.random import RandomState
 from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
 from .supervised import simple_stratify
 from .supervised import problem_type_dict
 from .supervised import select_features_dict, logit_pvalue, linear_pvalue, report_metrics
+from .sampling import yield_splits
+from .add_features import normalize_columns_with_scaler
+from .supervised import simple_oversample
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import precision_score, recall_score, roc_auc_score, roc_curve, r2_score, accuracy_score
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from datahelpers.constants import up, dn
-
+from datahelpers.constants import up, dn, bdist
 
 metric_selector = dict(zip(['corr', 'accuracy', 'precision', 'recall', 'f1'], range(5)))
 
@@ -561,3 +564,64 @@ def level_corr_one_tail(df_, groupby_cols, target_col, corr_cols, step=0.02,
 
     return ax
 
+
+def run_neut_models(df_package, cfeatures, seed=13, max_len_thr=21, forest_flag=True, n_iter=20,
+                    asym_flag=False, test_thr=0, target=bdist,
+                    verbose=False):
+    rns = RandomState(seed)
+
+    md_agg = {j: {k: [] for k in ['gw', 'lit']} for j in range(max_len_thr)}
+    co_agg = {j: {k: [] for k in ['gw', 'lit']} for j in range(max_len_thr)}
+
+    oversample = False
+
+    for len_thr in range(0, max_len_thr, 1):
+        if verbose:
+            print(f'len_thr {len_thr}')
+        for it in range(n_iter):
+            if asym_flag:
+                df_kfolds = yield_splits(df_package, rns=rns, len_thr=(len_thr, test_thr))
+            else:
+                df_kfolds = yield_splits(df_package, rns=rns, len_thr=len_thr)
+            for k, folds in df_kfolds.items():
+                seed = rns.choice(10000)
+                for df_train, df_test in folds:
+                    if not forest_flag:
+                        df_train, scaler = normalize_columns_with_scaler(df_train, cfeatures)
+                        df_test, scaler = normalize_columns_with_scaler(df_test, cfeatures)
+
+                    case_features_red = [c for c in cfeatures if sum(df_train[c].isnull()) == 0]
+                    if oversample:
+                        df_train = simple_oversample(df_train, target, seed=seed, ratios=(1, 1))
+
+                    X_train, y_train = df_train[case_features_red], df_train[target]
+                    if forest_flag:
+                        clf = RandomForestClassifier(min_samples_leaf=10, max_depth=6, random_state=seed)
+                        # clf = DecisionTreeClassifier(max_depth=3, min_samples_leaf=10, random_state=seed)
+                        clf = clf.fit(X_train, y_train)
+                        co_agg[len_thr][k].append(clf.feature_importances_)
+                        coeffs_sorted = sorted(list(zip(cfeatures, clf.feature_importances_)),
+                                               key=lambda x: abs(x[1]), reverse=True)
+                        # y_probs_train.append(clf.predict_proba(df_train[case_features_red])[:, 1])
+                        # y_probs_test.append(clf.predict_proba(df_test[case_features_red])[:, 1])
+
+                    else:
+                        clf, c_opt, acc_opt = find_optimal_model(X_train, y_train, 5,
+                                                                 # metric_type_foo=accuracy_score,
+                                                                 metric_type_foo=roc_auc_score,
+                                                                 verbose=False)
+                        # iis = np.nonzero(clf.coef_.T)[0]
+                        # nzero_features = [case_features_red[ii] for ii in iis]
+                        # coeffs = dict[]{case_features_red[ii]: clf.coef_.T[ii, 0] for ii in iis}
+                        # coeffs.update({'intercept': clf.intercept_[0]})
+                        # coeffs_sorted = sorted(list(coeffs.items()), key=lambda x: abs(x[1]), reverse=True)
+                        co_agg[len_thr][k].append(list(clf.coef_.T[:, 0]) + [clf.intercept_[0]])
+                    metrics_dict = produce_topk_model(clf, df_test, case_features_red, target)
+                    md_agg[len_thr][k].append(metrics_dict)
+                if verbose:
+                    if it == 0:
+                        print(f'for {k}, sizes: {df_train.shape[0]} {df_test.shape[0]}')
+                        # for c, x in coeffs_sorted:
+                        #     print('{0:30s} : {1:.3f}'.format(c, x))
+                        print(f'(***)')
+    return md_agg, co_agg

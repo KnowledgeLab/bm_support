@@ -68,7 +68,11 @@ def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4, 
 
     # y = cdf(x) = A (x**(beta+1) - a**(beta+1))/(beta+1)
     # (y*(beta+1)/A + a**(beta+1))**(1./(beta+1)) = x
-    rns = RandomState(seed)
+
+    if isinstance(seed, int):
+        rns = RandomState(seed)
+    else:
+        rns = seed
 
     heap_dict = {}
     for ii, item in counts.iteritems():
@@ -119,3 +123,27 @@ def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4, 
                 print('df_test power law exponent: {0:.3f}'.format(beta_test))
 
         return df_train, df_test
+
+
+def yield_splits(dfs_dict, len_thr=0, rns=None, n_splits=3, verbose=False):
+    df_kfolds = {}
+    for k, df0 in dfs_dict.items():
+        if not isinstance(len_thr, tuple):
+            df2 = df0[df0.n > len_thr].copy()
+        else:
+            df2 = df0.copy()
+        df_kfolds[k] = []
+        dfs, flag = sample_by_length(df2, (up, dn), 10, rns, [1]*n_splits, verbose=False)
+        for j in range(n_splits):
+            dtrain = pd.concat(dfs[:j] + dfs[j+1:])
+            dtest = dfs[j]
+            if isinstance(len_thr, tuple):
+                dtrain = dtrain[dtrain.n > len_thr[0]]
+                dtest = dtest[dtest.n > len_thr[1]]
+            dtrain['pct_mu*'] = dtrain['mu*'].rank(pct=True)
+            dtrain['abs_pct_mu*'] = (dtrain['pct_mu*'] - dtrain['pct_mu*'].median()).abs()
+            dtest['pct_mu*'] = dtest['mu*'].rank(pct=True)
+            dtest['abs_pct_mu*'] = (dtest['pct_mu*'] - dtest['pct_mu*'].median()).abs()
+            df_kfolds[k].append((dtrain, dtest))
+    return df_kfolds
+

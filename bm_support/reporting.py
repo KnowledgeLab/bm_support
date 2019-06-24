@@ -109,3 +109,26 @@ def convert_dict_format(old_dict):
     for k in old_dict['data_size'][0].keys():
         new_dict[k]['len'] = old_dict['data_size'][0][k]
     return new_dict
+
+
+def report2df_auc(md_agg):
+    auc_agg = []
+    for k, vdict in md_agg.items():
+        for orig, item in vdict.items():
+                auc_agg.extend([(k, orig, rr['auc']) for rr in item])
+
+    df_auc = DataFrame(auc_agg, columns=['thr', 'origin', 'auc'])
+    return df_auc
+
+
+def coeffs2df_co(co_agg, cfeatures, intercept=False):
+    co_agg2 = []
+    for k, vdict in co_agg.items():
+        for orig, item in vdict.items():
+            co_agg2.extend([(k, orig, *rr) for rr in item])
+    if intercept:
+        df_co = DataFrame(co_agg2, columns=['thr', 'origin', *cfeatures, 'intercept'])
+    else:
+        df_co = DataFrame(co_agg2, columns=['thr', 'origin', *cfeatures])
+    return df_co
+
