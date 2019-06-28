@@ -17,8 +17,10 @@ import sys
 
 # selectors = ['claim', 'batch', 'interaction']
 
-# exec_mode = 'bdist'
-exec_mode = 'alpha'
+# bdist for positive vs negative correlation
+# alpha for neutral  vs non neutral; positive correlates with non-neutral
+exec_mode = 'bdist'
+# exec_mode = 'alpha'
 
 if exec_mode == 'bdist':
     selectors = ['claim', 'batch']
@@ -32,6 +34,7 @@ else:
 
 origin = 'gw'
 version = 11
+cversion = 6
 
 feat_version = 20
 
@@ -121,8 +124,11 @@ refute_columns = [c for c in dftlit.columns if 'comm_ave' in c]
 
 thr_dict = dict()
 
-thr_dict['gw'] = (0.21, 0.306)
-thr_dict['lit'] = (0.165, 0.26)
+# thr_dict['gw'] = (0.21, 0.306)
+# thr_dict['lit'] = (0.165, 0.26)
+thr_dict['gw'] = (0.218, 0.305)
+thr_dict['lit'] = (0.157, 0.256)
+
 
 for k, df_ in df_base.items():
     df_['rdist_abs'] = df_['rdist'].abs()
@@ -136,7 +142,7 @@ df_dict = {}
 for key, dftmp in df_base.items():
     print('key {0}'.format(key))
     up_thr, dn_thr = thr_dict[key]
-    mask = (dftmp[cexp] < dn_thr) | (dftmp[cexp] > 1. - up_thr)
+    mask = (dftmp[cexp] <= dn_thr) | (dftmp[cexp] >= 1. - up_thr)
     if exec_mode == 'bdist':
         df_ = dftmp.loc[mask].copy()
         if key == 'lit':
@@ -249,7 +255,9 @@ for target in targets:
                 agg_vec.append(cr.reindex(cols).values)
             ccr = np.vstack(agg_vec)
 
-            dump_file_fname = expanduser('~/data/kl/corrs/corrs_binary_{0}_{1}_{2}_v5.csv'.format(target, mode, ttype))
+            dump_file_fname = expanduser('~/data/kl/corrs/corrs_binary_{0}_{1}_{2}_v{3}.csv'.format(target,
+                                                                                                    mode,
+                                                                                                    ttype, cversion))
             df_corr = pd.DataFrame(ccr.T, index=ordered_ind_flat, columns=ykeys)
             df_corr.to_csv(dump_file_fname)
 
@@ -276,6 +284,8 @@ for target in targets:
             r = plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
                          rotation_mode="anchor")
 
-            fig_fname = expanduser('~/data/kl/figs/corr/heatmap_corr_{0}_{1}_{2}_v5.pdf'.format(target, mode, ttype))
+            fig_fname = expanduser('~/data/kl/figs/corr/heatmap_corr_{0}_{1}_{2}_v{3}.pdf'.format(target,
+                                                                                                  mode,
+                                                                                                  ttype, cversion))
             plt.savefig(fig_fname, bbox_inches='tight')
             plt.close()

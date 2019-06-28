@@ -790,8 +790,8 @@ def train_massif_lr_clean(df_train, feature_columns, y_column,
     return report, massif
 
 
-def plot_importances(importances, stds, covariate_columns, fname, title_prefix, colors=None,
-                     show=False, sort_them=False):
+def plot_importances(importances, stds, covariate_columns, fname=None, title_prefix=None, colors=None,
+                     show=False, ax=None, topn=20, sort_them=False):
     """
     importances, stds, covariate_columns are all lists of the same length
     :param importances:
@@ -803,30 +803,32 @@ def plot_importances(importances, stds, covariate_columns, fname, title_prefix, 
     :return:
     """
 
-    if fname:
-        if sort_them:
-            indices = np.argsort(importances)[::-1]
-        else:
-            indices = range(importances.size)
-        n = len(covariate_columns)
-        if not colors:
-            colors = 'r'
-        imp_ccs = [covariate_columns[i] for i in indices]
-        fig = plt.figure(figsize=(n*3, 5))
-        sns.set_style("whitegrid")
-        plt.title('{0} Random Forest feature importances'.format(title_prefix))
-        plt.bar(range(n), importances[indices],
-                color=colors, yerr=stds[indices], align='center', alpha=0.5)
-        # sns.barplot(list(range(n)), importances[indices],
-        #             color=colors, yerr=stds[indices], align='center', alpha=0.5)
+    if sort_them:
+        indices = np.argsort(importances)[::-1]
+    else:
+        indices = list(range(importances.size))
+    if topn:
+        indices = indices[:topn]
+    n = topn if topn else len(covariate_columns)
+    if not colors:
+        colors = 'r'
+    imp_ccs = [covariate_columns[i] for i in indices]
+    fig = plt.figure(figsize=(n*3, 5))
+    sns.set_style("whitegrid")
+    plt.title('{0} Random Forest feature importances'.format(title_prefix))
+    plt.bar(range(n), importances[indices],
+            color=colors, yerr=stds[indices], align='center', alpha=0.5)
+    # sns.barplot(list(range(n)), importances[indices],
+    #             color=colors, yerr=stds[indices], align='center', alpha=0.5)
 
-        plt.xticks(range(n), imp_ccs)
-        plt.xlim([-1, n])
+    plt.xticks(range(n), imp_ccs)
+    plt.xlim([-1, n])
+    if fname:
         fig.savefig(fname)
-        if show:
-            plt.show()
-        else:
-            plt.close()
+        # if show:
+        #     plt.show()
+        # else:
+        #     plt.close()
 
 
 def plot_lr_coeffs_with_penalty(alphas, coeff_dict, covariate_names, fname=None, position='lower left',

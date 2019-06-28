@@ -111,13 +111,14 @@ def convert_dict_format(old_dict):
     return new_dict
 
 
-def report2df_auc(md_agg):
+def report2df_auc(md_agg, columns=('thr', 'origin', 'auc')):
     auc_agg = []
+    # if isinstance(md_agg, dict):
     for k, vdict in md_agg.items():
         for orig, item in vdict.items():
                 auc_agg.extend([(k, orig, rr['auc']) for rr in item])
 
-    df_auc = DataFrame(auc_agg, columns=['thr', 'origin', 'auc'])
+    df_auc = DataFrame(auc_agg, columns=columns)
     return df_auc
 
 
@@ -132,3 +133,13 @@ def coeffs2df_co(co_agg, cfeatures, intercept=False):
         df_co = DataFrame(co_agg2, columns=['thr', 'origin', *cfeatures])
     return df_co
 
+
+def coeffs2df_co2(co_agg, cfeatures, intercept=False):
+    co_agg2 = []
+    for orig, item in co_agg.items():
+        co_agg2.extend([(orig, *rr) for rr in item])
+    if intercept:
+        df_co = DataFrame(co_agg2, columns=['origin', *cfeatures, 'intercept'])
+    else:
+        df_co = DataFrame(co_agg2, columns=['origin', *cfeatures])
+    return df_co

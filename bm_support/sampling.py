@@ -50,8 +50,12 @@ def inv_cdf(y, norm, beta, xmin):
     return (y * (beta + 1) / norm + xmin ** (beta + 1)) ** (1. / (beta + 1))
 
 
-def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4, target_name=bdist, verbose=False):
-    counts = df.groupby(list(agg_columns)).apply(lambda x: x.shape[0])
+def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4,
+                     target_name=bdist, len_column=None, verbose=False):
+    if len_column:
+        counts = df.groupby(list(agg_columns)).apply(lambda x: x[len_column].iloc[0])
+    else:
+        counts = df.groupby(list(agg_columns)).apply(lambda x: x.shape[0])
 
     vcs = counts.value_counts()
     # we assume counts have a power law distribution
@@ -125,25 +129,28 @@ def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4, 
         return df_train, df_test
 
 
-def yield_splits(dfs_dict, len_thr=0, rns=None, n_splits=3, verbose=False):
+def yield_splits(dfs_dict, len_thr=0, rns=None, n_splits=3,
+                 len_column=None, rank_mustar=True, verbose=False):
     df_kfolds = {}
     for k, df0 in dfs_dict.items():
-        if not isinstance(len_thr, tuple):
-            df2 = df0[df0.n > len_thr].copy()
+        if not isinstance(len_thr, tuple) and len_column:
+            df2 = df0[df0[len_column] > len_thr].copy()
         else:
             df2 = df0.copy()
         df_kfolds[k] = []
-        dfs, flag = sample_by_length(df2, (up, dn), 10, rns, [1]*n_splits, verbose=False)
+        dfs, flag = sample_by_length(df2, (up, dn), 10, rns, [1]*n_splits,
+                                     len_column=len_column, verbose=False)
         for j in range(n_splits):
             dtrain = pd.concat(dfs[:j] + dfs[j+1:])
             dtest = dfs[j]
             if isinstance(len_thr, tuple):
                 dtrain = dtrain[dtrain.n > len_thr[0]]
                 dtest = dtest[dtest.n > len_thr[1]]
-            dtrain['pct_mu*'] = dtrain['mu*'].rank(pct=True)
-            dtrain['abs_pct_mu*'] = (dtrain['pct_mu*'] - dtrain['pct_mu*'].median()).abs()
-            dtest['pct_mu*'] = dtest['mu*'].rank(pct=True)
-            dtest['abs_pct_mu*'] = (dtest['pct_mu*'] - dtest['pct_mu*'].median()).abs()
+            if rank_mustar:
+                dtrain['pct_mu*'] = dtrain['mu*'].rank(pct=True)
+                dtrain['abs_pct_mu*'] = (dtrain['pct_mu*'] - dtrain['pct_mu*'].median()).abs()
+                dtest['pct_mu*'] = dtest['mu*'].rank(pct=True)
+                dtest['abs_pct_mu*'] = (dtest['pct_mu*'] - dtest['pct_mu*'].median()).abs()
             df_kfolds[k].append((dtrain, dtest))
     return df_kfolds
 
