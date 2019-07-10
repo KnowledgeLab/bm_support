@@ -113,10 +113,13 @@ def convert_dict_format(old_dict):
 
 def report2df_auc(md_agg, columns=('thr', 'origin', 'auc')):
     auc_agg = []
+    columns = columns
     # if isinstance(md_agg, dict):
     for k, vdict in md_agg.items():
         for orig, item in vdict.items():
-                auc_agg.extend([(k, orig, rr['auc']) for rr in item])
+            agg = [[rr[c] for c in columns[2:]] for rr in item]
+            agg = [[k, orig] + x for x in agg]
+            auc_agg.extend(agg)
 
     df_auc = DataFrame(auc_agg, columns=columns)
     return df_auc
@@ -143,3 +146,15 @@ def coeffs2df_co2(co_agg, cfeatures, intercept=False):
     else:
         df_co = DataFrame(co_agg2, columns=['origin', *cfeatures])
     return df_co
+
+
+def dump_info(report, coeffs, cfeatures,
+              fsuffix, model_type, fpath=expanduser('~/data/kl/reports/'),
+              fprefix='predict_neutral'):
+    coeffs_with_features = [cfeatures, coeffs]
+    with gzip.open(fpath + f'{fprefix}_{model_type}_coeff_{fsuffix}.pkl.gz', 'wb') as f:
+        pickle.dump(coeffs_with_features, f)
+
+    with gzip.open(fpath + f'{fprefix}_{model_type}_report_{fsuffix}.pkl.gz', 'wb') as f:
+        pickle.dump(report, f)
+

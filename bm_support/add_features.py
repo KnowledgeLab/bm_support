@@ -580,9 +580,9 @@ def generate_feature_groups(columns_filename, verbose=True):
     for k in ['litgwcomm_size', 'litgwsame_comm']:
         col_families_prefix_suffix[k] = [c for c in col_families_prefix_suffix[k] if not 'dyn' in c]
 
-    col_families_basic = {k: [k] for k in ['ai', 'ar', 'cite_count', 'delta_year']}
+    col_families_basic = {k: [k] for k in ['ai', 'ar', 'delta_year']}
     # fits of wos citations
-    col_families['citations'] = ['yearspan_flag', 'len_flag', 'succfit_flag', 'mu', 'sigma',
+    col_families['citations'] = ['yearspan_flag', 'len_flag', 'succfit_flag', 'mu', 'sigma', 'cite_count',
                                  'A', 'A_log', 'A_log_sigma', 'err', 'int_3', 'int_3_log', 'int_3_log_sigma']
     col_families['time'] = ['year_off', 'year_off2']
     col_families['authors_count'] = ['authors_count']

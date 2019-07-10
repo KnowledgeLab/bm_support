@@ -9,7 +9,8 @@ from .add_features import normalize_columns_with_scaler
 from .supervised import simple_oversample
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import precision_score, recall_score, roc_auc_score, roc_curve, r2_score, accuracy_score
+from sklearn.metrics import precision_score, recall_score, roc_auc_score, auc
+from sklearn.metrics import roc_curve, r2_score, accuracy_score, precision_recall_curve
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -308,6 +309,11 @@ def produce_topk_model_(y_test, y_prob, pos_label=1, verbose=False):
 
     metrics_dict['auc'] = roc_auc_score(y_test, y_prob)
     metrics_dict['corr'] = np.corrcoef(y_test, y_prob)[0, 1]
+    precision, recall, thresholds = precision_recall_curve(y_test, y_prob)
+    metrics_dict['pr_curve'] = precision, recall, thresholds
+    metrics_dict['auc_pr'] = auc(recall, precision)
+    metrics_dict['fraction_positive'] = y_test.mean()
+
     return metrics_dict
 
 
@@ -408,6 +414,59 @@ def plot_auc(metrics_dict, ax=None, title=None, fname=None, show_legend=False):
         ax.set_xlabel('False Positive Rate')
         ax.set_ylabel('True Positive Rate')
         ax.set_title('ROC')
+
+    if not ax_init and show_legend:
+    # if not ax_init:
+        ax.legend(loc="lower right")
+
+    if fname:
+        plt.savefig(fname)
+
+    return ax
+
+
+def plot_auc_pr(metrics_dict, ax=None, title=None, fname=None, show_legend=False, positive_frac=None):
+
+    ax_init = ax
+    sns.set_style('whitegrid')
+    alpha_level = 0.3
+    linewidth = 0.6
+
+    if not ax:
+        fig = plt.figure(figsize=(6, 6))
+        rect = [0.15, 0.15, 0.75, 0.75]
+        ax = fig.add_axes(rect)
+    else:
+        if show_legend:
+            leg = ax.get_legend()
+            lines = leg.get_lines()
+            texts = [t.get_text() for t in leg.get_texts()]
+
+    if title:
+        ax.set_title(title)
+
+    if 'pr_curve' in metrics_dict.keys():
+        prec, rec, thresholds = metrics_dict['pr_curve']
+        if ax_init:
+            line = ax.plot(rec, prec,  linewidth=2*linewidth, alpha=alpha_level)
+        else:
+            line = ax.plot(rec, prec, linewidth=2*linewidth, alpha=alpha_level,
+                           label=f'AUC={metrics_dict["auc_pr"]:.3f}')
+        if ax_init and show_legend:
+            lines += line
+            texts += ['AUC={0:.3f}'.format(metrics_dict['auc_pr'])]
+
+            if show_legend:
+                ax.legend(lines, texts)
+
+        # ax.legend(lines, texts)
+        if positive_frac:
+            ax.plot([0, 1], [positive_frac, positive_frac], 'r--', linewidth=2*linewidth)
+        ax.set_xlim([0.0, 1.0])
+        ax.set_ylim([0.0, 1.05])
+        ax.set_xlabel('Recall')
+        ax.set_ylabel('Precision')
+        ax.set_title('Precision-Recall curve')
 
     if not ax_init and show_legend:
     # if not ax_init:
@@ -571,7 +630,7 @@ def run_neut_models(df_package, cfeatures, seed=13, max_len_thr=21, forest_flag=
     rns = RandomState(seed)
 
     md_agg = {j: {k: [] for k in df_package.keys()} for j in range(max_len_thr)}
-    co_agg = {j: {k: [] for k in  df_package.keys()} for j in range(max_len_thr)}
+    co_agg = {j: {k: [] for k in df_package.keys()} for j in range(max_len_thr)}
 
     oversample = False
 
@@ -581,14 +640,21 @@ def run_neut_models(df_package, cfeatures, seed=13, max_len_thr=21, forest_flag=
         for it in range(n_iter):
             if asym_flag:
                 df_kfolds = yield_splits(df_package, rns=rns, len_column='n',
-                                         len_thr=(len_thr, test_thr))
+                                         len_thr=(len_thr, test_thr), target='bdist',
+                                         verbose=True)
             else:
                 df_kfolds = yield_splits(df_package, rns=rns, len_column='n',
-                                         len_thr=len_thr)
+                                         len_thr=len_thr, target='bdist',
+                                         verbose=True)
             for k, folds in df_kfolds.items():
                 seed = rns.choice(10000)
                 for df_train, df_test in folds:
                     if not forest_flag:
+                        for c in df_train.columns:
+                            df_train[c] = df_train[c].astype(float)
+                        for c in df_test.columns:
+                            df_test[c] = df_test[c].astype(float)
+
                         df_train, scaler = normalize_columns_with_scaler(df_train, cfeatures)
                         df_test, scaler = normalize_columns_with_scaler(df_test, cfeatures)
 
@@ -598,27 +664,20 @@ def run_neut_models(df_package, cfeatures, seed=13, max_len_thr=21, forest_flag=
 
                     X_train, y_train = df_train[case_features_red], df_train[target]
                     if forest_flag:
-                        clf = RandomForestClassifier(min_samples_leaf=10, max_depth=6, random_state=seed)
-                        # clf = DecisionTreeClassifier(max_depth=3, min_samples_leaf=10, random_state=seed)
+                        clf = RandomForestClassifier(min_samples_leaf=10, max_depth=6,
+                                                     n_estimators=100, random_state=seed)
                         clf = clf.fit(X_train, y_train)
                         co_agg[len_thr][k].append(clf.feature_importances_)
                         coeffs_sorted = sorted(list(zip(cfeatures, clf.feature_importances_)),
                                                key=lambda x: abs(x[1]), reverse=True)
-                        # y_probs_train.append(clf.predict_proba(df_train[case_features_red])[:, 1])
-                        # y_probs_test.append(clf.predict_proba(df_test[case_features_red])[:, 1])
-
                     else:
                         clf, c_opt, acc_opt = find_optimal_model(X_train, y_train, 5,
                                                                  # metric_type_foo=accuracy_score,
                                                                  metric_type_foo=roc_auc_score,
                                                                  verbose=False)
-                        # iis = np.nonzero(clf.coef_.T)[0]
-                        # nzero_features = [case_features_red[ii] for ii in iis]
-                        # coeffs = dict[]{case_features_red[ii]: clf.coef_.T[ii, 0] for ii in iis}
-                        # coeffs.update({'intercept': clf.intercept_[0]})
-                        # coeffs_sorted = sorted(list(coeffs.items()), key=lambda x: abs(x[1]), reverse=True)
                         co_agg[len_thr][k].append(list(clf.coef_.T[:, 0]) + [clf.intercept_[0]])
                     metrics_dict = produce_topk_model(clf, df_test, case_features_red, target)
+                    metrics_dict['tsize'] = df_train.shape[0] + df_test.shape[0]
                     md_agg[len_thr][k].append(metrics_dict)
                 if verbose:
                     if it == 0:
@@ -668,19 +727,12 @@ def run_posneg_models(df_package, cfeatures_, len_thr=0, seed=13, forest_flag=Tr
                     co_agg[k].append(clf.feature_importances_)
                     coeffs_sorted = sorted(list(zip(case_features_red, clf.feature_importances_)),
                                            key=lambda x: abs(x[1]), reverse=True)
-                    # y_probs_train.append(clf.predict_proba(df_train[case_features_red])[:, 1])
-                    # y_probs_test.append(clf.predict_proba(df_test[case_features_red])[:, 1])
 
                 else:
                     clf, c_opt, acc_opt = find_optimal_model(X_train, y_train, 5,
                                                              # metric_type_foo=accuracy_score,
                                                              metric_type_foo=roc_auc_score,
                                                              verbose=False)
-                    # iis = np.nonzero(clf.coef_.T)[0]
-                    # nzero_features = [case_features_red[ii] for ii in iis]
-                    # coeffs = dict[]{case_features_red[ii]: clf.coef_.T[ii, 0] for ii in iis}
-                    # coeffs.update({'intercept': clf.intercept_[0]})
-                    # coeffs_sorted = sorted(list(coeffs.items()), key=lambda x: abs(x[1]), reverse=True)
                     co_agg[k].append(list(clf.coef_.T[:, 0]) + [clf.intercept_[0]])
                 metrics_dict = produce_topk_model(clf, df_test, case_features_red, target)
                 md_agg[k].append(metrics_dict)

@@ -130,7 +130,7 @@ def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4,
 
 
 def yield_splits(dfs_dict, len_thr=0, rns=None, n_splits=3,
-                 len_column=None, rank_mustar=True, verbose=False):
+                 len_column=None, rank_mustar=True, target='bdist', verbose=False):
     df_kfolds = {}
     for k, df0 in dfs_dict.items():
         if not isinstance(len_thr, tuple) and len_column:
@@ -138,8 +138,16 @@ def yield_splits(dfs_dict, len_thr=0, rns=None, n_splits=3,
         else:
             df2 = df0.copy()
         df_kfolds[k] = []
-        dfs, flag = sample_by_length(df2, (up, dn), 10, rns, [1]*n_splits,
-                                     len_column=len_column, verbose=False)
+
+        pathology_flag = True
+        while pathology_flag:
+            dfs, flag = sample_by_length(df2, (up, dn), 10, rns, [1]*n_splits,
+                                         len_column=len_column, verbose=False)
+            vcs = [df_['bdist'].unique().shape[0] for df_ in dfs]
+            if verbose:
+                print(vcs)
+            pathology_flag = any([v == 1 for v in vcs])
+
         for j in range(n_splits):
             dtrain = pd.concat(dfs[:j] + dfs[j+1:])
             dtest = dfs[j]

@@ -804,7 +804,7 @@ def plot_importances(importances, stds, covariate_columns, fname=None, title_pre
     """
 
     if sort_them:
-        indices = np.argsort(importances)[::-1]
+        indices = np.argsort(np.abs(importances))[::-1]
     else:
         indices = list(range(importances.size))
     if topn:
@@ -816,12 +816,18 @@ def plot_importances(importances, stds, covariate_columns, fname=None, title_pre
     fig = plt.figure(figsize=(n*3, 5))
     sns.set_style("whitegrid")
     plt.title('{0} Random Forest feature importances'.format(title_prefix))
-    plt.bar(range(n), importances[indices],
-            color=colors, yerr=stds[indices], align='center', alpha=0.5)
+    importances2 = importances[indices]
+    stds2 = stds[indices]
+    sorted_ix = np.argsort(importances2)[::-1]
+    colors = ['b' if x > 0 else 'r' for x in importances2[sorted_ix]]
+    imp_ccs2 = [imp_ccs[i] for i in sorted_ix]
+
+    plt.bar(range(len(importances2)), importances2[sorted_ix],
+            color=colors, yerr=stds2[sorted_ix], align='center', alpha=0.5)
     # sns.barplot(list(range(n)), importances[indices],
     #             color=colors, yerr=stds[indices], align='center', alpha=0.5)
 
-    plt.xticks(range(n), imp_ccs)
+    plt.xticks(range(n), imp_ccs2)
     plt.xlim([-1, n])
     if fname:
         fig.savefig(fname)
