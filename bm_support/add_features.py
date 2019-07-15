@@ -14,6 +14,8 @@ from sklearn.model_selection import train_test_split
 from numpy import unique
 import gzip
 import pickle
+from copy import deepcopy
+from .derive_feature import add_t0_flag, attach_moving_averages_per_interaction
 
 
 def gcd(a, b):
@@ -145,6 +147,13 @@ def derive_distance_column(df, column_a_parameters=(cexp, qcexp, (-1.e-8, 0.5, 1
             cols.append(par)
 
     df[distance_column] = define_distance_(df, cols, verbose)
+    return df
+
+
+def derive_abs_pct_values(df, c):
+    df[f'{c}_pct'] = df[c].rank(pct=True)
+    df[f'{c}_absmed'] = (df[f'{c}_pct'] - df[f'{c}_pct'].median()).abs()
+    df[f'{c}_absmed_pct'] = df[f'{c}_absmed'].rank(pct=True)
     return df
 
 
@@ -589,6 +598,13 @@ def generate_feature_groups(columns_filename, verbose=True):
     col_families['affiliations_count'] = ['affiliations_count']
     col_families['prev_rdist'] = ['prev_rdist']
     col_families['prev_rdist_abs'] = ['prev_rdist_abs']
+    col_families['degrees'] = ['updeg_st', 'dndeg_st', 'effdeg_st',
+                               'updeg_end', 'dndeg_end', 'effdeg_end']
+    mu_cols = ['mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct']
+
+    col_families.update({k: [k] for k in mu_cols})
+
+    col_families['bdist_ma'] = ['bdist_ma_None', 'bdist_ma_2']
     # col_families['obs_mu'] = ['obs_mu']
 
     col_families = {**col_families, **col_families_basic, **col_families_prefix_suffix}
@@ -947,3 +963,133 @@ def transform_last_stage(df, trial_features, origin, len_thr=2, normalize=False,
     if trial_features and normalize:
         dfw = normalize_columns(dfw, trial_features)
     return dfw
+
+
+def define_laststage_metrics(origin, predict_mode='neutral', datapath=None, verbose=False):
+    """
+
+    :param origin:
+    :param predict_mode: 'neutral', 'posneg', 'full'
+    :param datapath:
+    :param verbose:
+    :return:
+    """
+    thr_dict = {'gw': (0.218, 0.305), 'lit': (0.157, 0.256)}
+
+    feat_version = 20
+
+    if origin == 'lit':
+        version = 8
+    elif origin == 'gw':
+        version = 11
+    else:
+        return None
+
+    cooked_version = 12
+
+    an_version = 30
+    excl_columns = ()
+
+    if datapath:
+        col_families = generate_feature_groups(expanduser(join(datapath, 'v{0}_columns.txt'.format(feat_version))))
+    else:
+        col_families = generate_feature_groups(expanduser('~/data/kl/columns/v{0}_columns.txt'.format(feat_version)))
+
+    if verbose:
+        print('Number of col families: {0}. Keys: {1}'.format(len(col_families), sorted(col_families.keys())))
+
+    col_families = {k: v for k, v in col_families.items() if 'future' not in k}
+    if verbose:
+        print('Number of col families (excl. future): {0}. Keys: {1}'.format(len(col_families),
+                                                                             sorted(col_families.keys())))
+
+    # columns_interest = [x for sublist in col_families.values() for x in sublist]
+    if datapath:
+        df_path = expanduser(join(datapath, '{0}_{1}_{2}.h5'.format(origin, version, cooked_version)))
+    else:
+        df_path = expanduser('~/data/kl/final/{0}_{1}_{2}.h5'.format(origin, version, cooked_version))
+    df0 = pd.read_hdf(df_path, key='df')
+
+    feature_dict = deepcopy(col_families)
+
+    families = select_feature_families(an_version)
+    feature_dict = {k: v for k, v in feature_dict.items() if k in families}
+
+    feature_dict = {k: list(v) for k, v in feature_dict.items() if not any([c in v for c in excl_columns])}
+
+    feature_dict_inv = {}
+    for k, v in feature_dict.items():
+        feature_dict_inv.update({x: k for x in v})
+
+    # define k, n for interactions -> save to df_qm
+    uniq_kn = set()
+    dft = df0.groupby([up, dn]).apply(lambda x: pd.Series([sum(x[ps]), x.shape[0], x[cexp].iloc[0]],
+                                                          index=['k', 'n', 'q']))
+    df0 = df0.merge(dft.reset_index(), on=[up, dn])
+
+    arr = dft[['k', 'n']].apply(lambda x: tuple(x), axis=1)
+    uniq_kn |= set(arr.unique())
+
+    # define year ymin, ymax for interactions -> df_years
+    dft = df0.groupby([up, dn]).apply(lambda x: pd.Series([x[ye].min(), x[ye].max()],
+                                                          index=['ymin', 'ymax']))
+    df_years = dft.reset_index()
+
+    df_years = df_years.groupby([up, dn]).apply(lambda x: pd.Series([x.ymin.min(), x.ymax.max()],
+                                                index=['ymin', 'ymax']))
+
+    # load degrees per interaction
+    df_degs = pd.read_csv(expanduser('~/data/kl/comms/interaction_network/updn_degrees.csv.gz'), index_col=0)
+    # load beta distribution distances per k, n
+    df_dist = pd.read_csv('~/data/kl/qmu_study/uniq_kn_dist.csv', index_col=0)
+
+    if origin == 'lit':
+        mask_lit = (df0[up] == 7157) & (df0[dn] == 1026)
+        print('filtering out 7157-1026 from lit: {0} rows out '.format(sum(mask_lit)))
+        df0 = df0.loc[~mask_lit]
+
+    df0 = pd.merge(df0.reset_index(), df_dist, on=['k', 'n'])
+    df0 = pd.merge(df0, df_degs, on=[up, dn])
+    df0 = pd.merge(df0, df_years, on=[up, dn])
+    df0['mu*'] = 1 - df0['dist']
+
+    # define target variables
+    thr_up, thr_dn = thr_dict[origin]
+    mask_pos = (df0.q > (1. - thr_up))
+    mask_neg = (df0.q < thr_dn)
+
+    # define interaction
+    df0['bint'] = 0.
+    # return df0
+
+    if predict_mode == 'neutral':
+        df0.loc[mask_neg | mask_pos, 'bint'] = 1.
+    else:
+        df0.loc[mask_neg, 'bint'] = 1.
+        df0 = df0.loc[mask_neg | mask_pos].copy()
+
+        if predict_mode == 'full':
+
+            # define claim correctness: 1 if incorrect, 0 if correct
+            df0['bdist'] = 0.
+            mask_incorrect = ((df0['bint'] == 1) & (df0[ps] == 1)) | ((df0['bint'] == 0) & (df0[ps] == 0))
+            print(f'number of correct claims, two ways {sum(~mask_incorrect)},'
+                  f' {sum((df0[ps] - df0[cexp]).abs() < 0.5)}')
+            print(f'number of incorrect: {sum(mask_incorrect)}, total size: {df0.shape[0]}')
+            df0.loc[mask_incorrect, 'bdist'] = 1.0
+
+    if predict_mode == 'neutral' or predict_mode == 'posneg':
+        df0 = df0.drop_duplicates([up, dn]).copy()
+        df0 = derive_abs_pct_values(df0, 'mu*')
+    else:
+        dfr = attach_moving_averages_per_interaction(df0, 'bdist', ps, 'bint')
+        df0 = df0.merge(dfr, left_on=[up, dn, ye], right_index=True)
+
+        dft = df0.drop_duplicates([up, dn])[[up, dn, 'mu*']].copy()
+        dft = derive_abs_pct_values(dft, 'mu*')
+
+        df0 = df0.merge(dft[[up, dn, 'mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct']], on=[up, dn])
+        df0 = add_t0_flag(df0)
+    return df0
+
+

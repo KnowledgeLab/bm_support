@@ -5,11 +5,26 @@ from numpy.random import RandomState
 from sklearn.linear_model import LinearRegression
 from collections import Iterable
 import pandas as pd
+from .add_features import derive_abs_pct_values
 
 
-def sample_from_heap_dict(heap_dict, invfoo, rns, inv_foo_params, frac_test=[0.5, 0.5]):
+def sample_from_heap_dict(heap_dict, invfoo, rns, inv_foo_params, frac_test=(0.5, 0.5),
+                          verbose=False):
+    """
+
+    :param heap_dict:
+    :param invfoo:
+    :param rns:
+    :param inv_foo_params:
+    :param frac_test:
+    :param verbose:
+    :return:
+    """
     if isinstance(frac_test, Iterable):
         frac_test = np.array(frac_test)/np.sum(frac_test)
+
+    if verbose:
+        print(frac_test)
 
     def get_frac(hdict_working, frac, total_count):
         new_heap_dict = {}
@@ -34,9 +49,18 @@ def sample_from_heap_dict(heap_dict, invfoo, rns, inv_foo_params, frac_test=[0.5
         return new_heap_dict
     heap_dict_working = deepcopy(heap_dict)
     total_cnt = sum([len(v)*k for k, v in heap_dict_working.items()])
+    total_cnt_int = sum([len(v)for k, v in heap_dict_working.items()])
+    if verbose:
+        print(f'{total_cnt} of {total_cnt_int}')
+
     if isinstance(frac_test, Iterable):
         r = [get_frac(heap_dict_working, f, total_cnt) for f in frac_test[1:]]
-        return [heap_dict_working] + r
+        ret = [heap_dict_working] + r
+        if verbose:
+            print(f'total count {[sum([len(v)*k for k, v in tmp.items()]) for tmp in ret]}')
+            print(f'interaction count {[sum([len(v) for k, v in tmp.items()]) for tmp in ret]}')
+
+        return ret
     else:
         r = get_frac(heap_dict_working, frac_test, total_cnt)
         return heap_dict_working, r
@@ -78,6 +102,7 @@ def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4,
     else:
         rns = seed
 
+    # {cnt: [(id_a, id_b), ...]}
     heap_dict = {}
     for ii, item in counts.iteritems():
         if item in heap_dict.keys():
@@ -86,9 +111,10 @@ def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4,
             heap_dict[item] = [ii]
 
     heap_dict = {k: sorted(v) for k, v in heap_dict.items()}
+
     kwargs = {'norm': norm, 'beta': beta, 'xmin': xa}
     if isinstance(frac_test, Iterable):
-        dict_kfold = sample_from_heap_dict(heap_dict, inv_cdf, rns, kwargs, frac_test)
+        dict_kfold = sample_from_heap_dict(heap_dict, inv_cdf, rns, kwargs, frac_test, verbose=verbose)
         keys_fold = [pd.DataFrame([x for sublist in dd.values() for x in sublist], columns=agg_columns)
                      for dd in dict_kfold]
         dfs = [df.merge(keys, how='inner', on=agg_columns) for keys in keys_fold]
@@ -97,7 +123,8 @@ def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4,
         return dfs, flag_good_strat
     else:
 
-        dict_train, dict_test = sample_from_heap_dict(heap_dict, inv_cdf, rns, kwargs, frac_test)
+        dict_train, dict_test = sample_from_heap_dict(heap_dict, inv_cdf, rns, kwargs,
+                                                      frac_test, verbose=verbose)
         if verbose:
             total_cnt = sum([len(v) * k for k, v in dict_train.items()])
             total_cnt2 = sum([len(v) * k for k, v in dict_test.items()])
@@ -141,24 +168,24 @@ def yield_splits(dfs_dict, len_thr=0, rns=None, n_splits=3,
 
         pathology_flag = True
         while pathology_flag:
-            dfs, flag = sample_by_length(df2, (up, dn), 10, rns, [1]*n_splits,
-                                         len_column=len_column, verbose=False)
-            vcs = [df_['bdist'].unique().shape[0] for df_ in dfs]
+            dfs, flag = sample_by_length(df2, (up, dn), 5, rns, [1]*n_splits,
+                                         len_column=len_column, verbose=verbose)
+
+            vcs = [df_[target].unique().shape[0] for df_ in dfs]
             if verbose:
                 print(vcs)
             pathology_flag = any([v == 1 for v in vcs])
 
         for j in range(n_splits):
-            dtrain = pd.concat(dfs[:j] + dfs[j+1:])
-            dtest = dfs[j]
+            dtrain = pd.concat(dfs[:j] + dfs[j+1:], axis=0)
+            dtest = dfs[j].copy()
+
             if isinstance(len_thr, tuple):
                 dtrain = dtrain[dtrain.n > len_thr[0]]
                 dtest = dtest[dtest.n > len_thr[1]]
             if rank_mustar:
-                dtrain['pct_mu*'] = dtrain['mu*'].rank(pct=True)
-                dtrain['abs_pct_mu*'] = (dtrain['pct_mu*'] - dtrain['pct_mu*'].median()).abs()
-                dtest['pct_mu*'] = dtest['mu*'].rank(pct=True)
-                dtest['abs_pct_mu*'] = (dtest['pct_mu*'] - dtest['pct_mu*'].median()).abs()
+                dtrain = derive_abs_pct_values(dtrain, 'mu*')
+                dtest = derive_abs_pct_values(dtest, 'mu*')
             df_kfolds[k].append((dtrain, dtest))
     return df_kfolds
 

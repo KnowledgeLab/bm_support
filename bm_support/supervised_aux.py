@@ -640,19 +640,19 @@ def run_neut_models(df_package, cfeatures, seed=13, max_len_thr=21, forest_flag=
         for it in range(n_iter):
             if asym_flag:
                 df_kfolds = yield_splits(df_package, rns=rns, len_column='n',
-                                         len_thr=(len_thr, test_thr), target='bdist',
+                                         len_thr=(len_thr, test_thr), target=target,
                                          verbose=True)
             else:
                 df_kfolds = yield_splits(df_package, rns=rns, len_column='n',
-                                         len_thr=len_thr, target='bdist',
+                                         len_thr=len_thr, target=target,
                                          verbose=True)
             for k, folds in df_kfolds.items():
                 seed = rns.choice(10000)
                 for df_train, df_test in folds:
                     if not forest_flag:
-                        for c in df_train.columns:
+                        for c in cfeatures:
                             df_train[c] = df_train[c].astype(float)
-                        for c in df_test.columns:
+                        for c in cfeatures:
                             df_test[c] = df_test[c].astype(float)
 
                         df_train, scaler = normalize_columns_with_scaler(df_train, cfeatures)

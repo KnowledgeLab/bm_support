@@ -1503,10 +1503,13 @@ def get_corrs(df, target_column, covariate_columns, threshold=0.03, mask=None,
     if individual_na:
         corrs = []
         for c in covariate_columns:
-            if c in df.columns:
-                mask = df_[c].notnull()
-                corr_ = df_.loc[mask, [c, target_column]].corr().values[0, 1]
-                corrs.append(corr_)
+            mask = df_[c].notnull()
+            if c in df.columns and sum(mask) > 2:
+                corr_ = df_.loc[mask, [c, target_column]].corr()
+                if corr_.shape == (2, 2):
+                    corrs.append(corr_.values[0, 1])
+                else:
+                    corrs.append(np.nan)
             else:
                 corrs.append(np.nan)
         corr_df = pd.Series(corrs, index=covariate_columns, name=target_column)

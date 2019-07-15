@@ -1,33 +1,49 @@
 import numpy as np
-import pandas as pd
-from datahelpers.constants import up, dn, pm, ye
+from datahelpers.constants import up, dn, pm, ye, ps, cexp, ye
 from scipy.stats import norm
-from os.path import expanduser
-from datahelpers.constants import ps
-
+from os.path import expanduser, join
+import pandas as pd
 
 # TODO add exponential average
 
 
+def add_t0_flag(df):
+    t0_mask = df.drop_duplicates([up, dn, ye]).groupby([up, dn]).apply(lambda x: x.loc[x[ye].idxmin(), ye])
+    t0_mask = t0_mask.reset_index().rename(columns={0: ye})
+    t0_mask['t0_flag'] = True
+    df = df.merge(t0_mask, on=[up, dn, ye], how='left')
+    df.loc[df['t0_flag'].isnull(), 't0_flag'] = False
+    return df
+
+
 def moving_average_windows(means, sizes, index, column_name, windows=(None, 1)):
+    positives = [m*s for m, s in zip(means, sizes)]
+    return moving_average_windows_(positives, sizes, index, column_name, windows)
+
+
+def moving_average_windows_(npositives, sizes, index, column_name, windows=(None, 1)):
 
     """
     compute the moving average
-    :param means:
+    :param npositives:
     :param sizes:
     :param index:
     :param column_name:
     :param windows:
     :return:
+    moving_average_windows([1, 2, 3], [4, 4, 4], [190, 191, 192], 'cc', [None, 2])
+                 cc_ma_None  cc_ma_2
+        190         NaN      NaN
+        191       0.250    0.250
+        192       0.375    0.375
     """
     r_series = []
     for window in windows:
-        rprods = [s * rmu for rmu, s in zip(means, sizes)]
         if window is not None:
             window_inds = [(max(k - window, 0), k) for k in range(1, len(sizes))]
-            est_mus = [sum(rprods[i:j]) / sum(sizes[i:j]) for i, j in window_inds]
+            est_mus = [sum(npositives[i:j]) / sum(sizes[i:j]) for i, j in window_inds]
         else:
-            est_mus = [sum(rprods[:j]) / sum(sizes[:j]) for j in range(1, len(sizes))]
+            est_mus = [sum(npositives[:j]) / sum(sizes[:j]) for j in range(1, len(sizes))]
         s = pd.Series([np.nan] + est_mus, index=index,
                       name='{0}_ma_{1}'.format(column_name, window))
         r_series.append(s)
@@ -66,6 +82,51 @@ def ppf_smart(x, epsilon=1e-6):
         return norm.ppf(1-epsilon)
     else:
         return norm.ppf(x)
+
+
+def attach_moving_averages_per_interaction(df0, correct_column, claim_col, interaction_column, windows=[None, 2]):
+
+    kn_int_per_year = df0.groupby([up, dn, ye]).apply(lambda x: pd.Series([x[correct_column].sum(), x.shape[0]],
+                                                                          index=['k', 'n']))
+    ma_per_int = kn_int_per_year.groupby(level=[0, 1]).apply(lambda batch:
+                                                             moving_average_windows_(batch.k, batch.n,
+                                                                                     batch.index, correct_column,
+                                                                                     windows))
+
+    # result | index: *interaction_index, year; columns : *ma_averages of correctness distance
+
+    kn_per_year = df0.groupby([ye], sort=True).apply(lambda x: pd.Series([x[claim_col].sum(), x.shape[0]],
+                                                                         index=['k_' + claim_col,
+                                                                                'n_' + claim_col]))
+    ma_claim_time = moving_average_windows_(kn_per_year['k_' + claim_col], kn_per_year['n_' + claim_col],
+                                           kn_per_year.index,
+                                           claim_col, windows)
+
+    # fill the first year with something mildly positive
+    ma_claim_time.iloc[0] = [0.7, 0.3]
+    claim_ma_columns = ma_claim_time.columns
+
+    # result | index: year; columns: *ma_averages or claims
+
+    t0_int = df0.drop_duplicates([up, dn, ye]).groupby([up, dn]).apply(lambda x: x.loc[x[ye].idxmin(),
+                                                                                       [ye, interaction_column]])
+
+    # result| index: *interaction_index; columns: year; interaction_sign
+
+    ma_claim_t0_int = pd.merge(t0_int, ma_claim_time, left_on=ye, right_index=True, how='left')
+
+    for c in claim_ma_columns:
+        new_column_name = 'bdist_' + '_'.join(c.split('_')[1:])
+        ma_claim_t0_int[new_column_name] = 1. - ma_claim_t0_int[c]
+        mask_incorrect = (((ma_claim_t0_int[interaction_column] == 1) & (ma_claim_t0_int[c] >= 0.5)) |
+                          ((ma_claim_t0_int[interaction_column] == 0) & (ma_claim_t0_int[c] < 0.5)))
+        ma_claim_t0_int.loc[mask_incorrect, new_column_name] = ma_claim_t0_int[c]
+        # if interaction is negative (=1) and ma claim columns is positive (>=0.5) or ...
+
+    ma_claim_t0_int2 = ma_claim_t0_int.reset_index().set_index([up, dn, ye])
+    ma_per_int.update(ma_claim_t0_int2)
+
+    return ma_per_int
 
 
 def attach_transition_metrics(df, target_col):
@@ -228,3 +289,5 @@ def clean_nas(df, feats, verbose=False):
         mask_agg &= m
     dfr = df.loc[mask_agg].copy()
     return dfr
+
+

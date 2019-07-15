@@ -12,7 +12,6 @@ from bm_support.supervised import trim_corrs_by_family
 from bm_support.supervised import get_corrs
 import seaborn as sns
 import json
-from bm_support.derive_feature import moving_average_windows, assign_positive_transition_flag
 from bm_support.derive_feature import find_transition, ppf_smart
 from sklearn.metrics import mean_squared_error, r2_score
 import matplotlib.pyplot as plt
