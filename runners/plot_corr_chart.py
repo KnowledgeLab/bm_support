@@ -74,7 +74,7 @@ for k, v in feature_dict.items():
 corr_tr = {}
 corr_agg = {}
 
-excl_symbol_list = ['1', '3', 'csize_dn', 'csize_up']
+excl_symbol_list = ['1', '3', 'csize_dn', 'csize_up', 'bdist']
 
 for target in targets:
     print('*** {0}'.format(target))
@@ -178,7 +178,10 @@ for target in targets:
 
             mask = np.isnan(ccr)
 
-            ax = sns.heatmap(ccr, mask=mask, ax=ax, cbar_ax=cbar_ax, cmap='RdBu_r',
+            # cmap = sns.diverging_palette(240, 10, l=5, n=90, as_cmap=True)
+            # cmap = sns.color_palette("RdBu_r", 90)
+            cmap = "RdBu_r"
+            ax = sns.heatmap(ccr, mask=mask, ax=ax, cbar_ax=cbar_ax, cmap=cmap,
                              xticklabels=xticks_trans,
                              yticklabels=ykeys,
                              vmin=-cmax, vmax=cmax,

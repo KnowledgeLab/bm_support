@@ -6,6 +6,7 @@ from sklearn.linear_model import LinearRegression
 from collections import Iterable
 import pandas as pd
 from .add_features import derive_abs_pct_values
+from scipy.optimize import bisect
 
 
 def sample_from_heap_dict(heap_dict, invfoo, rns, inv_foo_params, frac_test=(0.5, 0.5),
@@ -189,3 +190,61 @@ def yield_splits(dfs_dict, len_thr=0, rns=None, n_splits=3,
             df_kfolds[k].append((dtrain, dtest))
     return df_kfolds
 
+
+def fill_seqs(pdf_dict_imperfect, pdf_dict_perfect, n_projects=100, wcolumn='accounted'):
+    cnt = n_projects
+    while cnt > 0 and pdf_dict_imperfect:
+        min_cfilled = min(pdf_dict_imperfect.keys())
+        cdf = pdf_dict_imperfect[min_cfilled].pop()
+        if not pdf_dict_imperfect[min_cfilled]:
+            del pdf_dict_imperfect[min_cfilled]
+        ye_next = cdf.loc[~cdf[wcolumn], ye].iloc[0]
+        delta = cdf.loc[~cdf[wcolumn], 'size'].iloc[0]
+        cdf[wcolumn] = (cdf[ye] <= ye_next + 1e-6)
+        if cdf[wcolumn].all():
+            pdf_dict_perfect.append(cdf)
+        else:
+            n_filled = sum(cdf.loc[cdf[wcolumn], 'size'])
+            if n_filled in pdf_dict_imperfect.keys():
+                pdf_dict_imperfect[n_filled] += [cdf]
+            else:
+                pdf_dict_imperfect[n_filled] = [cdf]
+        cnt -= delta
+    return pdf_dict_imperfect, pdf_dict_perfect
+
+
+def check_dstructs(pdf_dict_imperfect, pdf_dict_perfect, wcolumn='accounted'):
+    acc = [x for sublist in pdf_dict_imperfect.values() for x in sublist]
+    if acc:
+        dfg = pd.concat(acc)
+        sg = dfg.loc[dfg[wcolumn], 'size'].sum()
+    else:
+        sg = 0
+    if pdf_dict_perfect:
+        dfp = pd.concat(pdf_dict_perfect)
+        sp = dfp.loc[dfp[wcolumn], 'size'].sum()
+    else:
+        sp = 0
+    return sg, sp
+
+
+def assign_half_flag(group, wcolumn='accounted'):
+    if len(group[ye].unique()) > 1:
+        group2 = group
+        group2['csize'] = np.cumsum(group2.sort_values(ye)['size'])
+        cumsums = [0] + list(group2['csize'].values)
+        mid = 0.5*group2['size'].sum()
+        size = group2.shape[0]
+
+        def foo(x):
+            x = int(np.round(x))
+            return cumsums[x] - mid
+        index = min([int(np.floor(bisect(foo, 0, size, xtol=0.5))), size - 1])
+        ye_mid = group2.iloc[index][ye]
+        group2[wcolumn] = False
+        group2.loc[group2[ye] < ye_mid + 1e-6, wcolumn] = True
+        return group2
+    else:
+        group['csize'] = group['size']
+        group[wcolumn] = True
+        return group

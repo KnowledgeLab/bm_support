@@ -600,7 +600,7 @@ def generate_feature_groups(columns_filename, verbose=True):
     col_families['prev_rdist_abs'] = ['prev_rdist_abs']
     col_families['degrees'] = ['updeg_st', 'dndeg_st', 'effdeg_st',
                                'updeg_end', 'dndeg_end', 'effdeg_end']
-    mu_cols = ['mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct']
+    mu_cols = ['mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct', 'muhat']
 
     col_families.update({k: [k] for k in mu_cols})
 
@@ -1088,7 +1088,7 @@ def define_laststage_metrics(origin, predict_mode='neutral', datapath=None, verb
         dft = df0.drop_duplicates([up, dn])[[up, dn, 'mu*']].copy()
         dft = derive_abs_pct_values(dft, 'mu*')
 
-        df0 = df0.merge(dft[[up, dn, 'mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct']], on=[up, dn])
+        df0 = df0.merge(dft[[up, dn, 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct']], on=[up, dn])
         df0 = add_t0_flag(df0)
     return df0
 

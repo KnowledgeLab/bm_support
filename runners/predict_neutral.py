@@ -5,8 +5,8 @@ from bm_support.reporting import dump_info
 import json
 
 
-predict_mode = 'neutral'
-# predict_mode = 'posneg'
+# predict_mode = 'neutral'
+predict_mode = 'posneg'
 fprefix = f'predict_{predict_mode}'
 
 selectors = ['claim', 'batch']
@@ -33,10 +33,10 @@ model_type = 'rf'
 if predict_mode == 'neutral':
     max_len_thr = 21
 else:
-    max_len_thr = 11
+    max_len_thr = 1
 
 n_iter = 20
-fsuffix = 'v2'
+fsuffix = 'v3'
 
 # n_iter = 20
 # max_len_thr = 6

@@ -103,13 +103,27 @@ def produce_beta_interaction_est(df_train, df_test, columns=[ps, 'pi_pos'], verb
     return y_pred_probs
 
 
-def produce_interaction_plain(df, cname='pi_pos', weighted=False, n_weight=10, verbose=False):
+def produce_interaction_plain(df, cname='pi_pos', weighted=False, n_weight=10):
     if weighted:
         center = df[ps].mean()
         df['weight'] = df['pi_pos'].apply(lambda x: (n_weight*np.abs(x - center) / 0.5))
         y_pred_probs = df.groupby([up, dn]).apply(lambda x: (x[cname]*x['weight']).sum()/x['weight'].sum())
     else:
         y_pred_probs = df.groupby([up, dn]).apply(lambda x: x[cname].mean())
+    return y_pred_probs
+
+
+def estimate_pi(df, cname='pi_pos', mode='plain'):
+    if mode == 'plain':
+        y_pred_probs = df.groupby([up, dn]).apply(lambda x: x[cname].mean())
+    elif mode == 'rank':
+        df['pct'] = df[cname].rank(pct=True)
+        df['pct_mid_abs'] = (df['pct'] - 0.5).abs()**0.5
+        y_pred_probs = df.groupby([up, dn]).apply(lambda x:
+                                                  (x[cname]*x['pct_mid_abs']).sum()/x['pct_mid_abs'].sum()
+                                                  if x['pct_mid_abs'].sum() > 0 else x[cname].mean())
+    else:
+        y_pred_probs = None
     return y_pred_probs
 
 

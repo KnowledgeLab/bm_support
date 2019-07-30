@@ -176,7 +176,8 @@ def sect_min(f, a, b, tol=1e-6):
     return 0.5*(a + b)
 
 
-def find_optimal_model(X_train, y_train, max_features=None, model_type=LogisticRegression,
+def find_optimal_model(X_train, y_train, max_features=None,
+                       model_type=LogisticRegression,
                        kwargs={'penalty': 'l1', 'solver': 'liblinear', 'max_iter': 100},
                        penalty_name='C',
                        metric_type_foo=precision_score,
@@ -186,7 +187,7 @@ def find_optimal_model(X_train, y_train, max_features=None, model_type=LogisticR
                        verbose=False):
 
     def foo(x):
-        clf_ = model_type(**{**kwargs, **{penalty_name: x}})
+        clf_ = model_type(**{**kwargs, **{penalty_name: np.exp(x)}})
         clf_.fit(X_train, y_train)
         if metric_type_foo == roc_auc_score:
             y_pred = clf_.predict_proba(X_train)[:, pos_label]
@@ -209,12 +210,12 @@ def find_optimal_model(X_train, y_train, max_features=None, model_type=LogisticR
 
     if max_features:
         best_penalty = bisect_zero(lambda x: np.sum(foo(x)[1].coef_ != 0.) - max_features,
-                                   cbounds[0], cbounds[1])
+                                   np.log(cbounds[0]), np.log(cbounds[1]))
     else:
-        best_penalty = sect_min(lambda x: -foo(x)[0], 1e-2, 1e2)
+        best_penalty = sect_min(lambda x: -np.log(foo(x)[0]), -2, 2.)
 
     acc, clf = foo(best_penalty)
-    return clf, best_penalty, acc
+    return clf, np.exp(best_penalty), acc
 
 
 # def produce_topk_model(clf, dft, features, target, pos_label=1, verbose=False):
@@ -641,11 +642,11 @@ def run_neut_models(df_package, cfeatures, seed=13, max_len_thr=21, forest_flag=
             if asym_flag:
                 df_kfolds = yield_splits(df_package, rns=rns, len_column='n',
                                          len_thr=(len_thr, test_thr), target=target,
-                                         verbose=True)
+                                         verbose=verbose)
             else:
                 df_kfolds = yield_splits(df_package, rns=rns, len_column='n',
                                          len_thr=len_thr, target=target,
-                                         verbose=True)
+                                         verbose=verbose)
             for k, folds in df_kfolds.items():
                 seed = rns.choice(10000)
                 for df_train, df_test in folds:
@@ -658,27 +659,27 @@ def run_neut_models(df_package, cfeatures, seed=13, max_len_thr=21, forest_flag=
                         df_train, scaler = normalize_columns_with_scaler(df_train, cfeatures)
                         df_test, scaler = normalize_columns_with_scaler(df_test, cfeatures)
 
-                    case_features_red = [c for c in cfeatures if sum(df_train[c].isnull()) == 0]
                     if oversample:
                         df_train = simple_oversample(df_train, target, seed=seed, ratios=(1, 1))
 
-                    X_train, y_train = df_train[case_features_red], df_train[target]
+                    X_train, y_train = df_train[cfeatures], df_train[target]
                     if forest_flag:
                         clf = RandomForestClassifier(min_samples_leaf=10, max_depth=6,
                                                      n_estimators=100, random_state=seed)
                         clf = clf.fit(X_train, y_train)
-                        co_agg[len_thr][k].append(clf.feature_importances_)
-                        coeffs_sorted = sorted(list(zip(cfeatures, clf.feature_importances_)),
-                                               key=lambda x: abs(x[1]), reverse=True)
+                        coeffs = clf.feature_importances_
+                        # co_agg[len_thr][k].append(clf.feature_importances_)
                     else:
-                        clf, c_opt, acc_opt = find_optimal_model(X_train, y_train, 5,
-                                                                 # metric_type_foo=accuracy_score,
-                                                                 metric_type_foo=roc_auc_score,
+                        max_features = None if len(cfeatures) < 5 else 5
+                        clf, c_opt, acc_opt = find_optimal_model(X_train, y_train, max_features,
+                                                                 metric_type_foo=accuracy_score,
+                                                                 # metric_type_foo=roc_auc_score,
                                                                  verbose=False)
-                        co_agg[len_thr][k].append(list(clf.coef_.T[:, 0]) + [clf.intercept_[0]])
-                    metrics_dict = produce_topk_model(clf, df_test, case_features_red, target)
+                        coeffs = list(clf.coef_.T[:, 0]) + [clf.intercept_[0]]
+                    metrics_dict = produce_topk_model(clf, df_test, cfeatures, target)
                     metrics_dict['tsize'] = df_train.shape[0] + df_test.shape[0]
-                    md_agg[len_thr][k].append(metrics_dict)
+                    md_agg[len_thr][k] += [metrics_dict]
+                    co_agg[len_thr][k] += [coeffs]
                 if verbose:
                     if it == 0:
                         print(f'for {k}, sizes: {df_train.shape[0]} {df_test.shape[0]}')
