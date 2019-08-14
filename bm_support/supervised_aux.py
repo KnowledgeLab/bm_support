@@ -670,7 +670,7 @@ def run_neut_models(df_package, cfeatures, seed=13, max_len_thr=21, forest_flag=
                         coeffs = clf.feature_importances_
                         # co_agg[len_thr][k].append(clf.feature_importances_)
                     else:
-                        max_features = None if len(cfeatures) < 5 else 5
+                        max_features = None if len(cfeatures) < 5 else 3
                         clf, c_opt, acc_opt = find_optimal_model(X_train, y_train, max_features,
                                                                  metric_type_foo=accuracy_score,
                                                                  # metric_type_foo=roc_auc_score,
@@ -744,3 +744,49 @@ def run_posneg_models(df_package, cfeatures_, len_thr=0, seed=13, forest_flag=Tr
                     #     print('{0:30s} : {1:.3f}'.format(c, x))
                     print(f'(***)')
     return md_agg, co_agg
+
+
+def run_claims(df_package, cfeatures, seed=13, len_thr=0, forest_flag=True, n_iter=20,
+               target=bdist, oversample=False, case_features=[],
+               verbose=False):
+
+    container = []
+
+    rns = RandomState(seed)
+    for it in range(n_iter):
+        df_kfolds = yield_splits(df_package, rns=rns, len_column='n',
+                                 len_thr=len_thr, target=target,
+                                 verbose=verbose)
+        for origin, folds in df_kfolds.items():
+            seed = rns.choice(10000)
+            for j, dfs in enumerate(folds):
+                df_train, df_test = dfs
+                if not forest_flag:
+                    for c in cfeatures:
+                        df_train[c] = df_train[c].astype(float)
+                    for c in cfeatures:
+                        df_test[c] = df_test[c].astype(float)
+
+                    df_train, scaler = normalize_columns_with_scaler(df_train, cfeatures)
+                    df_test, scaler = normalize_columns_with_scaler(df_test, cfeatures)
+
+                if oversample:
+                    df_train = simple_oversample(df_train, target, seed=seed, ratios=(1, 1))
+
+                X_train, y_train = df_train[case_features], df_train[target]
+                if forest_flag:
+                    clf = RandomForestClassifier(min_samples_leaf=10, max_depth=6,
+                                                 n_estimators=100, random_state=seed)
+                    clf = clf.fit(X_train, y_train)
+                    coeffs = clf.feature_importances_
+                else:
+                    max_features = None if len(cfeatures) < 5 else 5
+                    clf, c_opt, acc_opt = find_optimal_model(X_train, y_train, max_features,
+                                                             metric_type_foo=accuracy_score,
+                                                             # metric_type_foo=roc_auc_score,
+                                                             verbose=False)
+                    coeffs = list(clf.coef_.T[:, 0]) + [clf.intercept_[0]]
+                metrics_dict = produce_topk_model(clf, df_test, case_features, target)
+                metrics_dict['tsize'] = df_train.shape[0] + df_test.shape[0]
+                container.append([it, origin, j, (df_train, df_test), clf, metrics_dict, coeffs])
+    return container, case_features

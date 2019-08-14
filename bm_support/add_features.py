@@ -598,8 +598,10 @@ def generate_feature_groups(columns_filename, verbose=True):
     col_families['affiliations_count'] = ['affiliations_count']
     col_families['prev_rdist'] = ['prev_rdist']
     col_families['prev_rdist_abs'] = ['prev_rdist_abs']
-    col_families['degrees'] = ['updeg_st', 'dndeg_st', 'effdeg_st',
-                               'updeg_end', 'dndeg_end', 'effdeg_end']
+    # col_families['degrees'] = ['updeg_st', 'dndeg_st', 'effdeg_st',
+    #                            'updeg_end', 'dndeg_end', 'effdeg_end']
+    col_families['degrees'] = ['degree_source_in', 'degree_source_out',
+                               'degree_target_in', 'degree_target_out']
     mu_cols = ['mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct', 'muhat']
 
     col_families.update({k: [k] for k in mu_cols})
@@ -1039,7 +1041,8 @@ def define_laststage_metrics(origin, predict_mode='neutral', datapath=None, verb
                                                 index=['ymin', 'ymax']))
 
     # load degrees per interaction
-    df_degs = pd.read_csv(expanduser('~/data/kl/comms/interaction_network/updn_degrees.csv.gz'), index_col=0)
+    df_degs = pd.read_csv(expanduser('~/data/kl/comms/interaction_network/updn_degrees_directed.csv.gz'),
+                          index_col=0)
     # load beta distribution distances per k, n
     df_dist = pd.read_csv('~/data/kl/qmu_study/uniq_kn_dist.csv', index_col=0)
 
@@ -1049,7 +1052,7 @@ def define_laststage_metrics(origin, predict_mode='neutral', datapath=None, verb
         df0 = df0.loc[~mask_lit]
 
     df0 = pd.merge(df0.reset_index(), df_dist, on=['k', 'n'])
-    df0 = pd.merge(df0, df_degs, on=[up, dn])
+    df0 = pd.merge(df0, df_degs, on=[up, dn, ye])
     df0 = pd.merge(df0, df_years, on=[up, dn])
     df0['mu*'] = 1 - df0['dist']
 

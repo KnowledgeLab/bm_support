@@ -31,19 +31,20 @@ fpath = expanduser('~/data/kl/reports/')
 model_type = 'rf'
 
 if predict_mode == 'neutral':
-    max_len_thr = 21
+    max_len_thr = 11
 else:
-    max_len_thr = 1
+    max_len_thr = 6
 
 n_iter = 20
-fsuffix = 'v3'
+fsuffix = 'v5'
 
 # n_iter = 20
 # max_len_thr = 6
 
 cfeatures = ['mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct',
-             'updeg_st', 'dndeg_st', 'effdeg_st',
-             'updeg_end', 'dndeg_end', 'effdeg_end'
+             # 'degree_source_in', 'degree_source_out',
+             # 'degree_target_in', 'degree_target_out'
+             'degree_source', 'degree_target'
              ]
 
 extra_features = [c for c in feat_selector['interaction'] if ('same' in c or 'eff' in c) and ('_im_ud' in c)]
@@ -59,8 +60,10 @@ dump_info(report, coeffs, cfeatures, fsuffix, model_type)
 
 model_type = 'lr'
 cfeatures = ['mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct',
-             'updeg_st', 'dndeg_st', 'effdeg_st',
-             'updeg_end', 'dndeg_end', 'effdeg_end']
+             # 'degree_source_in', 'degree_source_out',
+             # 'degree_target_in', 'degree_target_out'
+             'degree_source', 'degree_target'
+             ]
 
 extra_features = [c for c in feat_selector['interaction'] if ('same' in c or 'eff' in c) and ('_im_ud' in c)]
 cfeatures += extra_features

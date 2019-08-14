@@ -55,6 +55,16 @@ class SeqLenGrower:
         sa, sb = check_dstructs(self.pdf_dict_imperfect, self.pdf_dict_perfect)
         return f'sa : {sa} sb: {sb} tot: {sa + sb}'
 
+    def get_pop_fracs(self):
+        acc = [x for sublist in self.pdf_dict_imperfect.values() for x in sublist]
+        if acc:
+            dfg = pd.concat(acc)
+            sg = dfg['size'].sum()
+        else:
+            sg = 0
+        sa, sb = check_dstructs(self.pdf_dict_imperfect, self.pdf_dict_perfect)
+        return sa, sb, sg, self.df.shape[0]
+
     def pop_populated_df(self, n_items=100):
         dfa, dfb = self.populate_seqs_(n_items)
         if self.verbose:
