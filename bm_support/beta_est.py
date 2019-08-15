@@ -50,6 +50,7 @@ def produce_beta_est(df, cname, pars_pos, pars_neg, weighted=False, n_weight=10)
 def produce_claim_valid(df, case_features_red, clf, pos_label=1, p_min=1e-2):
     # TESTED. pos_label is not needed
     # return pi_pos, prob of positive ps
+    # print(df[case_features_red].shape)
     arr_probs = clf.predict_proba(df[case_features_red])
     arr_probs2 = clean_zeros(arr_probs, p_min)
     arr_ps = df[ps].values

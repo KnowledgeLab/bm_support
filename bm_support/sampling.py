@@ -213,36 +213,33 @@ def fill_seqs(pdf_dict_imperfect, pdf_dict_perfect, n_projects=100, wcolumn='acc
     return pdf_dict_imperfect, pdf_dict_perfect
 
 
-def check_dstructs(pdf_dict_imperfect, pdf_dict_perfect, wcolumn='accounted'):
-    acc = [x for sublist in pdf_dict_imperfect.values() for x in sublist]
-    if acc:
-        dfg = pd.concat(acc)
-        sg = dfg.loc[dfg[wcolumn], 'size'].sum()
-    else:
-        sg = 0
-    if pdf_dict_perfect:
-        dfp = pd.concat(pdf_dict_perfect)
-        sp = dfp.loc[dfp[wcolumn], 'size'].sum()
-    else:
-        sp = 0
-    return sg, sp
+def assign_chrono_flag(group, wcolumn='accounted', column_time=ye, frac=0.5):
+    """"
+    record the flag wcolumn for a fraction frac for column column_time
 
+    :param group: Dataframe used in group by
+    :param wcolumn: column name to record the flag
+    :param column_time: column with which we sort
+    :param frac:
+    :return:
 
-def assign_half_flag(group, wcolumn='accounted'):
-    if len(group[ye].unique()) > 1:
+    csize ~ cumulative size
+    """
+
+    if len(group[column_time].unique()) > 1:
         group2 = group
-        group2['csize'] = np.cumsum(group2.sort_values(ye)['size'])
+        group2['csize'] = np.cumsum(group2.sort_values(column_time)['size'])
         cumsums = [0] + list(group2['csize'].values)
-        mid = 0.5*group2['size'].sum()
+        cdf_level = frac*group2['size'].sum()
         size = group2.shape[0]
 
         def foo(x):
             x = int(np.round(x))
-            return cumsums[x] - mid
+            return cumsums[x] - cdf_level
         index = min([int(np.floor(bisect(foo, 0, size, xtol=0.5))), size - 1])
-        ye_mid = group2.iloc[index][ye]
+        time_level = group2.iloc[index][column_time]
         group2[wcolumn] = False
-        group2.loc[group2[ye] < ye_mid + 1e-6, wcolumn] = True
+        group2.loc[group2[column_time] < time_level + 1e-6, wcolumn] = True
         return group2
     else:
         group['csize'] = group['size']

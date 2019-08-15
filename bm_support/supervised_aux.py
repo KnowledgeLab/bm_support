@@ -374,7 +374,7 @@ def plot_prec_recall(metrics_dict, ax=None, title=None, fname=None):
     return ax
 
 
-def plot_auc(metrics_dict, ax=None, title=None, fname=None, show_legend=False):
+def plot_auc(metrics_dict, ax=None, title=None, fname=None, show_legend=False, plot_baseline=False):
 
     ax_init = ax
     sns.set_style('whitegrid')
@@ -409,7 +409,8 @@ def plot_auc(metrics_dict, ax=None, title=None, fname=None, show_legend=False):
                 ax.legend(lines, texts)
 
         # ax.legend(lines, texts)
-        ax.plot([0, 1], [0, 1], 'r--', linewidth=2*linewidth)
+        if plot_baseline:
+            ax.plot([0, 1], [0, 1], 'r--', linewidth=2*linewidth)
         ax.set_xlim([0.0, 1.0])
         ax.set_ylim([0.0, 1.05])
         ax.set_xlabel('False Positive Rate')
