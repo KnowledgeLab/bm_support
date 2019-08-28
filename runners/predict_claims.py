@@ -1,25 +1,14 @@
-from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, nw, wi, dist, rdist, bdist, pm,                                     cpop, cden, ct, affs, aus
+from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, nw, wi, dist, rdist, bdist, pm, \
+    cpop, cden, ct, affs, aus
 from os.path import expanduser, join
-import pandas as pd
-from bm_support.add_features import normalize_columns, normalize_columns_with_scaler
 from copy import deepcopy
-import numpy as np
-from sklearn.metrics import roc_auc_score, roc_curve, accuracy_score, precision_score, recall_score,    f1_score, classification_report, confusion_matrix, balanced_accuracy_score
-from sklearn.ensemble import RandomForestClassifier
 from numpy.random import RandomState
-from bm_support.supervised_aux import find_optimal_model, produce_topk_model, produce_topk_model_
 from bm_support.supervised_aux import plot_prec_recall, plot_auc, plot_auc_pr, level_corr, run_claims
 from bm_support.add_features import select_feature_families, transform_last_stage
 
-from bm_support.beta_est import produce_beta_est, produce_claim_valid
-from bm_support.beta_est import produce_interaction_plain, estimate_pi
 import json
 from bm_support.add_features import generate_feature_groups, define_laststage_metrics
 
-from bm_support.math import interpolate_nonuniform_linear, integral_linear, get_function_values, find_bbs
-
-from bm_support.growth import SeqLenGrower
-from bm_support.communities import pick_by_community
 import pickle
 import gzip
 
@@ -110,7 +99,7 @@ oversample = False
 # train claims models
 rns = RandomState(seed)
 
-container = run_claims(df_package, cfeatures, seed=seed, len_thr=len_thr, forest_flag=forest_flag,
+container = run_claims(df_package, cfeatures, seed=seed, max_len_thr=len_thr, forest_flag=forest_flag,
                        n_iter=n_iter, target=target, oversample=oversample,
                        case_features=cfeatures_normal, verbose=False)
 

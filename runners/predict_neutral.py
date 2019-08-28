@@ -11,6 +11,13 @@ fprefix = f'predict_{predict_mode}'
 
 selectors = ['claim', 'batch']
 
+# model_type = 'lr'
+model_type = 'rf'
+
+if model_type == 'rf':
+    forest_flag = True
+else:
+    forest_flag = False
 
 thr_dict = {'gw': (0.218, 0.305), 'lit': (0.157, 0.256)}
 
@@ -28,8 +35,6 @@ with open(fname, 'r') as f:
 
 fpath = expanduser('~/data/kl/reports/')
 
-model_type = 'rf'
-
 if predict_mode == 'neutral':
     max_len_thr = 11
 else:
@@ -37,6 +42,8 @@ else:
 
 n_iter = 20
 fsuffix = 'v5'
+
+fprefix = f'predict_{predict_mode}'
 
 # n_iter = 20
 # max_len_thr = 6
@@ -52,11 +59,11 @@ cfeatures += extra_features
 
 report, coeffs = run_neut_models(df_dict, cfeatures,
                                  max_len_thr=max_len_thr, n_iter=n_iter,
-                                 forest_flag=True, asym_flag=False,
+                                 forest_flag=forest_flag, asym_flag=False,
                                  target='bint',
                                  verbose=True)
 
-dump_info(report, coeffs, cfeatures, fsuffix, model_type)
+dump_info(report, coeffs, cfeatures, fsuffix, model_type, fprefix=fprefix)
 
 model_type = 'lr'
 cfeatures = ['mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct',
@@ -70,9 +77,9 @@ cfeatures += extra_features
 
 report, coeffs = run_neut_models(df_dict, cfeatures,
                                  max_len_thr=max_len_thr, n_iter=n_iter,
-                                 forest_flag=False, asym_flag=False,
+                                 forest_flag=forest_flag, asym_flag=False,
                                  target='bint',
                                  verbose=True)
 
-dump_info(report, coeffs, cfeatures, fsuffix, model_type)
+dump_info(report, coeffs, cfeatures, fsuffix, model_type, fprefix=fprefix)
 

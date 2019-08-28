@@ -191,13 +191,32 @@ def yield_splits(dfs_dict, len_thr=0, rns=None, n_splits=3,
     return df_kfolds
 
 
-def fill_seqs(pdf_dict_imperfect, pdf_dict_perfect, n_projects=100, wcolumn='accounted'):
+def fill_seqs(pdf_dict_imperfect, pdf_dict_perfect, n_projects=100, wcolumn='accounted',
+              direction=min):
+    """
+
+    flag_df is of form:
+        up    dn    year    size    accounted
+        1543  2944  2008    2       True
+        1543  2944  2009    2       False
+
+    the general idea is to distribute projects fro n_projects
+    to fill the flags up in pdf_dict_imperfect
+
+    :param pdf_dict_imperfect: dict of underfilled flag_dfs
+    :param pdf_dict_perfect: list of filled flag_dfs
+    :param n_projects: number of projects to till
+    :param wcolumn: flag column
+    :param direction: min or max
+    :return:
+    """
     cnt = n_projects
     while cnt > 0 and pdf_dict_imperfect:
-        min_cfilled = min(pdf_dict_imperfect.keys())
-        cdf = pdf_dict_imperfect[min_cfilled].pop()
-        if not pdf_dict_imperfect[min_cfilled]:
-            del pdf_dict_imperfect[min_cfilled]
+
+        extremity_filled = direction(pdf_dict_imperfect.keys())
+        cdf = pdf_dict_imperfect[extremity_filled].pop()
+        if not pdf_dict_imperfect[extremity_filled]:
+            del pdf_dict_imperfect[extremity_filled]
         ye_next = cdf.loc[~cdf[wcolumn], ye].iloc[0]
         delta = cdf.loc[~cdf[wcolumn], 'size'].iloc[0]
         cdf[wcolumn] = (cdf[ye] <= ye_next + 1e-6)
