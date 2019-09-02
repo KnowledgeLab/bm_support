@@ -109,8 +109,8 @@ def savefigs(report_, pred_mode, master_col, xlabel,
         sns.lineplot(data=df_acc2, x=master_col, y='value', hue='sample', ax=ax)
         plt.xlabel(xlabel)
         plt.ylabel('AUC ROC value')
-        fig.savefig(join(fpath_figs, f'{pred_mode}_{origin}_auc_frac_depth.pdf'))
-        fig.savefig(join(fpath_figs, f'{pred_mode}_{origin}_auc_frac_depth.png'),
+        fig.savefig(join(fpath_figs, f'{pred_mode}_{origin}_auc_{master_col}.pdf'))
+        fig.savefig(join(fpath_figs, f'{pred_mode}_{origin}_auc_{master_col}.png'),
                     bbox_inches='tight', dpi=300)
 
 
