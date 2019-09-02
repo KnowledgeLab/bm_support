@@ -631,6 +631,7 @@ def level_corr_one_tail(df_, groupby_cols, target_col, corr_cols, step=0.02,
 def run_neut_models(df_package, cfeatures, seed=13, max_len_thr=21, forest_flag=True, n_iter=20,
                     asym_flag=False, test_thr=0, target=bdist,
                     complexity_dict={'min_samples_leaf': 10, 'max_depth': 6, 'n_estimators': 100},
+                    min_samples_leaf_frac=None,
                     verbose=False):
 
     if not forest_flag and 'min_samples_leaf' in complexity_dict.keys():
@@ -657,6 +658,10 @@ def run_neut_models(df_package, cfeatures, seed=13, max_len_thr=21, forest_flag=
                                          len_thr=len_thr, target=target,
                                          verbose=verbose)
             for origin, folds in df_kfolds.items():
+                if min_samples_leaf_frac:
+                    complexity_dict['min_samples_leaf'] = int(min_samples_leaf_frac *
+                                                              df_package[origin].shape[0])
+                print(complexity_dict['min_samples_leaf'])
                 seed = rns.choice(10000)
                 for j, dfs in enumerate(folds):
                     df_train, df_test = dfs
