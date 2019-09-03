@@ -71,7 +71,7 @@ def prepare_datasets(predict_mode_='posneg'):
 
         cfeatures0 = set()
         for s in selectors:
-            cfeatures0 |= feat_selector[s]
+            cfeatures0 |= set(feat_selector[s])
 
         gw_excl = [c for c in list(cfeatures0) if sum(df_dict['gw'][c].isnull()) > 0]
         lit_excl = [c for c in list(cfeatures0) if sum(df_dict['lit'][c].isnull()) > 0]
