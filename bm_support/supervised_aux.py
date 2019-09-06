@@ -632,6 +632,7 @@ def run_neut_models(df_package, cfeatures, seed=13, max_len_thr=21, forest_flag=
                     asym_flag=False, test_thr=0, target=bdist,
                     complexity_dict={'min_samples_leaf': 10, 'max_depth': 6, 'n_estimators': 100},
                     min_samples_leaf_frac=None,
+                    oversample=False,
                     verbose=False):
 
     if not forest_flag and 'min_samples_leaf' in complexity_dict.keys():
@@ -642,8 +643,6 @@ def run_neut_models(df_package, cfeatures, seed=13, max_len_thr=21, forest_flag=
     rns = RandomState(seed)
 
     container = []
-
-    oversample = False
 
     for len_thr in range(0, max_len_thr, 1):
         if verbose:
@@ -694,7 +693,8 @@ def run_neut_models(df_package, cfeatures, seed=13, max_len_thr=21, forest_flag=
                     metrics_dict_train = produce_topk_model(clf, df_train, cfeatures, target)
                     metrics_dict['train_report'] = metrics_dict_train
                     metrics_dict['tsize'] = df_train.shape[0] + df_test.shape[0]
-                    container.append([it, origin, j, (df_train, df_test), clf, metrics_dict, coeffs])
+                    container.append([it, origin, j, (df_train, df_test), clf,
+                                      metrics_dict, coeffs, cfeatures, len_thr])
 
                 if verbose:
                     if it == 0:

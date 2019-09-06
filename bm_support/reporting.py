@@ -148,13 +148,8 @@ def coeffs2df_co2(co_agg, cfeatures, intercept=False):
     return df_co
 
 
-def dump_info(report, coeffs, cfeatures,
-              fsuffix, model_type, fpath=expanduser('~/data/kl/reports/'),
-              fprefix='predict_neutral'):
-    coeffs_with_features = [cfeatures, coeffs]
-    with gzip.open(fpath + f'{fprefix}_{model_type}_coeff_{fsuffix}.pkl.gz', 'wb') as f:
-        pickle.dump(coeffs_with_features, f)
-
+def dump_info(report, fsuffix, model_type,
+              fpath=expanduser('~/data/kl/reports/'), fprefix='predict_neutral'):
     with gzip.open(fpath + f'{fprefix}_{model_type}_report_{fsuffix}.pkl.gz', 'wb') as f:
         pickle.dump(report, f)
 

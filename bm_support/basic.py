@@ -4,6 +4,37 @@ import datahelpers.collapse as dc
 import datahelpers.plotting as dp
 
 
+def rank_degenerate_values(keys, values, sort=True):
+
+    """
+    create ranking of values
+
+    :param keys: list of ids
+    :param values: list
+    :param sort: sort if keys and values are not sorted
+    :return:
+
+    example :
+        keys = ['a', 'b', 'c', 'd']
+        values = [5, 3, 2, 3]
+    output:
+        [('a', 5, 0), ('b', 3, 1), ('d', 3, 1), ('c', 2, 2)]
+    """
+    if sort:
+        sorted_kv = sorted(zip(keys, values), key=lambda x: x[1], reverse=True)
+    else:
+        sorted_kv = list(zip(keys, values))
+    agg = [(*sorted_kv[0], 0)]
+    for k, v in sorted_kv[1:]:
+        kp, vp, ip = agg[-1]
+        if vp == v:
+            agg.append((k, v, ip))
+        else:
+            agg.append((k, v, ip + 1))
+    result = [(x, z) for x, y, z in agg]
+    return result
+
+
 def transform_df(dfi, statement_columns, action_column, claim_column,
                  index_name, aggregate_negs=True):
     df = dfi.copy()

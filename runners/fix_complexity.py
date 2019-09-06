@@ -53,7 +53,6 @@ def prepare_datasets(predict_mode_='posneg'):
         target_ = 'bdist'
 
         feat_version = 21
-        an_version = 30
         excl_columns = ()
 
         col_families = generate_feature_groups(
@@ -87,11 +86,13 @@ def prepare_datasets(predict_mode_='posneg'):
 def savefigs(report_, pred_mode, master_col, xlabel,
              fpath_figs=expanduser('~/data/kl/figs/')):
 
+    print(f'mode: {pred_mode}')
+
     acc = []
     for depth, items in report_.items():
         for items2 in items:
             for item in items2:
-                it, origin, j, dfs, clf, mdict, coeffs = item
+                it, origin, j, dfs, clf, mdict, coeffs, cfeats = item
                 fpr, tpr, _ = mdict['roc_curve']
                 auc = integral_linear(fpr, tpr)
                 acc.append((depth, origin, 'test', auc))
@@ -136,13 +137,17 @@ if __name__ == "__main__":
     seed = args.seed
     n_iter = args.niter
 
+    print(f'mode: {predict_mode}')
+
     df_dict, cfeatures, target = prepare_datasets(predict_mode)
 
     max_len_thr = 1
     forest_flag = True
     verbose = False
-    len_thr = 0
-    oversample = False
+    if predict_mode == 'neutral':
+        oversample = True
+    else:
+        oversample = False
 
     #***
     # depth
@@ -161,6 +166,7 @@ if __name__ == "__main__":
                                  target=target,
                                  complexity_dict=complexity_dict,
                                  min_samples_leaf_frac=min_samples_leaf_frac,
+                                 oversample=oversample,
                                  verbose=False)
         sreport[cur_depth].append(report)
 
@@ -182,6 +188,7 @@ if __name__ == "__main__":
                                  target=target,
                                  complexity_dict=complexity_dict,
                                  min_samples_leaf_frac=min_leaf,
+                                 oversample=oversample,
                                  verbose=False)
         sreport[min_leaf].append(report)
 
@@ -207,6 +214,7 @@ if __name__ == "__main__":
                                  target=target,
                                  complexity_dict=complexity_dict,
                                  min_samples_leaf_frac=min_leaf,
+                                 oversample=oversample,
                                  verbose=False)
         sreport[x].append(report)
 

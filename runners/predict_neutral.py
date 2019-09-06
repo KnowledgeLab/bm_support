@@ -40,10 +40,11 @@ if predict_mode == 'neutral':
 else:
     max_len_thr = 6
 
+max_len_thr = 1
 n_iter = 20
 fsuffix = 'v5'
 
-fprefix = f'predict_{predict_mode}'
+fprefix = f'predict_{predict_mode}_nodeg'
 
 # n_iter = 20
 # max_len_thr = 6
@@ -51,35 +52,39 @@ fprefix = f'predict_{predict_mode}'
 cfeatures = ['mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct',
              # 'degree_source_in', 'degree_source_out',
              # 'degree_target_in', 'degree_target_out'
-             'degree_source', 'degree_target'
+             # 'degree_source', 'degree_target'
              ]
 
 extra_features = [c for c in feat_selector['interaction'] if ('same' in c or 'eff' in c) and ('_im_ud' in c)]
 cfeatures += extra_features
 
-report, coeffs = run_neut_models(df_dict, cfeatures,
-                                 max_len_thr=max_len_thr, n_iter=n_iter,
-                                 forest_flag=forest_flag, asym_flag=False,
-                                 target='bint',
-                                 verbose=True)
+complexity_dict = {'min_samples_leaf': 10, 'max_depth': 2, 'n_estimators': 100}
 
-dump_info(report, coeffs, cfeatures, fsuffix, model_type, fprefix=fprefix)
+report = run_neut_models(df_dict, cfeatures,
+                         max_len_thr=max_len_thr, n_iter=n_iter,
+                         forest_flag=forest_flag, asym_flag=False,
+                         target='bint',
+                         complexity_dict=complexity_dict,
+                         verbose=True)
 
-model_type = 'lr'
-cfeatures = ['mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct',
-             # 'degree_source_in', 'degree_source_out',
-             # 'degree_target_in', 'degree_target_out'
-             'degree_source', 'degree_target'
-             ]
+dump_info(report, fsuffix, model_type, fprefix=fprefix)
 
-extra_features = [c for c in feat_selector['interaction'] if ('same' in c or 'eff' in c) and ('_im_ud' in c)]
-cfeatures += extra_features
 
-report, coeffs = run_neut_models(df_dict, cfeatures,
-                                 max_len_thr=max_len_thr, n_iter=n_iter,
-                                 forest_flag=forest_flag, asym_flag=False,
-                                 target='bint',
-                                 verbose=True)
-
-dump_info(report, coeffs, cfeatures, fsuffix, model_type, fprefix=fprefix)
-
+# model_type = 'lr'
+# cfeatures = ['mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct',
+#              # 'degree_source_in', 'degree_source_out',
+#              # 'degree_target_in', 'degree_target_out'
+#              'degree_source', 'degree_target'
+#              ]
+#
+# extra_features = [c for c in feat_selector['interaction'] if ('same' in c or 'eff' in c) and ('_im_ud' in c)]
+# cfeatures += extra_features
+#
+# report = run_neut_models(df_dict, cfeatures,
+#                          max_len_thr=max_len_thr, n_iter=n_iter,
+#                          forest_flag=forest_flag, asym_flag=False,
+#                          target='bint',
+#                          verbose=True)
+#
+# dump_info(report, coeffs, cfeatures, fsuffix, model_type, fprefix=fprefix)
+#
