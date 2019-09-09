@@ -43,6 +43,9 @@ if mode == 'rf':
 else:
     complexity_dict = {'penalty': 'l1', 'solver': 'liblinear', 'max_iter': 100}
 
+extra_parameters = {'min_samples_leaf_frac': 0.05}
+
+
 rns = RandomState(13)
 rnew = run_model_(dfs, cfeatures, rns, target, mode=mode, clf_parameters=complexity_dict)
 dfs_, clf, metrics_dict, coefficients, cfeatures = rnew

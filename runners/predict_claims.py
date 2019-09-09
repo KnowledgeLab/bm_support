@@ -3,7 +3,7 @@ from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp,
 from os.path import expanduser, join
 from copy import deepcopy
 from numpy.random import RandomState
-from bm_support.supervised_aux import run_model, run_claims
+from bm_support.supervised_aux import run_model, run_claims, run_model_iterate_over_datasets
 from bm_support.add_features import select_feature_families, transform_last_stage
 
 import json
@@ -81,43 +81,35 @@ cfeatures_normal = list(cfeatures - excl_set)
 cfeatures_excl = list(excl_set)
 
 
-# cfeatures_container = [cfeatures_normal, cfeatures_excl]
-# cfeatures_container = [cfeatures_normal]
-
 verbose = False
 seed = 17
 
 n_iter = 1
-forest_flag = True
+mode = 'rf'
+# mode = 'lr'
+
 target = 'bdist'
 verbose = False
 df_package = df_dict
 len_thr = 0
 oversample = False
 
-
 # train claims models
 rns = RandomState(seed)
-complexity_dict = {'max_depth': 4, 'n_estimators': 100}
-version = 9
+version = 8
 
 cfeatures = sorted(list(cfeatures))
 
-# container = run_claims(df_package, cfeatures,
-#                        max_len_thr=len_thr,
-#                        seed=seed, forest_flag=forest_flag,
-#                        n_iter=n_iter, target=target,
-#                        oversample=oversample,
-#                        complexity_dict=complexity_dict,
-#                        verbose=False)
+if mode == 'rf':
+    clf_parameters = {'max_depth': 4, 'n_estimators': 100, 'min_samples_leaf': 20}
+else:
+    clf_parameters = {'penalty': 'l1', 'solver': 'liblinear', 'max_iter': 100}
 
-container = run_model(df_package, cfeatures,
-                      seed=seed, forest_flag=forest_flag,
-                      n_iter=n_iter, target=target,
-                      oversample=oversample,
-                      complexity_dict=complexity_dict,
-                      verbose=False)
-#
+extra_parameters = {'min_samples_leaf_frac': 0.05}
+
+container = run_model_iterate_over_datasets(df_package, cfeatures, rns,
+                                            target=target, mode=mode, n_splits=3,
+                                            clf_parameters=clf_parameters, n_iterations=n_iter)
 
 fpath = expanduser('~/data/kl/reports/')
 

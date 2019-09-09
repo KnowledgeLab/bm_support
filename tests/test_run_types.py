@@ -43,10 +43,15 @@ target = 'bdist'
 
 df_dict = {'gw': df}
 
+extra_parameters = {'min_samples_leaf_frac': 0.05}
+
 rns = RandomState(13)
 
 reports = run_model_iterate_over_datasets(df_dict, cfeatures, rns, target, mode=mode, n_splits=3,
-                                          clf_parameters=complexity_dict, n_iterations=2)
+                                          clf_parameters=complexity_dict,
+                                          extra_parameters=extra_parameters,
+                                          n_iterations=2)
+
 i0, key, j0, dfs_, clf, md, coefficients, cfeatures = reports[-1]
 print(md['auc'], md['train_report']['auc'])
 
@@ -55,7 +60,9 @@ print(i0, key, j0)
 
 rns = RandomState(13)
 reports = run_model_iterate_over_datasets(df_dict, cfeatures, rns, target, mode=mode, n_splits=3,
-                                          clf_parameters=complexity_dict, n_iterations=2)
+                                          clf_parameters=complexity_dict,
+                                          extra_parameters=extra_parameters,
+                                          n_iterations=2)
 i0, key, j0, dfs_, clf, md, coefficients, cfeatures = reports[-1]
 print(md['auc'], md['train_report']['auc'])
 
