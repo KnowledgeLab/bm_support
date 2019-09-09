@@ -1,6 +1,6 @@
 from copy import deepcopy
 import numpy as np
-from datahelpers.constants import iden, ye, ai, ps, up, dn, bdist
+from datahelpers.constants import iden, ye, ai, ps, up, dn, bdist, large_int
 from numpy.random import RandomState
 from sklearn.linear_model import LinearRegression
 from collections import Iterable
@@ -21,6 +21,7 @@ def sample_from_heap_dict(heap_dict, invfoo, rns, inv_foo_params, frac_test=(0.5
     :param verbose:
     :return:
     """
+
     if isinstance(frac_test, Iterable):
         frac_test = np.array(frac_test)/np.sum(frac_test)
 
@@ -75,7 +76,7 @@ def inv_cdf(y, norm, beta, xmin):
     return (y * (beta + 1) / norm + xmin ** (beta + 1)) ** (1. / (beta + 1))
 
 
-def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4,
+def sample_by_length(df, rns, agg_columns=(up, dn), head=10, frac_test=0.4,
                      target_name=bdist, len_column=None, verbose=False):
     if len_column:
         counts = df.groupby(list(agg_columns)).apply(lambda x: x[len_column].iloc[0])
@@ -97,11 +98,6 @@ def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4,
 
     # y = cdf(x) = A (x**(beta+1) - a**(beta+1))/(beta+1)
     # (y*(beta+1)/A + a**(beta+1))**(1./(beta+1)) = x
-
-    if isinstance(seed, int):
-        rns = RandomState(seed)
-    else:
-        rns = seed
 
     # {cnt: [(id_a, id_b), ...]}
     heap_dict = {}
@@ -157,7 +153,7 @@ def sample_by_length(df, agg_columns=(up, dn), head=10, seed=11, frac_test=0.4,
         return df_train, df_test
 
 
-def yield_splits(dfs_dict, len_thr=0, rns=None, n_splits=3,
+def yield_splits(dfs_dict, rns, len_thr=0, n_splits=3,
                  len_column=None, rank_mustar=True, target='bdist', verbose=False):
     df_kfolds = {}
     for k, df0 in dfs_dict.items():
@@ -169,7 +165,7 @@ def yield_splits(dfs_dict, len_thr=0, rns=None, n_splits=3,
 
         pathology_flag = True
         while pathology_flag:
-            dfs, flag = sample_by_length(df2, (up, dn), 5, rns, [1]*n_splits,
+            dfs, flag = sample_by_length(df2, rns, (up, dn), 5, [1]*n_splits,
                                          len_column=len_column, verbose=verbose)
 
             vcs = [df_[target].unique().shape[0] for df_ in dfs]
@@ -188,6 +184,40 @@ def yield_splits(dfs_dict, len_thr=0, rns=None, n_splits=3,
                 dtrain = derive_abs_pct_values(dtrain, 'mu*')
                 dtest = derive_abs_pct_values(dtest, 'mu*')
             df_kfolds[k].append((dtrain, dtest))
+    return df_kfolds
+
+
+def yield_splits_plain(df0, rns, n_splits=3,
+                       len_column=None, len_thr=0,
+                       rank_mustar=True, target='bdist', verbose=False):
+    df_kfolds = []
+    if not isinstance(len_thr, tuple) and len_column:
+        df2 = df0[df0[len_column] > len_thr].copy()
+    else:
+        df2 = df0.copy()
+
+    pathology_flag = True
+    while pathology_flag:
+        dfs, flag = sample_by_length(df2, rns, agg_columns=(up, dn),
+                                     head=5, frac_test=[1]*n_splits,
+                                     len_column=len_column, verbose=verbose)
+
+        vcs = [df_[target].unique().shape[0] for df_ in dfs]
+        if verbose:
+            print(vcs)
+        pathology_flag = any([v == 1 for v in vcs])
+
+    for j in range(n_splits):
+        dtrain = pd.concat(dfs[:j] + dfs[j+1:], axis=0)
+        dtest = dfs[j].copy()
+
+        if isinstance(len_thr, tuple):
+            dtrain = dtrain[dtrain.n > len_thr[0]]
+            dtest = dtest[dtest.n > len_thr[1]]
+        if rank_mustar:
+            dtrain = derive_abs_pct_values(dtrain, 'mu*')
+            dtest = derive_abs_pct_values(dtest, 'mu*')
+        df_kfolds.append((dtrain, dtest))
     return df_kfolds
 
 

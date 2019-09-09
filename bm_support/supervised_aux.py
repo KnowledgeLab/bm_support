@@ -4,7 +4,7 @@ from sklearn.ensemble import RandomForestClassifier
 from .supervised import simple_stratify
 from .supervised import problem_type_dict
 from .supervised import select_features_dict, logit_pvalue, linear_pvalue, report_metrics
-from .sampling import yield_splits
+from .sampling import yield_splits, yield_splits_plain
 from .add_features import normalize_columns_with_scaler
 from .supervised import simple_oversample
 import numpy as np
@@ -14,7 +14,7 @@ from sklearn.metrics import roc_curve, r2_score, accuracy_score, precision_recal
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from datahelpers.constants import up, dn, bdist
+from datahelpers.constants import up, dn, bdist, large_int
 
 metric_selector = dict(zip(['corr', 'accuracy', 'precision', 'recall', 'f1'], range(5)))
 
@@ -178,7 +178,7 @@ def sect_min(f, a, b, tol=1e-6):
 
 def find_optimal_model(X_train, y_train, max_features=None,
                        model_type=LogisticRegression,
-                       kwargs={'penalty': 'l1', 'solver': 'liblinear', 'max_iter': 100},
+                       clf_parameters={'penalty': 'l1', 'solver': 'liblinear', 'max_iter': 100},
                        penalty_name='C',
                        metric_type_foo=precision_score,
                        pos_label=1,
@@ -189,7 +189,7 @@ def find_optimal_model(X_train, y_train, max_features=None,
         print(f'>>> max features: {max_features}')
 
     def foo(x):
-        clf_ = model_type(**{**kwargs, **{penalty_name: np.exp(x)}})
+        clf_ = model_type(**{**clf_parameters, **{penalty_name: np.exp(x)}})
         clf_.fit(X_train, y_train)
         if metric_type_foo == roc_auc_score:
             y_pred = clf_.predict_proba(X_train)[:, pos_label]
@@ -703,10 +703,15 @@ def run_neut_models(df_package, cfeatures, seed=13, max_len_thr=21, forest_flag=
     return container
 
 
-def run_claims(df_package, cfeatures, seed=13, max_len_thr=0, forest_flag=True, n_iter=20,
-               target=bdist, oversample=False,
+def run_claims(df_package, cfeatures,
+               max_len_thr=0,
+               seed=13, forest_flag=True,
+               n_iter=20, target=bdist,
+               oversample=False,
                complexity_dict={'min_samples_leaf': 10, 'max_depth': 6, 'n_estimators': 100},
                verbose=False):
+
+    rns = RandomState(seed)
 
     if not forest_flag and 'min_samples_leaf' in complexity_dict.keys():
         complexity_dict = {'max_features': 5}
@@ -715,10 +720,10 @@ def run_claims(df_package, cfeatures, seed=13, max_len_thr=0, forest_flag=True, 
 
     container = []
 
-    rns = RandomState(seed)
     for it in range(n_iter):
         df_kfolds = yield_splits(df_package, rns=rns, len_column='n',
-                                 len_thr=max_len_thr, target=target,
+                                 len_thr=max_len_thr,
+                                 target=target,
                                  verbose=verbose)
         for origin, folds in df_kfolds.items():
             seed = rns.choice(10000)
@@ -738,6 +743,7 @@ def run_claims(df_package, cfeatures, seed=13, max_len_thr=0, forest_flag=True, 
 
                 X_train, y_train = df_train[cfeatures], df_train[target]
                 if forest_flag:
+                    print(complexity_dict, X_train.shape)
                     clf = RandomForestClassifier(**complexity_dict)
                     clf = clf.fit(X_train, y_train)
                     coeffs = clf.feature_importances_
@@ -754,3 +760,199 @@ def run_claims(df_package, cfeatures, seed=13, max_len_thr=0, forest_flag=True, 
                 metrics_dict['train_report'] = metrics_dict_train
                 container.append([it, origin, j, (df_train, df_test), clf, metrics_dict, coeffs])
     return container
+
+
+def run_model(df_package, cfeatures,
+              seed=13, forest_flag=True,
+              n_iter=20, target=bdist,
+              oversample=False,
+              complexity_dict={'min_samples_leaf': 10, 'max_depth': 6, 'n_estimators': 100},
+              min_samples_leaf_frac=None,
+              verbose=False):
+
+    rns = RandomState(seed)
+
+    if not forest_flag and 'min_samples_leaf' in complexity_dict.keys():
+        complexity_dict = {'max_features': 5}
+    else:
+        complexity_dict['random_state'] = seed
+
+    container = []
+
+    for it in range(n_iter):
+        df_kfolds = yield_splits(df_package, rns=rns, len_column='n',
+                                 len_thr=0,
+                                 target=target,
+                                 verbose=verbose)
+        for origin, folds in df_kfolds.items():
+            if min_samples_leaf_frac:
+                complexity_dict['min_samples_leaf'] = int(min_samples_leaf_frac *
+                                                          df_package[origin].shape[0])
+            seed = rns.choice(10000)
+            for j, dfs in enumerate(folds):
+                df_train, df_test = dfs
+
+                if verbose:
+                    if it == 0 and j == 0:
+                        print(f'for {origin}, sizes: {df_train.shape[0]} {df_test.shape[0]}')
+                        print(f'(***)')
+
+                if not forest_flag:
+                    for c in cfeatures:
+                        df_train[c] = df_train[c].astype(float)
+                    for c in cfeatures:
+                        df_test[c] = df_test[c].astype(float)
+
+                    df_train, scaler = normalize_columns_with_scaler(df_train, cfeatures)
+                    df_test, scaler = normalize_columns_with_scaler(df_test, cfeatures)
+
+                if oversample:
+                    df_train = simple_oversample(df_train, target, seed=seed, ratios=(1, 1))
+
+                X_train, y_train = df_train[cfeatures], df_train[target]
+                if forest_flag:
+                    print(complexity_dict, X_train.shape)
+                    clf = RandomForestClassifier(**complexity_dict)
+                    clf = clf.fit(X_train, y_train)
+                    coeffs = clf.feature_importances_
+                else:
+                    # max_features = None if len(cfeatures) < 5 else 3
+                    clf, c_opt, acc_opt = find_optimal_model(X_train, y_train,
+                                                             metric_type_foo=accuracy_score,
+                                                             # metric_type_foo=roc_auc_score,
+                                                             verbose=verbose,
+                                                             **complexity_dict)
+                    coeffs = list(clf.coef_.T[:, 0]) + [clf.intercept_[0]]
+                metrics_dict = produce_topk_model(clf, df_test, cfeatures, target)
+                metrics_dict_train = produce_topk_model(clf, df_train, cfeatures, target)
+                metrics_dict['train_report'] = metrics_dict_train
+                metrics_dict['tsize'] = df_train.shape[0] + df_test.shape[0]
+                container.append([it, origin, j, (df_train, df_test), clf,
+                                  metrics_dict, coeffs, cfeatures])
+
+    return container
+
+
+def run_model_(dfs, cfeatures,
+               rns,
+               target=bdist,
+               mode='rf',
+               clf_parameters=None,
+               extra_parameters=None):
+
+    df_train, df_test = dfs
+
+    size = df_train.shape[0] + df_test.shape[0]
+
+    if not clf_parameters:
+        clf_parameters = dict()
+
+    if mode == 'rf':
+        if isinstance(extra_parameters, dict) and 'min_samples_leaf_frac' in extra_parameters:
+            clf_parameters['min_samples_leaf'] = int(extra_parameters['min_samples_leaf_frac'] * size)
+    elif mode == 'lr':
+        for c in cfeatures:
+            df_train[c] = df_train[c].astype(float)
+        for c in cfeatures:
+            df_test[c] = df_test[c].astype(float)
+
+        df_train, scaler = normalize_columns_with_scaler(df_train, cfeatures)
+        df_test, scaler = normalize_columns_with_scaler(df_test, cfeatures)
+
+    clf_parameters['random_state'] = rns
+
+    X_train, y_train = df_train[cfeatures], df_train[target]
+
+    if mode == 'rf':
+        print(clf_parameters)
+        clf = RandomForestClassifier(**clf_parameters)
+        clf = clf.fit(X_train, y_train)
+
+        coefficients = clf.feature_importances_
+    elif mode == 'lr':
+        clf, c_opt, acc_opt = find_optimal_model(X_train, y_train,
+                                                 metric_type_foo=accuracy_score,
+                                                 # metric_type_foo=roc_auc_score,
+                                                 clf_parameters=clf_parameters)
+        coefficients = list(clf.coef_.T[:, 0]) + [clf.intercept_[0]]
+    else:
+        return []
+
+    metrics_dict = produce_topk_model(clf, df_test, cfeatures, target)
+    metrics_dict_train = produce_topk_model(clf, df_train, cfeatures, target)
+    metrics_dict['train_report'] = metrics_dict_train
+    metrics_dict['tsize'] = size
+    report = ((df_train, df_test), clf, metrics_dict, coefficients, cfeatures)
+    return report
+
+
+def run_model_splits(df0, cfeatures,
+                     rns,
+                     target=bdist,
+                     mode='rf',
+                     clf_parameters=None,
+                     extra_parameters=None,
+                     n_splits=3):
+
+    folds = yield_splits_plain(df0,
+                               rns=rns, n_splits=n_splits,
+                               len_thr=0,
+                               target=target)
+    reports = []
+    for j, dfs in zip(range(n_splits), folds):
+        r = run_model_(dfs, cfeatures, rns, target, mode, clf_parameters, extra_parameters)
+        reports.append((j, *r))
+    return reports
+
+
+def run_model_iterate(df0, cfeatures,
+                      rns,
+                      target=bdist,
+                      mode='rf',
+                      clf_parameters=None,
+                      extra_parameters=None,
+                      n_splits=3, n_iterations=1):
+
+    seeds = rns.choice(large_int, n_iterations)
+    rnss = [RandomState(seed) for seed in seeds]
+
+    report_batches = map(lambda rns0: run_model_splits(df0, cfeatures,
+                                                       rns0,
+                                                       target=target,
+                                                       mode=mode,
+                                                       clf_parameters=clf_parameters,
+                                                       extra_parameters=extra_parameters,
+                                                       n_splits=n_splits), rnss)
+
+    reports = []
+    for j, batch in enumerate(report_batches):
+        for report in batch:
+            reports.append((j, *report))
+    return reports
+
+
+def run_model_iterate_over_datasets(df_dict, cfeatures,
+                                   rns,
+                                   target=bdist,
+                                   mode='rf',
+                                   clf_parameters=None,
+                                   extra_parameters=None,
+                                   n_splits=3, n_iterations=1):
+
+    agg = []
+    for origin, df in df_dict.items():
+        batch = run_model_iterate(df, cfeatures,
+                                  rns,
+                                  target=target,
+                                  mode=mode,
+                                  clf_parameters=clf_parameters,
+                                  extra_parameters=extra_parameters,
+                                  n_splits=n_splits, n_iterations=n_iterations)
+        agg.append((origin, batch))
+
+    reports = []
+    for origin, batch in agg:
+        for report in batch:
+            it, rest = report[0], report[1:]
+            reports.append((it, origin, *rest))
+    return reports

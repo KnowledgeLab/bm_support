@@ -3,7 +3,7 @@ from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp,
 from os.path import expanduser, join
 from copy import deepcopy
 from numpy.random import RandomState
-from bm_support.supervised_aux import plot_prec_recall, plot_auc, plot_auc_pr, level_corr, run_claims
+from bm_support.supervised_aux import run_model, run_claims
 from bm_support.add_features import select_feature_families, transform_last_stage
 
 import json
@@ -98,12 +98,28 @@ oversample = False
 
 # train claims models
 rns = RandomState(seed)
+complexity_dict = {'max_depth': 4, 'n_estimators': 100}
+version = 9
 
-container = run_claims(df_package, cfeatures, seed=seed, max_len_thr=len_thr, forest_flag=forest_flag,
-                       n_iter=n_iter, target=target, oversample=oversample,
-                       case_features=cfeatures_normal, verbose=False)
+cfeatures = sorted(list(cfeatures))
+
+# container = run_claims(df_package, cfeatures,
+#                        max_len_thr=len_thr,
+#                        seed=seed, forest_flag=forest_flag,
+#                        n_iter=n_iter, target=target,
+#                        oversample=oversample,
+#                        complexity_dict=complexity_dict,
+#                        verbose=False)
+
+container = run_model(df_package, cfeatures,
+                      seed=seed, forest_flag=forest_flag,
+                      n_iter=n_iter, target=target,
+                      oversample=oversample,
+                      complexity_dict=complexity_dict,
+                      verbose=False)
+#
 
 fpath = expanduser('~/data/kl/reports/')
 
-with gzip.open(fpath + f'models_claims.pkl.gz', 'wb') as f:
+with gzip.open(fpath + f'models_claims_v{version}.pkl.gz', 'wb') as f:
     pickle.dump(container, f)

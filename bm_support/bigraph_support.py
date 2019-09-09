@@ -276,7 +276,7 @@ def compute_modularity_index_gen(data, bipart_edges_dict, window_col=ye, window=
                 r_agg.append(output)
 
     if window:
-        suff = '{0}'.format(window)
+        suff = f'{window}'
     else:
         suff = ''
 
