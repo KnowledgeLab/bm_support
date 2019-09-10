@@ -41,7 +41,6 @@ if predict_mode == 'neutral':
 else:
     max_len_thr = 6
 
-max_len_thr = 1
 n_iter = 20
 fsuffix = 'v5'
 mode = 'rf'

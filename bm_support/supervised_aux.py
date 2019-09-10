@@ -838,7 +838,8 @@ def run_model_(dfs, cfeatures,
                target=bdist,
                mode='rf',
                clf_parameters=None,
-               extra_parameters=None):
+               extra_parameters=None,
+               oversample=False):
 
     df_train, df_test = dfs
 
@@ -849,7 +850,7 @@ def run_model_(dfs, cfeatures,
 
     if mode == 'rf':
         if isinstance(extra_parameters, dict) and 'min_samples_leaf_frac' in extra_parameters:
-            clf_parameters['min_samples_leaf'] = int(extra_parameters['min_samples_leaf_frac'] * size)
+            clf_parameters['min_samples_leaf'] = max([1, int(extra_parameters['min_samples_leaf_frac'] * size)])
     elif mode == 'lr':
         for c in cfeatures:
             df_train[c] = df_train[c].astype(float)
@@ -861,10 +862,12 @@ def run_model_(dfs, cfeatures,
 
     clf_parameters['random_state'] = rns
 
+    if oversample:
+        df_train = simple_oversample(df_train, target, rns, ratios=(1, 1))
+
     X_train, y_train = df_train[cfeatures], df_train[target]
 
     if mode == 'rf':
-        print(clf_parameters)
         clf = RandomForestClassifier(**clf_parameters)
         clf = clf.fit(X_train, y_train)
 
@@ -892,7 +895,8 @@ def run_model_splits(df0, cfeatures,
                      mode='rf',
                      clf_parameters=None,
                      extra_parameters=None,
-                     n_splits=3):
+                     n_splits=3,
+                     oversample=False):
 
     folds = yield_splits_plain(df0,
                                rns=rns, n_splits=n_splits,
@@ -900,7 +904,8 @@ def run_model_splits(df0, cfeatures,
                                target=target)
     reports = []
     for j, dfs in zip(range(n_splits), folds):
-        r = run_model_(dfs, cfeatures, rns, target, mode, clf_parameters, extra_parameters)
+        r = run_model_(dfs, cfeatures, rns, target, mode, clf_parameters, extra_parameters,
+                       oversample=oversample)
         reports.append((j, *r))
     return reports
 
@@ -911,7 +916,8 @@ def run_model_iterate(df0, cfeatures,
                       mode='rf',
                       clf_parameters=None,
                       extra_parameters=None,
-                      n_splits=3, n_iterations=1):
+                      n_splits=3, n_iterations=1,
+                      oversample=False):
 
     seeds = rns.choice(large_int, n_iterations)
     rnss = [RandomState(seed) for seed in seeds]
@@ -922,7 +928,8 @@ def run_model_iterate(df0, cfeatures,
                                                        mode=mode,
                                                        clf_parameters=clf_parameters,
                                                        extra_parameters=extra_parameters,
-                                                       n_splits=n_splits), rnss)
+                                                       n_splits=n_splits,
+                                                       oversample=oversample), rnss)
 
     reports = []
     for j, batch in enumerate(report_batches):
@@ -932,12 +939,13 @@ def run_model_iterate(df0, cfeatures,
 
 
 def run_model_iterate_over_datasets(df_dict, cfeatures,
-                                   rns,
-                                   target=bdist,
-                                   mode='rf',
-                                   clf_parameters=None,
-                                   extra_parameters=None,
-                                   n_splits=3, n_iterations=1):
+                                    rns,
+                                    target=bdist,
+                                    mode='rf',
+                                    clf_parameters=None,
+                                    extra_parameters=None,
+                                    n_splits=3, n_iterations=1,
+                                    oversample=False):
 
     agg = []
     for origin, df in df_dict.items():
@@ -947,7 +955,8 @@ def run_model_iterate_over_datasets(df_dict, cfeatures,
                                   mode=mode,
                                   clf_parameters=clf_parameters,
                                   extra_parameters=extra_parameters,
-                                  n_splits=n_splits, n_iterations=n_iterations)
+                                  n_splits=n_splits, n_iterations=n_iterations,
+                                  oversample=oversample)
         agg.append((origin, batch))
 
     reports = []

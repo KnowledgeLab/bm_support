@@ -389,7 +389,7 @@ def simple_stratify(df, statify_column, seed=0, ratios=None, verbose=False):
         return dfr
 
 
-def simple_oversample(df, statify_column, seed=0, ratios=None, verbose=False):
+def simple_oversample(df, statify_column, rns, ratios=None, verbose=False):
     """
     return oversampled df
     """
@@ -399,7 +399,6 @@ def simple_oversample(df, statify_column, seed=0, ratios=None, verbose=False):
     elif ratios == 'original':
         return df
 
-    np.random.seed(seed)
     vc = df[statify_column].value_counts()
     if verbose:
         print(vc)
@@ -409,7 +408,7 @@ def simple_oversample(df, statify_column, seed=0, ratios=None, verbose=False):
     new_sizes = [int(r * sizes[0] / ratios[0]) for r in ratios[1:]]
     if verbose:
         print('sizes: {0} new_size: {1}'.format(sizes, new_sizes))
-    indices = [np.random.choice(actual, new_size, replace=True) for
+    indices = [rns.choice(actual, new_size, replace=True) for
                actual, new_size in zip(sizes[1:], new_sizes)]
     # print([len(ii) for ii in indices])
     subdfs = [df.loc[masks[0]]] + [df.loc[m].iloc[ii] for m, ii in zip(masks[1:], indices)]

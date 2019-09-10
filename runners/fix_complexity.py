@@ -6,7 +6,7 @@ from os.path import expanduser, join
 from numpy.random import RandomState
 import numpy as np
 import json
-from bm_support.supervised_aux import run_neut_models
+from bm_support.supervised_aux import run_neut_models, run_model_iterate_over_datasets
 from bm_support.math import interpolate_nonuniform_linear, integral_linear, get_function_values, find_bbs
 import pandas as pd
 import seaborn as sns
@@ -14,16 +14,6 @@ import matplotlib.pyplot as plt
 
 
 def prepare_datasets(predict_mode_='posneg'):
-    fprefix = f'predict_{predict_mode_}'
-
-    # model_type = 'lr'
-    model_type = 'rf'
-
-    if model_type == 'rf':
-        forest_flag = True
-    else:
-        forest_flag = False
-
     fname = expanduser('~/data/kl/columns/feature_groups_v3.txt')
     with open(fname, 'r') as f:
         feat_selector = json.load(f)
@@ -80,11 +70,19 @@ def prepare_datasets(predict_mode_='posneg'):
         cfeatures_ = None
         target_ = None
 
+    print('***')
+    print(len(cfeatures_))
+
+    print('***')
+    print(cfeatures_)
+    print('***')
+    print(target_)
+
     return df_dict, cfeatures_, target_
 
 
 def savefigs(report_, pred_mode, master_col, xlabel,
-             fpath_figs=expanduser('~/data/kl/figs/')):
+             fpath_figs=expanduser('~/data/kl/figs/tmp')):
 
     print(f'mode: {pred_mode}')
 
@@ -93,6 +91,7 @@ def savefigs(report_, pred_mode, master_col, xlabel,
         for items2 in items:
             for item in items2:
                 it, origin, j, dfs, clf, mdict, coeffs, cfeats = item
+                # print(mdict['auc'], mdict['train_report']['auc'])
                 fpr, tpr, _ = mdict['roc_curve']
                 auc = integral_linear(fpr, tpr)
                 acc.append((depth, origin, 'test', auc))
@@ -125,19 +124,30 @@ if __name__ == "__main__":
     parser.add_argument('-n', '--niter',
                         type=int,
                         default=1,
-                        help='test on the head of the dataset')
+                        help='number of iterations')
 
     parser.add_argument('-s', '--seed',
                         type=int,
                         default=13,
-                        help='test on the head of the dataset')
+                        help='seed, used to control random functions')
+
+    parser.add_argument('-o', '--oversample',
+                        type=bool,
+                        default=False,
+                        help='use if your dataset is unbalanced')
+
+    min_leaf_frac_baseline = 0.005
 
     args = parser.parse_args()
     predict_mode = args.mode
     seed = args.seed
     n_iter = args.niter
 
+    oversample = args.oversample
+
     print(f'mode: {predict_mode}')
+    mode = 'rf'
+    rns = RandomState(seed)
 
     df_dict, cfeatures, target = prepare_datasets(predict_mode)
 
@@ -151,46 +161,46 @@ if __name__ == "__main__":
 
     #***
     # depth
-    complexity_dict = {'max_depth': 6, 'n_estimators': 100}
-    min_samples_leaf_frac = 0.05
+    clf_parameters = {'max_depth': 6, 'n_estimators': 100}
+    extra_parameters = {'min_samples_leaf_frac': min_leaf_frac_baseline}
+
     depths = list(range(1, 7))
     sreport = {k: [] for k in depths}
     for cur_depth in depths:
-        print(f'***{cur_depth}')
-        complexity_dict['max_depth'] = cur_depth
-        report = run_neut_models(df_dict, cfeatures,
-                                 seed=seed,
-                                 max_len_thr=max_len_thr,
-                                 n_iter=n_iter,
-                                 forest_flag=forest_flag, asym_flag=False,
-                                 target=target,
-                                 complexity_dict=complexity_dict,
-                                 min_samples_leaf_frac=min_samples_leaf_frac,
-                                 oversample=oversample,
-                                 verbose=False)
-        sreport[cur_depth].append(report)
+        print(f'*** depth: {cur_depth}')
+        clf_parameters['max_depth'] = cur_depth
+
+        container = run_model_iterate_over_datasets(df_dict, cfeatures, rns,
+                                                    target=target, mode=mode, n_splits=3,
+                                                    clf_parameters=clf_parameters,
+                                                    extra_parameters=extra_parameters,
+                                                    n_iterations=n_iter,
+                                                    oversample=oversample)
+
+        sreport[cur_depth].append(container)
 
     savefigs(sreport, predict_mode, 'depth', 'depth of decision tree')
 
     #***
     # min leaf size
 
-    complexity_dict = {'max_depth': 1, 'n_estimators': 100}
-    min_leaves = np.arange(0.005, 0.1, 0.005)
+    clf_parameters = {'max_depth': 2, 'n_estimators': 100}
+    min_leaves = [0.0005, 0.001, 0.025, 0.05, 0.01, 0.025, 0.05]
     sreport = {k: [] for k in min_leaves}
 
     for min_leaf in min_leaves:
-        print(f'***{min_leaf}')
-        report = run_neut_models(df_dict, cfeatures,
-                                 seed=seed,
-                                 max_len_thr=max_len_thr, n_iter=n_iter,
-                                 forest_flag=forest_flag, asym_flag=False,
-                                 target=target,
-                                 complexity_dict=complexity_dict,
-                                 min_samples_leaf_frac=min_leaf,
-                                 oversample=oversample,
-                                 verbose=False)
-        sreport[min_leaf].append(report)
+        print(f'*** leaf_frac: {min_leaf}')
+
+        extra_parameters = {'min_samples_leaf_frac': min_leaf}
+
+        container = run_model_iterate_over_datasets(df_dict, cfeatures, rns,
+                                                    target=target, mode=mode, n_splits=3,
+                                                    clf_parameters=clf_parameters,
+                                                    extra_parameters=extra_parameters,
+                                                    n_iterations=n_iter,
+                                                    oversample=oversample)
+
+        sreport[min_leaf].append(container)
 
     savefigs(sreport, predict_mode, 'leaf_frac',
              'min leaf size as fraction dataset size')
@@ -198,24 +208,22 @@ if __name__ == "__main__":
     #***
     # n estimators
 
-    complexity_dict = {'max_depth': 1, 'n_estimators': 100}
+    clf_parameters = {'max_depth': 1, 'n_estimators': 100}
     min_leaf = 0.04
     estimators = np.arange(10, 200, 10)
+    extra_parameters = {'min_samples_leaf_frac': min_leaf_frac_baseline}
     sreport = {k: [] for k in estimators}
 
     for x in estimators:
-        print(f'***{x}')
-        complexity_dict['n_estimators'] = x
-        report = run_neut_models(df_dict, cfeatures,
-                                 seed=seed,
-                                 max_len_thr=max_len_thr,
-                                 n_iter=n_iter,
-                                 forest_flag=forest_flag, asym_flag=False,
-                                 target=target,
-                                 complexity_dict=complexity_dict,
-                                 min_samples_leaf_frac=min_leaf,
-                                 oversample=oversample,
-                                 verbose=False)
-        sreport[x].append(report)
+        print(f'*** n_est: {x}')
+        clf_parameters['n_estimators'] = x
+
+        container = run_model_iterate_over_datasets(df_dict, cfeatures, rns,
+                                                    target=target, mode=mode, n_splits=3,
+                                                    clf_parameters=clf_parameters,
+                                                    extra_parameters=extra_parameters,
+                                                    n_iterations=n_iter,
+                                                    oversample=oversample)
+        sreport[x].append(container)
 
     savefigs(sreport, predict_mode, 'n_estimators', 'number of estimators')

@@ -76,7 +76,7 @@ lit_excl = [c for c in cfeatures0 if sum(df_dict['lit'][c].isnull()) > 0]
 
 
 cfeatures = (set(feat_selector['claim']) | set(feat_selector['batch'])) - (set(gw_excl) | set(lit_excl))
-cfeatures_all = list(cfeatures)
+cfeatures_all = list(cfeatures - excl_set)
 cfeatures_normal = list(cfeatures - excl_set)
 cfeatures_excl = list(excl_set)
 
@@ -84,7 +84,7 @@ cfeatures_excl = list(excl_set)
 verbose = False
 seed = 17
 
-n_iter = 1
+n_iter = 20
 mode = 'rf'
 # mode = 'lr'
 
@@ -96,9 +96,16 @@ oversample = False
 
 # train claims models
 rns = RandomState(seed)
-version = 8
+version = 20
 
-cfeatures = sorted(list(cfeatures))
+cfeatures = sorted(list(cfeatures - excl_set))
+
+print('***')
+print(len(cfeatures))
+
+print('***')
+print(cfeatures)
+print('***')
 
 if mode == 'rf':
     clf_parameters = {'max_depth': 4, 'n_estimators': 100, 'min_samples_leaf': 20}
