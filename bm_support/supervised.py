@@ -802,6 +802,13 @@ def plot_importances(importances, stds, covariate_columns, fname=None, title_pre
     :return:
     """
 
+    sns.set_style('whitegrid')
+
+    # if not ax:
+    #     fig = plt.figure(figsize=(8, 4))
+    #     rect = [0.15, 0.15, 0.75, 0.75]
+    #     ax = fig.add_axes(rect)
+
     if sort_them:
         indices = np.argsort(np.abs(importances))[::-1]
     else:
@@ -811,6 +818,7 @@ def plot_importances(importances, stds, covariate_columns, fname=None, title_pre
     n = topn if topn else len(covariate_columns)
     if not colors:
         colors = 'r'
+
     imp_ccs = [covariate_columns[i] for i in indices]
     fig = plt.figure(figsize=(n*3, 5))
     sns.set_style("whitegrid")
@@ -822,7 +830,7 @@ def plot_importances(importances, stds, covariate_columns, fname=None, title_pre
     imp_ccs2 = [imp_ccs[i] for i in sorted_ix]
 
     plt.bar(range(len(importances2)), importances2[sorted_ix],
-            color=colors, yerr=stds2[sorted_ix], align='center', alpha=0.5)
+           color=colors, yerr=stds2[sorted_ix], align='center', alpha=0.5)
     # sns.barplot(list(range(n)), importances[indices],
     #             color=colors, yerr=stds[indices], align='center', alpha=0.5)
 

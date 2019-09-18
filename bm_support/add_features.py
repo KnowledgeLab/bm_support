@@ -16,6 +16,7 @@ import gzip
 import pickle
 from copy import deepcopy
 from .derive_feature import add_t0_flag, attach_moving_averages_per_interaction
+import json
 
 
 def gcd(a, b):
@@ -574,8 +575,12 @@ def generate_feature_groups(columns_filename, verbose=True):
                ['pre_authors', 'pre_affs']
 
     bipatterns = [('lincs', 'comm_size'), ('lincs', 'same_comm'),
-                  ('litgw', 'dyn_eff_comm_size'), ('litgw', 'dyn_same_comm'),
-                  ('litgw', 'comm_size'), ('litgw', 'same_comm')]
+                  ('litgw', 'dyn_eff_comm_size'),
+                  ('litgw', 'dyn_same_comm'),
+                  ('litgw', 'dyn_csize_up'),
+                  ('litgw', 'dyn_csize_dn'),
+                  ('litgw', 'comm_size'),
+                  ('litgw', 'same_comm')]
 
     print('### Patterns')
     print(patterns)
@@ -583,6 +588,82 @@ def generate_feature_groups(columns_filename, verbose=True):
     col_families = {pat: [x for x in columns if pat in x] for pat in patterns}
     col_families_prefix_suffix = {pat0 + pat1: [x for x in columns if pat0 in x and pat1 in x] for pat0, pat1 in
                                   bipatterns}
+
+    # little filtering hack
+
+    for k in ['litgwcomm_size', 'litgwsame_comm']:
+        col_families_prefix_suffix[k] = [c for c in col_families_prefix_suffix[k] if not 'dyn' in c]
+
+    col_families_basic = {k: [k] for k in ['ai', 'ar', 'delta_year']}
+    # fits of wos citations
+    col_families['citations'] = ['yearspan_flag', 'len_flag', 'succfit_flag', 'mu', 'sigma', 'cite_count',
+                                 'A', 'A_log', 'A_log_sigma', 'err', 'int_3', 'int_3_log', 'int_3_log_sigma']
+    col_families['time'] = ['year_off', 'year_off2']
+    col_families['authors_count'] = ['authors_count']
+    col_families['affiliations_count'] = ['affiliations_count']
+    col_families['prev_rdist'] = ['prev_rdist']
+    col_families['prev_rdist_abs'] = ['prev_rdist_abs']
+    # col_families['degrees'] = ['updeg_st', 'dndeg_st', 'effdeg_st',
+    #                            'updeg_end', 'dndeg_end', 'effdeg_end']
+    col_families['degrees'] = ['degree_source_in', 'degree_source_out',
+                               'degree_target_in', 'degree_target_out']
+    mu_cols = ['mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct', 'muhat']
+
+    col_families.update({k: [k] for k in mu_cols})
+
+    col_families['bdist_ma'] = ['bdist_ma_None', 'bdist_ma_2']
+    # col_families['obs_mu'] = ['obs_mu']
+
+    col_families = {**col_families, **col_families_basic, **col_families_prefix_suffix}
+
+    lens = {k: len(v) for k, v in col_families.items()}
+    cols_outstanding = list(set(columns) - set([x for v in col_families.values() for x in v]))
+    if verbose:
+        print(lens)
+        print(sum(lens.values()), len(columns))
+        print(sorted(cols_outstanding)[:30])
+        print(len(col_families))
+
+    return col_families
+
+
+def generate_feature_groups_coarse(columns_filename, verbose=True):
+    with open(columns_filename, 'r') as f:
+        line = f.read()
+    columns = line.split('\n')
+    columns = [x for x in columns if x != '']
+
+    # patterns = ['cpop', 'cden', 'ksst', 'nhi'] + \
+    patterns = ['cden', 'ksst', 'nhi'] + \
+               ['affind'] + \
+               ['suppind'] + \
+               ['rcomm_size'] + \
+               ['rcommrel_size'] + \
+               ['rncomms'] + \
+               ['rncomponents'] + \
+               ['pos_comm_ave'] + \
+               ['pre_authors', 'pre_affs']
+
+    bipatterns = [('lincs', 'comm_size'),
+                  ('lincs', 'same_comm'),
+                  ('litgw', 'dyn_eff_comm_size'),
+                  ('litgw', 'dyn_same_comm'),
+                  ('litgw', 'dyn_csize_up'),
+                  ('litgw', 'dyn_csize_dn'),
+                  ('litgw', 'comm_size'),
+                  ('litgw', 'same_comm')]
+
+    print('### Patterns')
+    print(patterns)
+
+    col_families = {pat: [x for x in columns if pat in x] for pat in patterns}
+    col_families_prefix_suffix = {pat0 + pat1: [x for x in columns if pat0 in x and pat1 in x] for pat0, pat1 in
+                                  bipatterns}
+
+    col_families_prefix_suffix['litgwdyn_eff_comm_size'] += col_families_prefix_suffix['litgwdyn_csize_up']
+    col_families_prefix_suffix['litgwdyn_eff_comm_size'] += col_families_prefix_suffix['litgwdyn_csize_dn']
+    del col_families_prefix_suffix['litgwdyn_csize_up']
+    del col_families_prefix_suffix['litgwdyn_csize_dn']
 
     # little filtering hack
 
@@ -967,7 +1048,8 @@ def transform_last_stage(df, trial_features, origin, len_thr=2, normalize=False,
     return dfw
 
 
-def define_laststage_metrics(origin, predict_mode='neutral', datapath=None, verbose=False):
+def define_laststage_metrics(origin, predict_mode='neutral', datapath=None,
+                             thr=0, verbose=False):
     """
 
     :param origin:
@@ -1027,6 +1109,8 @@ def define_laststage_metrics(origin, predict_mode='neutral', datapath=None, verb
     uniq_kn = set()
     dft = df0.groupby([up, dn]).apply(lambda x: pd.Series([sum(x[ps]), x.shape[0], x[cexp].iloc[0]],
                                                           index=['k', 'n', 'q']))
+    dft = dft[dft.n >= thr]
+
     df0 = df0.merge(dft.reset_index(), on=[up, dn])
 
     arr = dft[['k', 'n']].apply(lambda x: tuple(x), axis=1)
@@ -1096,3 +1180,72 @@ def define_laststage_metrics(origin, predict_mode='neutral', datapath=None, verb
     return df0
 
 
+def prepare_datasets(predict_mode_='posneg', thr=0):
+    fname = expanduser('~/data/kl/columns/feature_groups_v3.txt')
+    with open(fname, 'r') as f:
+        feat_selector = json.load(f)
+
+    df_dict = {}
+
+    for origin in ['gw', 'lit']:
+        df_dict[origin] = define_laststage_metrics(origin,
+                                                   predict_mode=predict_mode_,
+                                                   thr=thr,
+                                                   verbose=True)
+        print(f'>>> {origin} {predict_mode_} {df_dict[origin].shape[0]}')
+
+    if predict_mode_ == 'neutral' or predict_mode_ == 'posneg':
+        selectors = ['interaction']
+        target_ = 'bint'
+
+        cfeatures_ = ['mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct',
+                      'degree_source', 'degree_target']
+
+        cfeatures0 = set()
+        for s in selectors:
+            cfeatures0 |= set(feat_selector[s])
+
+        extra_features = [c for c in list(cfeatures0) if ('same' in c or 'eff' in c) and ('_im_ud' in c)]
+        cfeatures_ += extra_features
+
+    elif predict_mode_ == 'full':
+        selectors = ['claim', 'batch']
+        target_ = 'bdist'
+
+        feat_version = 21
+        excl_columns = ()
+
+        col_families = generate_feature_groups(
+            expanduser('~/data/kl/columns/v{0}_columns.txt'.format(feat_version)))
+
+        feature_dict = deepcopy(col_families)
+        feature_dict = {k: list(v) for k, v in feature_dict.items() if not any([c in v for c in excl_columns])}
+
+        feature_dict_inv = {}
+
+        for k, v in feature_dict.items():
+            feature_dict_inv.update({x: k for x in v})
+
+        excl_set = {'bdist_ma_None', 'bdist_ma_2'}
+
+        cfeatures0 = set()
+        for s in selectors:
+            cfeatures0 |= set(feat_selector[s])
+
+        gw_excl = [c for c in list(cfeatures0) if sum(df_dict['gw'][c].isnull()) > 0]
+        lit_excl = [c for c in list(cfeatures0) if sum(df_dict['lit'][c].isnull()) > 0]
+
+        cfeatures_ = list(cfeatures0 - (set(gw_excl) | set(lit_excl) | excl_set))
+    else:
+        cfeatures_ = None
+        target_ = None
+
+    print('***')
+    print(len(cfeatures_))
+
+    print('***')
+    print(cfeatures_)
+    print('***')
+    print(target_)
+
+    return df_dict, cfeatures_, target_

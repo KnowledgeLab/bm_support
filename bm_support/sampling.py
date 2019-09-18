@@ -199,13 +199,17 @@ def yield_splits_plain(df0, rns, n_splits=3,
     pathology_flag = True
     while pathology_flag:
         dfs, flag = sample_by_length(df2, rns, agg_columns=(up, dn),
-                                     head=5, frac_test=[1]*n_splits,
+                                     head=10, frac_test=[1]*n_splits,
                                      len_column=len_column, verbose=verbose)
 
         vcs = [df_[target].unique().shape[0] for df_ in dfs]
+
+        int_sizes = [df_.drop_duplicates([up, dn]).shape[0] for df_ in dfs]
+        tsize = sum(int_sizes)
+        pathology_flag = any([x/tsize < 0.2/n_splits for x in int_sizes])
         if verbose:
             print(vcs)
-        pathology_flag = any([v == 1 for v in vcs])
+        pathology_flag |= any([v == 1 for v in vcs])
 
     for j in range(n_splits):
         dtrain = pd.concat(dfs[:j] + dfs[j+1:], axis=0)

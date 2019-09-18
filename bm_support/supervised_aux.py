@@ -876,7 +876,8 @@ def run_model_(dfs, cfeatures,
         clf, c_opt, acc_opt = find_optimal_model(X_train, y_train,
                                                  metric_type_foo=accuracy_score,
                                                  # metric_type_foo=roc_auc_score,
-                                                 clf_parameters=clf_parameters)
+                                                 clf_parameters=clf_parameters,
+                                                 **extra_parameters)
         coefficients = list(clf.coef_.T[:, 0]) + [clf.intercept_[0]]
     else:
         return []
@@ -917,19 +918,21 @@ def run_model_iterate(df0, cfeatures,
                       clf_parameters=None,
                       extra_parameters=None,
                       n_splits=3, n_iterations=1,
-                      oversample=False):
+                      oversample=False,
+                      verbose=False):
 
     seeds = rns.choice(large_int, n_iterations)
     rnss = [RandomState(seed) for seed in seeds]
 
-    report_batches = map(lambda rns0: run_model_splits(df0, cfeatures,
-                                                       rns0,
-                                                       target=target,
-                                                       mode=mode,
-                                                       clf_parameters=clf_parameters,
-                                                       extra_parameters=extra_parameters,
-                                                       n_splits=n_splits,
-                                                       oversample=oversample), rnss)
+    report_batches = []
+    for j, rns0 in enumerate(rnss):
+        if verbose:
+            print(f'batch {j}')
+        rb = run_model_splits(df0, cfeatures, rns0,
+                              target=target, mode=mode, clf_parameters=clf_parameters,
+                              extra_parameters=extra_parameters, n_splits=n_splits,
+                              oversample=oversample)
+        report_batches += [rb]
 
     reports = []
     for j, batch in enumerate(report_batches):
@@ -945,10 +948,13 @@ def run_model_iterate_over_datasets(df_dict, cfeatures,
                                     clf_parameters=None,
                                     extra_parameters=None,
                                     n_splits=3, n_iterations=1,
-                                    oversample=False):
+                                    oversample=False,
+                                    verbose=False):
 
     agg = []
     for origin, df in df_dict.items():
+        if verbose:
+            print(f'running: {origin}')
         batch = run_model_iterate(df, cfeatures,
                                   rns,
                                   target=target,
@@ -956,7 +962,8 @@ def run_model_iterate_over_datasets(df_dict, cfeatures,
                                   clf_parameters=clf_parameters,
                                   extra_parameters=extra_parameters,
                                   n_splits=n_splits, n_iterations=n_iterations,
-                                  oversample=oversample)
+                                  oversample=oversample,
+                                  verbose=verbose)
         agg.append((origin, batch))
 
     reports = []

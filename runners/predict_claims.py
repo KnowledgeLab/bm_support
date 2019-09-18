@@ -1,5 +1,3 @@
-from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, nw, wi, dist, rdist, bdist, pm, \
-    cpop, cden, ct, affs, aus
 from os.path import expanduser, join
 from copy import deepcopy
 from numpy.random import RandomState
@@ -39,7 +37,7 @@ for origin in ['gw', 'lit']:
     print(f'>>> {origin} {exec_mode} {df_dict[origin].shape[0]}')
 
 
-feat_version = 21
+feat_version = 22
 an_version = 30
 
 # correlation version
@@ -52,7 +50,7 @@ if datapath:
 else:
     col_families = generate_feature_groups(expanduser('~/data/kl/columns/v{0}_columns.txt'.format(feat_version)))
 
-fname = expanduser('~/data/kl/columns/feature_groups_v3.txt')
+fname = expanduser('~/data/kl/columns/feature_groups_v4.txt')
 with open(fname, 'r') as f:
     feat_selector = json.load(f)
 
@@ -82,7 +80,7 @@ cfeatures_excl = list(excl_set)
 
 
 verbose = False
-seed = 17
+seed = 13
 
 n_iter = 20
 mode = 'rf'
@@ -91,12 +89,11 @@ mode = 'rf'
 target = 'bdist'
 verbose = False
 df_package = df_dict
-len_thr = 0
 oversample = False
 
 # train claims models
 rns = RandomState(seed)
-version = 20
+version = n_iter
 
 cfeatures = sorted(list(cfeatures - excl_set))
 
@@ -116,7 +113,8 @@ extra_parameters = {'min_samples_leaf_frac': 0.05}
 
 container = run_model_iterate_over_datasets(df_package, cfeatures, rns,
                                             target=target, mode=mode, n_splits=3,
-                                            clf_parameters=clf_parameters, n_iterations=n_iter)
+                                            clf_parameters=clf_parameters, n_iterations=n_iter,
+                                            verbose=True)
 
 fpath = expanduser('~/data/kl/reports/')
 

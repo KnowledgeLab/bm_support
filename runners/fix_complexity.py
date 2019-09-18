@@ -1,84 +1,13 @@
 import argparse
-from bm_support.add_features import generate_feature_groups, define_laststage_metrics
-from bm_support.add_features import define_laststage_metrics
-from copy import deepcopy
+from bm_support.add_features import define_laststage_metrics, prepare_datasets
 from os.path import expanduser, join
 from numpy.random import RandomState
 import numpy as np
-import json
-from bm_support.supervised_aux import run_neut_models, run_model_iterate_over_datasets
-from bm_support.math import interpolate_nonuniform_linear, integral_linear, get_function_values, find_bbs
+from bm_support.supervised_aux import run_model_iterate_over_datasets
+from bm_support.math import interpolate_nonuniform_linear, integral_linear
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-
-
-def prepare_datasets(predict_mode_='posneg'):
-    fname = expanduser('~/data/kl/columns/feature_groups_v3.txt')
-    with open(fname, 'r') as f:
-        feat_selector = json.load(f)
-
-    df_dict = {}
-
-    for origin in ['gw', 'lit']:
-        df_dict[origin] = define_laststage_metrics(origin, predict_mode=predict_mode_, verbose=True)
-        print(f'>>> {origin} {predict_mode_} {df_dict[origin].shape[0]}')
-
-    if predict_mode_ == 'neutral' or predict_mode_ == 'posneg':
-        selectors = ['interaction']
-        target_ = 'bint'
-
-        cfeatures_ = ['mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct',
-                      'degree_source', 'degree_target']
-
-        cfeatures0 = set()
-        for s in selectors:
-            cfeatures0 |= set(feat_selector[s])
-
-        extra_features = [c for c in list(cfeatures0) if ('same' in c or 'eff' in c) and ('_im_ud' in c)]
-        cfeatures_ += extra_features
-
-    elif predict_mode_ == 'full':
-        selectors = ['claim', 'batch']
-        target_ = 'bdist'
-
-        feat_version = 21
-        excl_columns = ()
-
-        col_families = generate_feature_groups(
-            expanduser('~/data/kl/columns/v{0}_columns.txt'.format(feat_version)))
-
-        feature_dict = deepcopy(col_families)
-        feature_dict = {k: list(v) for k, v in feature_dict.items() if not any([c in v for c in excl_columns])}
-
-        feature_dict_inv = {}
-
-        for k, v in feature_dict.items():
-            feature_dict_inv.update({x: k for x in v})
-
-        excl_set = {'bdist_ma_None', 'bdist_ma_2'}
-
-        cfeatures0 = set()
-        for s in selectors:
-            cfeatures0 |= set(feat_selector[s])
-
-        gw_excl = [c for c in list(cfeatures0) if sum(df_dict['gw'][c].isnull()) > 0]
-        lit_excl = [c for c in list(cfeatures0) if sum(df_dict['lit'][c].isnull()) > 0]
-
-        cfeatures_ = list(cfeatures0 - (set(gw_excl) | set(lit_excl) | excl_set))
-    else:
-        cfeatures_ = None
-        target_ = None
-
-    print('***')
-    print(len(cfeatures_))
-
-    print('***')
-    print(cfeatures_)
-    print('***')
-    print(target_)
-
-    return df_dict, cfeatures_, target_
 
 
 def savefigs(report_, pred_mode, master_col, xlabel,
@@ -151,15 +80,13 @@ if __name__ == "__main__":
 
     df_dict, cfeatures, target = prepare_datasets(predict_mode)
 
-    max_len_thr = 1
-    forest_flag = True
     verbose = False
     if predict_mode == 'neutral':
         oversample = True
     else:
         oversample = False
 
-    #***
+    # ***
     # depth
     clf_parameters = {'max_depth': 6, 'n_estimators': 100}
     extra_parameters = {'min_samples_leaf_frac': min_leaf_frac_baseline}
@@ -181,7 +108,7 @@ if __name__ == "__main__":
 
     savefigs(sreport, predict_mode, 'depth', 'depth of decision tree')
 
-    #***
+    # ***
     # min leaf size
 
     clf_parameters = {'max_depth': 2, 'n_estimators': 100}
@@ -205,12 +132,11 @@ if __name__ == "__main__":
     savefigs(sreport, predict_mode, 'leaf_frac',
              'min leaf size as fraction dataset size')
 
-    #***
+    # ***
     # n estimators
 
     clf_parameters = {'max_depth': 1, 'n_estimators': 100}
-    min_leaf = 0.04
-    estimators = np.arange(10, 200, 10)
+    estimators = np.arange(10, 150, 10)
     extra_parameters = {'min_samples_leaf_frac': min_leaf_frac_baseline}
     sreport = {k: [] for k in estimators}
 
