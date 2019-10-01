@@ -790,7 +790,8 @@ def train_massif_lr_clean(df_train, feature_columns, y_column,
 
 
 def plot_importances(importances, stds, covariate_columns, fname=None, title_prefix=None, colors=None,
-                     show=False, ax=None, topn=20, sort_them=False):
+                     show=False, ax=None, topn=20, sort_them=False,
+                     title=None):
     """
     importances, stds, covariate_columns are all lists of the same length
     :param importances:
@@ -822,7 +823,7 @@ def plot_importances(importances, stds, covariate_columns, fname=None, title_pre
     imp_ccs = [covariate_columns[i] for i in indices]
     fig = plt.figure(figsize=(n*3, 5))
     sns.set_style("whitegrid")
-    plt.title('{0} Random Forest feature importances'.format(title_prefix))
+    plt.title(title)
     importances2 = importances[indices]
     stds2 = stds[indices]
     sorted_ix = np.argsort(importances2)[::-1]

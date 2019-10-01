@@ -376,11 +376,11 @@ def plot_prec_recall(metrics_dict, ax=None, title=None, fname=None):
     return ax
 
 
-def plot_auc(metrics_dict, ax=None, title=None, fname=None, show_legend=False, plot_baseline=False):
+def plot_auc(metrics_dict, ax=None, title=None, fname=None, show_legend=False, plot_baseline=False,
+             color='g', cbaseline='r', alpha=0.2):
 
     ax_init = ax
     sns.set_style('whitegrid')
-    alpha_level = 0.3
     linewidth = 0.6
 
     if not ax:
@@ -399,10 +399,10 @@ def plot_auc(metrics_dict, ax=None, title=None, fname=None, show_legend=False, p
     if 'roc_curve' in metrics_dict.keys():
         fpr, tpr, thresholds = metrics_dict['roc_curve']
         if ax_init:
-            line = ax.plot(fpr, tpr,  linewidth=2*linewidth, alpha=alpha_level)
+            line = ax.plot(fpr, tpr,  linewidth=2*linewidth, alpha=alpha, c=color)
         else:
-            line = ax.plot(fpr, tpr, linewidth=2 * linewidth, alpha=alpha_level,
-                           label='AUC={0:.3f}'.format(metrics_dict['auc']))
+            line = ax.plot(fpr, tpr, linewidth=2 * linewidth, alpha=alpha,
+                           label='AUC={0:.3f}'.format(metrics_dict['auc']), c=color)
         if ax_init and show_legend:
             lines += line
             texts += ['AUC={0:.3f}'.format(metrics_dict['auc'])]
@@ -412,7 +412,7 @@ def plot_auc(metrics_dict, ax=None, title=None, fname=None, show_legend=False, p
 
         # ax.legend(lines, texts)
         if plot_baseline:
-            ax.plot([0, 1], [0, 1], 'r--', linewidth=2*linewidth)
+            ax.plot([0, 1], [0, 1], c=cbaseline, linestyle='--', linewidth=2*linewidth)
         ax.set_xlim([0.0, 1.0])
         ax.set_ylim([0.0, 1.05])
         ax.set_xlabel('False Positive Rate')
@@ -420,7 +420,6 @@ def plot_auc(metrics_dict, ax=None, title=None, fname=None, show_legend=False, p
         ax.set_title('ROC')
 
     if not ax_init and show_legend:
-    # if not ax_init:
         ax.legend(loc="lower right")
 
     if fname:

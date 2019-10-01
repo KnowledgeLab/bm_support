@@ -1,6 +1,15 @@
-from datahelpers.constants import iden, ye, ai, ps, up, dn
+from datahelpers.constants import ye, up, dn
 from bm_support.sampling import assign_chrono_flag, fill_seqs
+from bm_support.beta_est import produce_claim_valid
+from bm_support.beta_est import estimate_pi
+from bm_support.supervised_aux import produce_topk_model_
+from sklearn.linear_model import LinearRegression
+
+
+
+
 import pandas as pd
+import numpy as np
 
 
 def check_distribution_dstructs(pdf_dict_imperfect, pdf_list_perfect):
@@ -32,6 +41,7 @@ def check_dstructs(pdf_dict_imperfect, pdf_list_perfect, wcolumn='accounted'):
 class SeqLenGrower:
     def __init__(self, df0, wcolumn='accounted',
                  init_frac=0.5,
+                 fill_max=100,
                  index_cols=[up, dn],
                  time_column=ye,
                  verbose=False):
@@ -65,11 +75,11 @@ class SeqLenGrower:
 
         # list of perfect seqs
 
-        self.pdf_list_perfect = []
+        self.pdf_list_complete = []
 
         # dict of imperfect seqs
         # keys are lengths
-        self.pdf_dict_imperfect = {}
+        self.pdf_dict_incomplete = {}
 
         self.wcolumn = wcolumn
         self.df = df0.copy()
@@ -81,14 +91,16 @@ class SeqLenGrower:
         for ii, group in df_masked.groupby(index_cols):
             n_filled = sum(group.loc[group[wcolumn], 'size'])
             if group[wcolumn].all():
-                self.pdf_list_perfect.append(group[full_index_cols + ['size', wcolumn]])
+                self.pdf_list_complete.append(group[full_index_cols + ['size', wcolumn]])
             else:
-                if n_filled in self.pdf_dict_imperfect.keys():
-                    self.pdf_dict_imperfect[n_filled].append(group[full_index_cols + ['size', wcolumn]])
+                if n_filled in self.pdf_dict_incomplete.keys():
+                    self.pdf_dict_incomplete[n_filled].append(group[full_index_cols + ['size', wcolumn]])
                 else:
-                    self.pdf_dict_imperfect[n_filled] = [group[full_index_cols + ['size', wcolumn]]]
+                    self.pdf_dict_incomplete[n_filled] = [group[full_index_cols + ['size', wcolumn]]]
 
-        sa, _, sb = check_dstructs(self.pdf_dict_imperfect, self.pdf_list_perfect)
+        # adjust
+
+        sa, _, sb = check_dstructs(self.pdf_dict_incomplete, self.pdf_list_complete)
         self.imperfect_size = sa
         self.filled_size = sb
 
@@ -96,19 +108,19 @@ class SeqLenGrower:
             print(f'sa : {self.imperfect_size} sb: {self.filled_size}')
 
     def populate_seqs_(self, n_items=100, direction=min):
-        self.pdf_dict_imperfect, self.pdf_list_perfect = fill_seqs(self.pdf_dict_imperfect,
-                                                                   self.pdf_list_perfect, n_items,
-                                                                   direction=direction)
-        if self.pdf_dict_imperfect:
-            dfa = pd.concat([x for sublist in self.pdf_dict_imperfect.values() for x in sublist])
+        self.pdf_dict_incomplete, self.pdf_list_complete = fill_seqs(self.pdf_dict_incomplete,
+                                                                     self.pdf_list_complete, n_items,
+                                                                     direction=direction)
+        if self.pdf_dict_incomplete:
+            dfa = pd.concat([x for sublist in self.pdf_dict_incomplete.values() for x in sublist])
             dfa = dfa.loc[dfa[self.wcolumn]]
         else:
             dfa = pd.DataFrame()
-        if self.pdf_list_perfect:
-            dfb = pd.concat(self.pdf_list_perfect)
+        if self.pdf_list_complete:
+            dfb = pd.concat(self.pdf_list_complete)
         else:
             dfb = pd.DataFrame()
-        sa, _, sb = check_dstructs(self.pdf_dict_imperfect, self.pdf_list_perfect)
+        sa, _, sb = check_dstructs(self.pdf_dict_incomplete, self.pdf_list_complete)
         self.imperfect_size = sa
         self.filled_size = sb
         if self.verbose:
@@ -117,14 +129,14 @@ class SeqLenGrower:
         return dfa, dfb
 
     def __str__(self):
-        sa, samax, sb = check_dstructs(self.pdf_dict_imperfect, self.pdf_list_perfect)
+        sa, samax, sb = check_dstructs(self.pdf_dict_incomplete, self.pdf_list_complete)
         return f'sa : {sa} sb: {sb} tot: {sa + sb} max: {sb + samax}'
 
     # def get_stats(self):
 
     def get_pop_stats(self):
         underfilled_size, underfilled_potential_size, filled_size = \
-            check_dstructs(self.pdf_dict_imperfect, self.pdf_list_perfect)
+            check_dstructs(self.pdf_dict_incomplete, self.pdf_list_complete)
         return underfilled_size, filled_size, underfilled_potential_size + filled_size
 
     def pop_populated_df(self, n_items=100, direction=min):
@@ -136,5 +148,36 @@ class SeqLenGrower:
         return dfr
 
 
+def populate_df(df, len_thr, cfeatures, clf, itarget, pop_delta=50, init_frac=0.2, direction=min,
+                verbose=False):
+    reports = []
+    dfw = df[df.n > len_thr]
+    df_len = dfw.shape[0]
+    slg = SeqLenGrower(dfw, verbose=False, init_frac=init_frac)
+    dfw = slg.pop_populated_df(pop_delta)
 
+    while dfw.shape[0] < (1 - init_frac)*df_len:
+        df_int = produce_claim_valid(dfw, cfeatures, clf)
+        nstat = dfw.groupby([up, dn]).apply(lambda x: x.shape[0])
+        yi_test_ = pd.DataFrame(estimate_pi(df_int), columns=['muhat'])
 
+        yi_test = df_int.drop_duplicates([up, dn]).sort_values([up, dn])[itarget]
+        yi_pred_sc = yi_test_['muhat'].sort_index()
+
+        if yi_test.unique().shape[0] == 2:
+            report = produce_topk_model_(yi_test, yi_pred_sc)
+            stats = slg.get_pop_stats()
+            data = dfw.groupby([up, dn]).apply(lambda x: x.shape[0]).values
+            data_log = np.log(data)
+            cnts, bins = np.histogram(data_log, 3)
+            cnts_log = np.log(cnts)
+            mask = np.isinf(cnts_log)
+            cnts_log2 = cnts_log[~mask]
+            bins2 = bins[:-1][~mask]
+            reg = LinearRegression().fit(bins2.reshape(-1, 1), cnts_log2)
+            beta = reg.coef_[0]
+            reports += [(*stats, nstat.mean(), nstat.std(), beta, report)]
+            if verbose:
+                print(f'cur pop {dfw.shape[0]} / {df_len} : beta {beta}')
+        dfw = slg.pop_populated_df(pop_delta, direction=direction)
+    return reports

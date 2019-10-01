@@ -38,3 +38,40 @@ def pick_min_communities(df, window=None, min_comm_sizes=2):
     interactions_with_multiple_communities = flags[flags].reset_index()
     dfr = dfr.merge(interactions_with_multiple_communities, on=[up, dn], how='right')
     return dfr
+
+
+def pick_interval_communities(df, window=None, interval=(1, 1)):
+
+    a, b = interval
+
+    if window:
+        suff = f'{window}'
+    else:
+        suff = ''
+
+    commid_col = f'rcommid{suff}'
+    ncomms = f'rncomms{suff}'
+
+    flags = (df[ncomms] >= a) & (df[ncomms] <= b)
+    dfr = df.loc[flags].copy()
+    return dfr
+
+
+def pick_interval_communities_alt(df, window=None, interval=(1, 1)):
+
+    a, b = interval
+
+    if window:
+        suff = f'{window}'
+    else:
+        suff = ''
+
+    commid_col = f'rcommid{suff}'
+    ncomms = f'rncomms{suff}'
+
+    comm_size = df.groupby([up, dn]).apply(lambda x: len(x[commid_col].unique()))
+
+    flags = (comm_size >= a) & (comm_size <= b)
+    updns = flags[flags].reset_index()
+    dfr = updns.merge(df, on=[up, dn])
+    return dfr

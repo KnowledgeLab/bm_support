@@ -1198,7 +1198,9 @@ def prepare_datasets(predict_mode_='posneg', thr=0):
         selectors = ['interaction']
         target_ = 'bint'
 
-        cfeatures_ = ['mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct',
+        cfeatures_ = [
+                      # 'mu*', 'mu*_absmed',
+                      'mu*_pct', 'mu*_absmed_pct',
                       'degree_source', 'degree_target']
 
         cfeatures0 = set()

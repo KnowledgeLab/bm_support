@@ -246,7 +246,6 @@ def fill_seqs(pdf_dict_imperfect, pdf_dict_perfect, n_projects=100, wcolumn='acc
     """
     cnt = n_projects
     while cnt > 0 and pdf_dict_imperfect:
-
         extremity_filled = direction(pdf_dict_imperfect.keys())
         cdf = pdf_dict_imperfect[extremity_filled].pop()
         if not pdf_dict_imperfect[extremity_filled]:
