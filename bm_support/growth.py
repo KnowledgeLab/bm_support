@@ -155,6 +155,7 @@ def populate_df(df, len_thr, cfeatures, clf, itarget, pop_delta=50, init_frac=0.
     df_len = dfw.shape[0]
     slg = SeqLenGrower(dfw, verbose=False, init_frac=init_frac)
     dfw = slg.pop_populated_df(pop_delta)
+    # dfw = slg.pop_populated_df(0)
 
     while dfw.shape[0] < (1 - init_frac)*df_len:
         df_int = produce_claim_valid(dfw, cfeatures, clf)
@@ -181,3 +182,35 @@ def populate_df(df, len_thr, cfeatures, clf, itarget, pop_delta=50, init_frac=0.
                 print(f'cur pop {dfw.shape[0]} / {df_len} : beta {beta}')
         dfw = slg.pop_populated_df(pop_delta, direction=direction)
     return reports
+
+
+def populate_df_chrono(df, len_thr, cfeatures, clf, itarget):
+    reports = []
+    dfwa = df[df.n > len_thr]
+
+    years = sorted(dfwa[ye].unique())
+
+    for yc in years[1:]:
+        dfw = dfwa.loc[dfwa[ye] < yc].copy()
+        df_int = produce_claim_valid(dfw, cfeatures, clf)
+        nstat = dfw.groupby([up, dn]).apply(lambda x: x.shape[0])
+        yi_test_ = pd.DataFrame(estimate_pi(df_int), columns=['muhat'])
+
+        yi_test = df_int.drop_duplicates([up, dn]).sort_values([up, dn])[itarget]
+        yi_pred_sc = yi_test_['muhat'].sort_index()
+
+        if yi_test.unique().shape[0] == 2:
+            report = produce_topk_model_(yi_test, yi_pred_sc)
+            stats = None
+            data = dfw.groupby([up, dn]).apply(lambda x: x.shape[0]).values
+            data_log = np.log(data)
+            cnts, bins = np.histogram(data_log, 3)
+            cnts_log = np.log(cnts)
+            mask = np.isinf(cnts_log)
+            cnts_log2 = cnts_log[~mask]
+            bins2 = bins[:-1][~mask]
+            reg = LinearRegression().fit(bins2.reshape(-1, 1), cnts_log2)
+            beta = reg.coef_[0]
+            reports += [(*stats, nstat.mean(), nstat.std(), beta, report)]
+    return reports
+

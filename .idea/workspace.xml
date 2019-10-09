@@ -2,14 +2,11 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="d2790ead-1acc-4de8-87af-3bda68281652" name="Default Changelist" comment="">
+      <change afterPath="$PROJECT_DIR$/runners/loop_predict_m.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bm_support/add_features.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/add_features.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bm_support/communities.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/communities.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bm_support/growth.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/growth.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bm_support/sampling.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/sampling.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bm_support/supervised.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/supervised.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bm_support/supervised_aux.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/supervised_aux.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/runners/predict_neutral.py" beforeDir="false" afterPath="$PROJECT_DIR$/runners/predict_neutral.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/runners/predict_m.py" beforeDir="false" afterPath="$PROJECT_DIR$/runners/predict_m.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />

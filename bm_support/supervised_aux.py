@@ -851,6 +851,7 @@ def run_model_(dfs, cfeatures,
         if isinstance(extra_parameters, dict) and 'min_samples_leaf_frac' in extra_parameters:
             clf_parameters['min_samples_leaf'] = max([1, int(extra_parameters['min_samples_leaf_frac'] * size)])
     elif mode == 'lr':
+        extra_parameters = {'max_features': min([len(cfeatures) - 1, extra_parameters['max_features']])}
         for c in cfeatures:
             df_train[c] = df_train[c].astype(float)
         for c in cfeatures:
