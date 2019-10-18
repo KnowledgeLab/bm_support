@@ -4,12 +4,21 @@ from bm_support.beta_est import produce_claim_valid
 from bm_support.beta_est import estimate_pi
 from bm_support.supervised_aux import produce_topk_model_
 from sklearn.linear_model import LinearRegression
-
-
-
-
 import pandas as pd
 import numpy as np
+from scipy.optimize import minimize_scalar
+from functools import partial
+
+
+def neg_pl_likelihood(gamma , cnts_dict):
+    nstat_full = {k: cnts_dict[k] if k in cnts_dict.keys() else 0
+                  for k in range(min(cnts_dict.keys()), max(cnts_dict.keys()) + 1)}
+    xcoord = np.array(sorted(nstat_full.keys()), dtype=float)
+    counts = np.array([nstat_full[k] for k in xcoord])
+    probs = xcoord**(-gamma)
+    probs = probs/np.sum(probs)
+    LL = np.sum(counts*np.log(probs))
+    return -LL
 
 
 def check_distribution_dstructs(pdf_dict_imperfect, pdf_list_perfect):
@@ -132,8 +141,6 @@ class SeqLenGrower:
         sa, samax, sb = check_dstructs(self.pdf_dict_incomplete, self.pdf_list_complete)
         return f'sa : {sa} sb: {sb} tot: {sa + sb} max: {sb + samax}'
 
-    # def get_stats(self):
-
     def get_pop_stats(self):
         underfilled_size, underfilled_potential_size, filled_size = \
             check_dstructs(self.pdf_dict_incomplete, self.pdf_list_complete)
@@ -154,32 +161,25 @@ def populate_df(df, len_thr, cfeatures, clf, itarget, pop_delta=50, init_frac=0.
     dfw = df[df.n > len_thr]
     df_len = dfw.shape[0]
     slg = SeqLenGrower(dfw, verbose=False, init_frac=init_frac)
-    dfw = slg.pop_populated_df(pop_delta)
-    # dfw = slg.pop_populated_df(0)
+    dfw = slg.pop_populated_df(0)
 
     while dfw.shape[0] < (1 - init_frac)*df_len:
         df_int = produce_claim_valid(dfw, cfeatures, clf)
-        nstat = dfw.groupby([up, dn]).apply(lambda x: x.shape[0])
         yi_test_ = pd.DataFrame(estimate_pi(df_int), columns=['muhat'])
 
         yi_test = df_int.drop_duplicates([up, dn]).sort_values([up, dn])[itarget]
         yi_pred_sc = yi_test_['muhat'].sort_index()
-
         if yi_test.unique().shape[0] == 2:
             report = produce_topk_model_(yi_test, yi_pred_sc)
             stats = slg.get_pop_stats()
-            data = dfw.groupby([up, dn]).apply(lambda x: x.shape[0]).values
-            data_log = np.log(data)
-            cnts, bins = np.histogram(data_log, 3)
-            cnts_log = np.log(cnts)
-            mask = np.isinf(cnts_log)
-            cnts_log2 = cnts_log[~mask]
-            bins2 = bins[:-1][~mask]
-            reg = LinearRegression().fit(bins2.reshape(-1, 1), cnts_log2)
-            beta = reg.coef_[0]
-            reports += [(*stats, nstat.mean(), nstat.std(), beta, report)]
-            if verbose:
-                print(f'cur pop {dfw.shape[0]} / {df_len} : beta {beta}')
+            frac = (stats[0] + stats[1])/stats[2]
+            nstat = dfw.groupby([up, dn]).apply(lambda x: x.shape[0])
+            cnts_dict = dict(nstat.value_counts())
+            foo = partial(neg_pl_likelihood, cnts_dict=cnts_dict)
+            answer = minimize_scalar(foo, [0.1, 4.0])
+            if answer.success:
+                beta = answer.x
+                reports += [(frac, nstat.mean(), nstat.std(), beta, report)]
         dfw = slg.pop_populated_df(pop_delta, direction=direction)
     return reports
 
@@ -193,7 +193,6 @@ def populate_df_chrono(df, len_thr, cfeatures, clf, itarget):
     for yc in years[1:]:
         dfw = dfwa.loc[dfwa[ye] < yc].copy()
         df_int = produce_claim_valid(dfw, cfeatures, clf)
-        nstat = dfw.groupby([up, dn]).apply(lambda x: x.shape[0])
         yi_test_ = pd.DataFrame(estimate_pi(df_int), columns=['muhat'])
 
         yi_test = df_int.drop_duplicates([up, dn]).sort_values([up, dn])[itarget]
@@ -201,16 +200,13 @@ def populate_df_chrono(df, len_thr, cfeatures, clf, itarget):
 
         if yi_test.unique().shape[0] == 2:
             report = produce_topk_model_(yi_test, yi_pred_sc)
-            stats = None
-            data = dfw.groupby([up, dn]).apply(lambda x: x.shape[0]).values
-            data_log = np.log(data)
-            cnts, bins = np.histogram(data_log, 3)
-            cnts_log = np.log(cnts)
-            mask = np.isinf(cnts_log)
-            cnts_log2 = cnts_log[~mask]
-            bins2 = bins[:-1][~mask]
-            reg = LinearRegression().fit(bins2.reshape(-1, 1), cnts_log2)
-            beta = reg.coef_[0]
-            reports += [(*stats, nstat.mean(), nstat.std(), beta, report)]
+            frac = dfw.shape[0]/dfwa.shape[0]
+            nstat = dfw.groupby([up, dn]).apply(lambda x: x.shape[0])
+            cnts_dict = dict(nstat.value_counts())
+            foo = partial(neg_pl_likelihood, cnts_dict=cnts_dict)
+            answer = minimize_scalar(foo, [0.1, 4.0])
+            if answer.success:
+                beta = answer.x
+                reports += [(frac, nstat.mean(), nstat.std(), beta, report, yc, dfw[ye].max())]
     return reports
 

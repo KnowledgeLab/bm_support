@@ -789,9 +789,12 @@ def train_massif_lr_clean(df_train, feature_columns, y_column,
     return report, massif
 
 
-def plot_importances(importances, stds, covariate_columns, fname=None, title_prefix=None, colors=None,
-                     show=False, ax=None, topn=20, sort_them=False,
-                     title=None):
+def plot_importances(importances, stds, covariate_columns, fname=None, title_prefix=None,
+                     show=False, ax=None, topn=None, sort_them=False,
+                     title=None,
+                     colors_dict=None,
+                     keep_order=True
+                     ):
     """
     importances, stds, covariate_columns are all lists of the same length
     :param importances:
@@ -811,14 +814,23 @@ def plot_importances(importances, stds, covariate_columns, fname=None, title_pre
     #     ax = fig.add_axes(rect)
 
     if sort_them:
-        indices = np.argsort(np.abs(importances))[::-1]
+        if isinstance(sort_them, dict):
+            indices = np.argsort([sort_them[c] if c in sort_them.keys() else len(sort_them) + 10
+                                  for c in importances.index])[:len(sort_them):]
+        else:
+            indices = np.argsort(np.abs(importances))[::-1]
     else:
         indices = list(range(importances.size))
     if topn:
         indices = indices[:topn]
-    n = topn if topn else len(covariate_columns)
-    if not colors:
-        colors = 'r'
+    if topn:
+        n = topn
+    elif isinstance(sort_them, dict):
+        n = len(sort_them)
+    else:
+        n = len(covariate_columns)
+    if not colors_dict:
+        colors_dict = {0: 'b', 1: 'r'}
 
     imp_ccs = [covariate_columns[i] for i in indices]
     fig = plt.figure(figsize=(n*3, 5))
@@ -826,12 +838,17 @@ def plot_importances(importances, stds, covariate_columns, fname=None, title_pre
     plt.title(title)
     importances2 = importances[indices]
     stds2 = stds[indices]
-    sorted_ix = np.argsort(importances2)[::-1]
-    colors = ['b' if x > 0 else 'r' for x in importances2[sorted_ix]]
+    if keep_order:
+        sorted_ix = np.arange((len(importances2)))
+    else:
+        sorted_ix = np.argsort(importances2)[::-1]
+    colors = [colors_dict[0] if x > 0 else colors_dict[1] for x in importances2[sorted_ix]]
     imp_ccs2 = [imp_ccs[i] for i in sorted_ix]
-
+    error_kw = dict(lw=5, capthick=2)
     plt.bar(range(len(importances2)), importances2[sorted_ix],
-           color=colors, yerr=stds2[sorted_ix], align='center', alpha=0.5)
+            color=colors, yerr=stds2[sorted_ix], align='center', alpha=0.6, error_kw=error_kw)
+
+    # colors = ['b' if x > 0 else 'r' for x in importances2[sorted_ix]]
     # sns.barplot(list(range(n)), importances[indices],
     #             color=colors, yerr=stds[indices], align='center', alpha=0.5)
 
@@ -839,10 +856,6 @@ def plot_importances(importances, stds, covariate_columns, fname=None, title_pre
     plt.xlim([-1, n])
     if fname:
         fig.savefig(fname)
-        # if show:
-        #     plt.show()
-        # else:
-        #     plt.close()
 
 
 def plot_lr_coeffs_with_penalty(alphas, coeff_dict, covariate_names, fname=None, position='lower left',

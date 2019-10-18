@@ -19,6 +19,12 @@ from datahelpers.constants import up, dn, bdist, large_int
 metric_selector = dict(zip(['corr', 'accuracy', 'precision', 'recall', 'f1'], range(5)))
 
 
+def entropy(arr):
+    # 0 or 1 yield zero entropy
+    x = arr[(arr != 0) & (arr != 1)]
+    return np.sum(-x * np.log(x) - (1 - x) * np.log(1 - x))
+
+
 def split_three_way(dfw, seed, target):
     rns = RandomState(seed)
     if len(dfw[target].unique()) < 5:
@@ -316,6 +322,7 @@ def produce_topk_model_(y_test, y_prob, pos_label=1, verbose=False):
     metrics_dict['pr_curve'] = precision, recall, thresholds
     metrics_dict['auc_pr'] = auc(recall, precision)
     metrics_dict['fraction_positive'] = y_test.mean()
+    metrics_dict['ent_ave'] = entropy(y_prob)/y_prob.shape[0]
 
     return metrics_dict
 
