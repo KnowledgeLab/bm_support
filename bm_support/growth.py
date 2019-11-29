@@ -184,7 +184,7 @@ def populate_df(df, len_thr, cfeatures, clf, itarget, pop_delta=50, init_frac=0.
     return reports
 
 
-def populate_df_chrono(df, len_thr, cfeatures, clf, itarget):
+def populate_df_chrono(df, len_thr, cfeatures, clf, itarget, return_data=False):
     reports = []
     dfwa = df[df.n > len_thr]
 
@@ -207,6 +207,37 @@ def populate_df_chrono(df, len_thr, cfeatures, clf, itarget):
             answer = minimize_scalar(foo, [0.1, 4.0])
             if answer.success:
                 beta = answer.x
-                reports += [(frac, nstat.mean(), nstat.std(), beta, report, yc, dfw[ye].max())]
+                if return_data:
+                    reports += [(frac, nstat.mean(), nstat.std(), beta, report, yc, dfw[ye].max(), nstat)]
+                else:
+                    reports += [(frac, nstat.mean(), nstat.std(), beta, report, yc, dfw[ye].max())]
     return reports
+
+
+# def populate_df_random(df, len_thr, cfeatures, clf, itarget, return_data=False):
+#     reports = []
+#     dfw = df[df.n > len_thr]
+#     df_len = dfw.shape[0]
+#     slg = SeqLenGrower(dfw, verbose=False, init_frac=init_frac)
+#     dfw = slg.pop_populated_df(0)
+#
+#     while dfw.shape[0] < (1 - init_frac)*df_len:
+#         df_int = produce_claim_valid(dfw, cfeatures, clf)
+#         yi_test_ = pd.DataFrame(estimate_pi(df_int), columns=['muhat'])
+#
+#         yi_test = df_int.drop_duplicates([up, dn]).sort_values([up, dn])[itarget]
+#         yi_pred_sc = yi_test_['muhat'].sort_index()
+#         if yi_test.unique().shape[0] == 2:
+#             report = produce_topk_model_(yi_test, yi_pred_sc)
+#             stats = slg.get_pop_stats()
+#             frac = (stats[0] + stats[1])/stats[2]
+#             nstat = dfw.groupby([up, dn]).apply(lambda x: x.shape[0])
+#             cnts_dict = dict(nstat.value_counts())
+#             foo = partial(neg_pl_likelihood, cnts_dict=cnts_dict)
+#             answer = minimize_scalar(foo, [0.1, 4.0])
+#             if answer.success:
+#                 beta = answer.x
+#                 reports += [(frac, nstat.mean(), nstat.std(), beta, report)]
+#         dfw = slg.pop_populated_df(pop_delta, direction=direction)
+#     return reports
 

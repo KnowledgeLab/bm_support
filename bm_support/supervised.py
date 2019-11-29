@@ -96,7 +96,7 @@ def generate_samples(origin, version, lo, hi, n_batches, cutoff_len,
 
     keys = ('version', 'cutoff_len')
     values = (version, cutoff_len)
-    batches_path = expanduser('~/data/kl/batches')
+    batches_path = expanduser('~/datay/kl/batches')
 
     invariant_args = {
         'origin': origin,

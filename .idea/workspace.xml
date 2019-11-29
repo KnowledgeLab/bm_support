@@ -2,10 +2,13 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="d2790ead-1acc-4de8-87af-3bda68281652" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/bm_support.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/bm_support.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bm_support/growth.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/growth.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bm_support/supervised.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/supervised.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bm_support/supervised_aux.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/supervised_aux.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/sample_features.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/sample_features.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/sample_features_v2.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/sample_features_v2.sh" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -26,6 +29,7 @@
   <component name="ProjectId" id="1R5WxYTZKC3RBTk3EAl0evQRPXN" />
   <component name="PropertiesComponent">
     <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/../wos_arango_ingest" />
     <property name="settings.editor.selected.configurable" value="com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable" />
   </component>
   <component name="RunDashboard">
