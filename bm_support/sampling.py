@@ -226,7 +226,7 @@ def yield_splits_plain(df0, rns, n_splits=3,
 
 
 def fill_seqs(pdf_dict_imperfect, pdf_dict_perfect, n_projects=100, wcolumn='accounted',
-              direction=min):
+              direction=min, rns=13):
     """
 
     flag_df is of form:
@@ -234,7 +234,7 @@ def fill_seqs(pdf_dict_imperfect, pdf_dict_perfect, n_projects=100, wcolumn='acc
         1543  2944  2008    2       True
         1543  2944  2009    2       False
 
-    the general idea is to distribute projects fro n_projects
+    distribute projects for n_projects
     to fill the flags up in pdf_dict_imperfect
 
     :param pdf_dict_imperfect: dict of underfilled flag_dfs
@@ -242,11 +242,20 @@ def fill_seqs(pdf_dict_imperfect, pdf_dict_perfect, n_projects=100, wcolumn='acc
     :param n_projects: number of projects to till
     :param wcolumn: flag column
     :param direction: min or max
+    :param rns:
     :return:
     """
     cnt = n_projects
     while cnt > 0 and pdf_dict_imperfect:
-        extremity_filled = direction(pdf_dict_imperfect.keys())
+        if direction != 'random':
+            extremity_filled = direction(pdf_dict_imperfect.keys())
+        else:
+            skeys = sorted(pdf_dict_imperfect.keys())
+            lens = np.array([len(pdf_dict_imperfect[k]) for k in skeys])
+            probs = lens/lens.sum()
+            if not isinstance(rns, RandomState):
+                rns = RandomState(rns)
+            extremity_filled = rns.choice(skeys, p=probs)
         cdf = pdf_dict_imperfect[extremity_filled].pop()
         if not pdf_dict_imperfect[extremity_filled]:
             del pdf_dict_imperfect[extremity_filled]

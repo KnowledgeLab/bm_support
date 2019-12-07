@@ -2,13 +2,9 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="d2790ead-1acc-4de8-87af-3bda68281652" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/bm_support.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/bm_support.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bm_support/growth.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/growth.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bm_support/supervised.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/supervised.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/sample_features.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/sample_features.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/sample_features_v2.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/sample_features_v2.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bm_support/sampling.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/sampling.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />

@@ -161,7 +161,7 @@ def populate_df(df, len_thr, cfeatures, clf, itarget, pop_delta=50, init_frac=0.
     dfw = df[df.n > len_thr]
     df_len = dfw.shape[0]
     slg = SeqLenGrower(dfw, verbose=False, init_frac=init_frac)
-    dfw = slg.pop_populated_df(0)
+    dfw = slg.pop_populated_df(0, direction=direction)
 
     while dfw.shape[0] < (1 - init_frac)*df_len:
         df_int = produce_claim_valid(dfw, cfeatures, clf)
