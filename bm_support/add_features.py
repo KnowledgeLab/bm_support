@@ -1150,8 +1150,10 @@ def define_laststage_metrics(origin, predict_mode='neutral', datapath=None,
     # return df0
 
     if predict_mode == 'neutral':
+        # non neutral: 1
         df0.loc[mask_neg | mask_pos, 'bint'] = 1.
     else:
+        # negative: 1
         df0.loc[mask_neg, 'bint'] = 1.
         df0 = df0.loc[mask_neg | mask_pos].copy()
 

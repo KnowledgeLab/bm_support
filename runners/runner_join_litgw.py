@@ -59,7 +59,8 @@ masks.append(ai_mask)
 cols_norm = []
 cols_norm_by_int = []
 
-cols_active = [ai, ar, ct] + cur_metric_columns_exp +               ['pre_' + aus, 'nhi_' + aus, 'pre_' + affs, 'nhi_' + affs, 'year_off', 'year_off2']
+cols_active = [ai, ar, ct] + cur_metric_columns_exp + \
+              ['pre_' + aus, 'nhi_' + aus, 'pre_' + affs, 'nhi_' + affs, 'year_off', 'year_off2']
 
 eps = 0.2
 upper_exp, lower_exp = 1 - eps, eps

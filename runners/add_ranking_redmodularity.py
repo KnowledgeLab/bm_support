@@ -32,8 +32,9 @@ for ms in metric_sources:
 
         if head > 0:
             df = df.head(head)
-        df2 = df.groupby([up, dn, 'ylook'], as_index=False, group_keys=False).apply(lambda item:
-                                item.drop_duplicates(id_col)[[up, dn, 'ylook', relsize_col, id_col]])
+        df2 = df.groupby([up, dn, 'ylook'],
+                         as_index=False, group_keys=False).apply(lambda item:
+                         item.drop_duplicates(id_col)[[up, dn, 'ylook', relsize_col, id_col]])
 
         df3 = df2.groupby([up, dn, 'ylook']).apply(lambda x:
                                     pd.DataFrame(rank_degenerate_values(x[id_col], x[relsize_col]),

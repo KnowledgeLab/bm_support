@@ -2,9 +2,14 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="d2790ead-1acc-4de8-87af-3bda68281652" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bm_support/growth.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/growth.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bm_support/sampling.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/sampling.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bm_support/add_features.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/add_features.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bm_support/basic.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/basic.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bm_support/bigraph_support.py" beforeDir="false" afterPath="$PROJECT_DIR$/bm_support/bigraph_support.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/runners/add_ranking_redmodularity.py" beforeDir="false" afterPath="$PROJECT_DIR$/runners/add_ranking_redmodularity.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/runners/plot_corr_chart.py" beforeDir="false" afterPath="$PROJECT_DIR$/runners/plot_corr_chart.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/runners/runner_join_litgw.py" beforeDir="false" afterPath="$PROJECT_DIR$/runners/runner_join_litgw.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -25,7 +30,7 @@
   <component name="ProjectId" id="1R5WxYTZKC3RBTk3EAl0evQRPXN" />
   <component name="PropertiesComponent">
     <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/../wos_arango_ingest" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/../../../hw/misc_libs/data_transformers" />
     <property name="settings.editor.selected.configurable" value="com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable" />
   </component>
   <component name="RunDashboard">

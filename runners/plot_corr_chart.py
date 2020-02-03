@@ -13,13 +13,55 @@ import sys
 from bm_support.add_features import generate_feature_groups, define_laststage_metrics
 
 
+replace_dict = {
+    # interaction partition size
+    'litgw_comm_dyneffcommsize' :'IPS',
+    # interaction partition position
+    'litgw_comm_dynsamecomm' : 'IPP',
+    # mean claim percentile
+    'mu*_pct': 'MCP',
+    # absolute median claim percentile
+    'mu*_absmed_pct': 'AMMCP',
+
+    'rncomms': 'CCN',
+
+    'suppind': 'SIND',
+
+    'affind': 'AIND',
+
+    'nhi': 'NHI',
+
+    'pre': 'NW',
+
+    'rcomm_size': 'CAS',
+
+    'rrelcomm_size': 'CRS',
+
+    'cden': 'CD',
+
+    'cpop': 'CP',
+
+    'ksst': 'FLAT',
+}
+
+
+def push_subset_right(flist, subset):
+    subset = sorted(subset)
+    for s in subset:
+        if s in flist:
+            j = flist.index(s)
+            flist.pop(j)
+            flist += [s]
+    return flist
+
+
 # selectors = ['claim', 'batch', 'interaction']
 
 # bdist for positive vs negative correlation
 # alpha for neutral  vs non neutral; positive correlates with non-neutral
 
-exec_mode = 'neutral'
-exec_mode = 'posneg'
+# exec_mode = 'neutral'
+# exec_mode = 'posneg'
 exec_mode = 'full'
 
 if exec_mode == 'neutral' or exec_mode == 'posneg':
@@ -46,7 +88,7 @@ feat_version = 21
 an_version = 30
 
 # correlation version
-cversion = 7
+cversion = 8
 
 datapath = None
 excl_columns = ()
@@ -88,23 +130,20 @@ for target in targets:
         for s in selectors:
             case_features = sorted(set(feat_selector[s]) - {target})
             case_features = [c for c in case_features if not any([x in c for x in excl_symbol_list])]
-            if exec_mode == 'neutral':
-                extra_feautres = ['updeg_st', 'dndeg_st', 'effdeg_st',
-                                  'updeg_end', 'dndeg_end', 'effdeg_end']
-                extra_feautres += ['mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct']
-            elif exec_mode == 'posneg':
-                extra_feautres = ['updeg_st', 'dndeg_st', 'effdeg_st',
-                                  'updeg_end', 'dndeg_end', 'effdeg_end']
-                extra_feautres += ['mu*', 'mu*_pct', 'mu*_absmed', 'mu*_absmed_pct']
+            if exec_mode == 'neutral' or  exec_mode == 'posneg':
+                extra_feautres = ['mu*_pct', 'mu*_absmed_pct']
             else:
                 extra_feautres = []
             case_features += extra_feautres
             # feature_dict_inv.update(dict(zip(extra_feautres, extra_feautres)))
             cr_abs, cr = get_corrs(df, target, case_features, -1, dropnas=False, individual_na=True)
+            cr = -cr
             corr_agg[target][k][s] = {'abs': cr_abs, 'nabs': cr}
             print(sum(cr_abs.isnull()), sum(cr.isnull()), cr.shape[0])
-
-            trimmed_cr_df = trim_corrs_by_family(cr, feature_dict_inv)
+            if s == 'interaction':
+                trimmed_cr_df = cr
+            else:
+                trimmed_cr_df = trim_corrs_by_family(cr, feature_dict_inv)
             corr_tr[target][k][s] = trimmed_cr_df
 
 
@@ -112,33 +151,75 @@ col_families_inv2 = [{w: k for w in v} for k, v in col_families.items()]
 col_families_inv = reduce(lambda a, b: dict(a, **b), col_families_inv2)
 
 example_corr = [v for k, v in corr_agg[targets[0]].items() if 't0' not in k][0]
-
 ordered_inds = {}
+
 for s, item in example_corr.items():
     v = item['nabs']
     vind = list(v.index)
-    families = sorted(list(set([col_families_inv[i] for i in vind])))
-    good_index = []
-    for f in families:
-        good_index.extend(sorted([c for c in col_families[f] if c in vind]))
-    ordered_inds[s] = good_index
+    if s != 'interaction':
+        families = sorted(list(set([col_families_inv[i] for i in vind])))
+        good_index = []
+        print(s)
+        for f in families:
+            good_index.extend(sorted([c for c in col_families[f] if c in vind]))
+    else:
+        good_index = vind
+    if s == 'claim':
+        # recast rcommrel to rrelcom
+        good_index_tr = [x.replace('rcommrel', 'rrelcomm')
+                         for x in good_index]
+        aux = [x.split('_') for x in good_index_tr]
+        aux = [x[1:3] + x[0:1] + x[3:]
+               if any(['affind' in y for y in x]) or
+               any(['rcomm' in y for y in x]) or
+               any(['rrelcomm' in y for y in x]) or
+               any(['count' in y for y in x]) else x
+               for x in aux]
+        aux = list(zip(good_index, aux))
+        good_index_ = sorted(aux, key=lambda x: x[1])
+        good_index = [x for x, y in good_index_]
+        good_index = push_subset_right(good_index, feature_dict['citations'])
+        rename_dict = {v: '_'.join([x for x in k if x]) for v, k in good_index_}
+        ordered_inds[s] = good_index
+    elif s == 'batch' or s == 'interaction':
+        # exclude non dynamic communities
+        good_index = [x
+               for x in good_index
+               if (not 'litgw_comm' in x) or
+               ('litgw_comm' in x and 'dyn' in x)]
+        aux = [x.split('_') for x in good_index]
+        aux = [x[:2] + [''.join(x[6:])] + x[2:6]
+                    for x in aux]
+        aux = [x[1:2] + x[0:1] + x[2:]
+               if any(['rncomms' in y for y in x]) or
+               any(['suppind' in y for y in x]) else x
+               for x in aux]
+        aux = list(zip(good_index, aux))
+        good_index_ = sorted(aux, key=lambda x: x[1])
+        rename_dict = {v: '_'.join([x for x in k if x]) for v, k in good_index_}
+        good_index = [x for x, y in good_index_]
+    ordered_inds[s] = good_index, rename_dict
 
-for target in targets:
+for target in targets[:]:
     cagg = corr_agg[target]
-    for mode in selectors:
+    for mode in selectors[:]:
         print('*** {0}'.format(mode))
-        ordered_ind_flat = ordered_inds[mode]
+        ordered_ind_flat, rn = ordered_inds[mode]
 
         xticks = ordered_ind_flat
-        xticks = [col_families_inv[x] for x in xticks]
-        xticks_trans = []
-        xticks_appearance = []
-        for x in xticks:
-            if x in xticks_appearance:
-                xticks_trans.append('')
-            else:
-                xticks_trans.append(x)
-                xticks_appearance.append(x)
+        if mode != 'interaction':
+            xticks = [col_families_inv[x] for x in xticks]
+            xticks_trans = []
+            xticks_appearance = []
+            for x in xticks:
+                if x in xticks_appearance:
+                    xticks_trans.append('')
+                else:
+                    xticks_trans.append(x)
+                    xticks_appearance.append(x)
+        else:
+            xticks_trans = []
+            xticks_appearance = []
 
         ykeys = sorted(cagg.keys())
         ykeys = sorted([c for c in ykeys if 't0' in c]) + sorted([c for c in ykeys if 't0' not in c])
@@ -156,14 +237,14 @@ for target in targets:
             agg_vec = []
             for k in ykeys:
                 cr = cagg[k][mode][ttype]
-                cols = ordered_inds[mode]
-                agg_vec.append(cr.reindex(cols).values)
+                agg_vec.append(cr.reindex(ordered_ind_flat).values)
             ccr = np.vstack(agg_vec)
 
             dump_file_fname = expanduser(f'~/data/kl/corrs/corrs_binary_{target}_{exec_mode}_'
                                          f'{mode}_{ttype}_v{cversion}.csv')
             df_corr = pd.DataFrame(ccr.T, index=ordered_ind_flat, columns=ykeys)
             df_corr.to_csv(dump_file_fname)
+            ccr = df_corr.values.T
 
             ccr_flat = ccr.flatten()
             mask_flat = np.isnan(ccr_flat)
@@ -181,8 +262,19 @@ for target in targets:
             # cmap = sns.diverging_palette(240, 10, l=5, n=90, as_cmap=True)
             # cmap = sns.color_palette("RdBu_r", 90)
             cmap = "RdBu_r"
+
+            rename_dict2 = {}
+            for v in rn.values():
+                vv = str(v)
+                for qin, qout in replace_dict.items():
+                    vv = vv.replace(qin, qout)
+                rename_dict2[v] = vv
+
+            xticks = [rename_dict2[rn[k]] for k in ordered_ind_flat]
+
             ax = sns.heatmap(ccr, mask=mask, ax=ax, cbar_ax=cbar_ax, cmap=cmap,
-                             xticklabels=xticks_trans,
+                             xticklabels=xticks,
+                             # xticklabels=xticks_trans,
                              yticklabels=ykeys,
                              vmin=-cmax, vmax=cmax,
                              cbar_kws={"orientation": "horizontal"})

@@ -36,10 +36,11 @@ def rank_degenerate_values(keys, values, sort=True):
 
 
 def transform_df(dfi, statement_columns, action_column, claim_column,
-                 index_name, aggregate_negs=True):
+                 index_name, aggregate_negs=True, verbose=False):
     df = dfi.copy()
-    print('df shape:', df.shape, '. Type of', claim_column, \
-        'column', df[claim_column].dtype)
+    if verbose:
+        print('df shape:', df.shape, '. Type of', claim_column,
+              'column', df[claim_column].dtype)
     index_cs = statement_columns + [action_column]
     n_unique_triplets = df.drop_duplicates(index_cs).shape[0]
     if aggregate_negs:

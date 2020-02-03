@@ -494,6 +494,11 @@ def compute_comm_structure_bigraph(uvs_list, disjoint_uv=True, verbose=False):
 
 
 def bipart_graph_to_weights(uvs):
+    """
+
+    :param uvs: [(u, [v])] list of tuples, where
+    :return:
+    """
     c = combinations(uvs, 2)
     u_edges = {}
 
@@ -504,7 +509,7 @@ def bipart_graph_to_weights(uvs):
         b_vs_set = set(b_vs)
         union = a_vs_set | b_vs_set
         if union:
-            weight = len(a_vs_set & b_vs_set) / len(a_vs_set | b_vs_set)
+            weight = len(a_vs_set & b_vs_set) / len(union)
         else:
             weight = 0
         u_edges[(a, b)] = weight
