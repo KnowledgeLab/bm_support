@@ -25,4 +25,3 @@ def compute_topk_thr(y_test, y_pred, test_thr=25, rec_level=0.5):
     ii = np.argmin(delta_recs > rec_level)
     best_prec, best_rec = precs[ii], recs[ii]
     return best_prec, best_rec, base_prec, precs, recs
-

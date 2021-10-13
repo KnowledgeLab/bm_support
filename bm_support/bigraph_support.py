@@ -1,15 +1,37 @@
 import pandas as pd
 import numpy as np
 from itertools import combinations
-from datahelpers.constants import iden, ye, ai, ps, up, dn, ar, ni, cexp, qcexp, dist, rdist, pm
+from datahelpers.constants import (
+    iden,
+    ye,
+    ai,
+    ps,
+    up,
+    dn,
+    ar,
+    ni,
+    cexp,
+    qcexp,
+    dist,
+    rdist,
+    pm,
+)
 import igraph as ig
 import random
 
 
-def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
-                          window=None, frac_important=0.1,
-                          transform='square', mode='all', use_wosids=True,
-                          verbose=False):
+def compute_support_index(
+    data,
+    bipart_edges_dict,
+    pm_wid_dict,
+    window_col=ye,
+    window=None,
+    frac_important=0.1,
+    transform="square",
+    mode="all",
+    use_wosids=True,
+    verbose=False,
+):
     """
 
     :param data:
@@ -40,39 +62,53 @@ def compute_support_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
         if window:
             mask = (data[window_col] <= ix) & (data[window_col] > ix - window)
         else:
-            mask = (data[window_col] <= ix)
+            mask = data[window_col] <= ix
         cur_pmids = data.loc[mask, pm].unique()
         if use_wosids:
             cur_wosids = [pm_wid_dict[k] for k in cur_pmids if k in pm_wid_dict.keys()]
         else:
             cur_wosids = list(set(cur_pmids))
-        if mode == 'all':
+        if mode == "all":
             cur_cites = [list(set(bipart_edges_dict[k])) for k in cur_wosids]
-        elif mode == 'cross':
-            cur_cites = [[y for y in list(set(bipart_edges_dict[k])) if y in cur_wosids] for k in cur_wosids]
+        elif mode == "cross":
+            cur_cites = [
+                [y for y in list(set(bipart_edges_dict[k])) if y in cur_wosids]
+                for k in cur_wosids
+            ]
 
         if verbose:
             print(ix, cur_cites)
 
-        alpha, n_unique_citations, n_edges = compute_support(cur_cites, frac_important, transform)
+        alpha, n_unique_citations, n_edges = compute_support(
+            cur_cites, frac_important, transform
+        )
         ind_agg.append(ix)
         r_agg.append((alpha, len(cur_cites), n_unique_citations, n_edges))
 
     if window:
-        suff = '{0}'.format(window)
+        suff = "{0}".format(window)
     else:
-        suff = ''
-    cols = ['suppind', 'size_level_a', 'size_level_b', 'n_edges']
-    ren_cols = ['{0}{1}'.format(k, suff) for k in cols]
+        suff = ""
+    cols = ["suppind", "size_level_a", "size_level_b", "n_edges"]
+    ren_cols = ["{0}{1}".format(k, suff) for k in cols]
     dfr = pd.DataFrame(r_agg, index=ind_agg, columns=ren_cols)
-    dfr = dfr.rename_axis(window_col, axis='index')
+    dfr = dfr.rename_axis(window_col, axis="index")
     return dfr
 
 
 # TODO this function has to be double checked, the filters might behave unpredictably
 
-def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
-                           window=None, mode='all', use_wosids=True, verbose=False):
+
+def compute_affinity_index(
+    data,
+    bipart_edges_dict,
+    pm_wid_dict,
+    window_col=ye,
+    window=None,
+    mode="all",
+    use_wosids=True,
+    verbose=False,
+):
     """
     :param data:
             DataFrame of format:
@@ -93,9 +129,9 @@ def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
     ixs = sorted(data[window_col].unique())
     r_agg = []
     for ix in ixs:
-        mask = (data[window_col] <= ix)
+        mask = data[window_col] <= ix
         if window:
-            mask &= (data[window_col] > ix - window)
+            mask &= data[window_col] > ix - window
 
         pmids = list(data.loc[mask, pm].unique())
         pmids_ix = list(data.loc[data[window_col] == ix, pm].unique())
@@ -107,8 +143,11 @@ def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
             pmids_present = pmids
             wosids_present = pmids
         if pmids_ix:
-            if mode == 'cross':
-                cur_cites = [[y for y in list(set(bipart_edges_dict[k])) if y in wosids_present] for k in wosids_present]
+            if mode == "cross":
+                cur_cites = [
+                    [y for y in list(set(bipart_edges_dict[k])) if y in wosids_present]
+                    for k in wosids_present
+                ]
             else:
                 cur_cites = [list(set(bipart_edges_dict[k])) for k in wosids_present]
             alphas = compute_affinity(cur_cites)
@@ -119,9 +158,9 @@ def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
                 r_agg.append(output)
 
     if window:
-        col_suffixed = 'affind{0}'.format(window)
+        col_suffixed = "affind{0}".format(window)
     else:
-        col_suffixed = 'affind'
+        col_suffixed = "affind"
 
     if r_agg:
         rdata = np.concatenate(r_agg)
@@ -131,8 +170,17 @@ def compute_affinity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye,
     return dfr
 
 
-def compute_modularity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye, window=None, mode='all',
-                             disjoint_uv=True, modularity_mode='uv', verbose=False):
+def compute_modularity_index(
+    data,
+    bipart_edges_dict,
+    pm_wid_dict,
+    window_col=ye,
+    window=None,
+    mode="all",
+    disjoint_uv=True,
+    modularity_mode="uv",
+    verbose=False,
+):
     """
 
     :param data:
@@ -160,13 +208,13 @@ def compute_modularity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye
         if window:
             mask = (data[window_col] <= ix) & (data[window_col] > ix - window)
         else:
-            mask = (data[window_col] <= ix)
+            mask = data[window_col] <= ix
 
         pmids = list(data.loc[mask, pm].unique())
         pmids_ix = list(data.loc[data[window_col] == ix, pm].unique())
         if verbose:
-            print('***')
-            print('up, dn, ye: {0} {1}'.format(list(data[[up, dn]].iloc[0].values), ix))
+            print("***")
+            print("up, dn, ye: {0} {1}".format(list(data[[up, dn]].iloc[0].values), ix))
 
         if pm_wid_dict:
             pmids_present = [pmx for pmx in pmids if pmx in pm_wid_dict.keys()]
@@ -176,18 +224,33 @@ def compute_modularity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye
             pmids_present = pmids
             wosids_present = pmids
         if pmids_ix:
-            if mode == 'cross':
-                uvs_list = [(k, [y for y in list(set(bipart_edges_dict[k])) if y in wosids_present])
-                            for k in wosids_present]
+            if mode == "cross":
+                uvs_list = [
+                    (
+                        k,
+                        [
+                            y
+                            for y in list(set(bipart_edges_dict[k]))
+                            if y in wosids_present
+                        ],
+                    )
+                    for k in wosids_present
+                ]
             else:
-                uvs_list = [(k, list(set(bipart_edges_dict[k]))) for k in wosids_present]
+                uvs_list = [
+                    (k, list(set(bipart_edges_dict[k]))) for k in wosids_present
+                ]
 
-            if modularity_mode == 'uv':
-                commsize_ncomm_usize = compute_comm_structure_bigraph(uvs_list, disjoint_uv, verbose)
+            if modularity_mode == "uv":
+                commsize_ncomm_usize = compute_comm_structure_bigraph(
+                    uvs_list, disjoint_uv, verbose
+                )
                 csize_dict = dict(zip(pmids_present, commsize_ncomm_usize))
                 output = [(ix, p, *csize_dict[p]) for p in pmids_ix]
             else:
-                commsize_ncomm_usize = compute_comm_structure_reduced_graph(uvs_list, verbose)
+                commsize_ncomm_usize = compute_comm_structure_reduced_graph(
+                    uvs_list, verbose
+                )
                 csize_dict = dict(zip(pmids_present, commsize_ncomm_usize))
                 output = [(ix, p, *csize_dict[p]) for p in pmids_present]
             # ***
@@ -195,16 +258,23 @@ def compute_modularity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye
                 r_agg.append(output)
 
     if window:
-        suff = '{0}'.format(window)
+        suff = "{0}".format(window)
     else:
-        suff = ''
+        suff = ""
 
-    if modularity_mode == 'uv':
-        cols = ['comm_size', 'ncomms', 'size_ulist', 'ncomponents', 'commproj_size', 'commprojrel_size']
-        cols = ['{0}{1}'.format(k, suff) for k in cols]
+    if modularity_mode == "uv":
+        cols = [
+            "comm_size",
+            "ncomms",
+            "size_ulist",
+            "ncomponents",
+            "commproj_size",
+            "commprojrel_size",
+        ]
+        cols = ["{0}{1}".format(k, suff) for k in cols]
         # cols = []
     else:
-        cols = ['rcomm_size', 'rncomms', 'rncomponents', 'rcommid', 'rcommrel_size']
+        cols = ["rcomm_size", "rncomms", "rncomponents", "rcommid", "rcommrel_size"]
 
     if r_agg:
         rdata = np.concatenate(r_agg)
@@ -214,8 +284,16 @@ def compute_modularity_index(data, bipart_edges_dict, pm_wid_dict, window_col=ye
     return dfr
 
 
-def compute_modularity_index_gen(data, bipart_edges_dict, window_col=ye, window=None, mode='all', disjoint_uv=True,
-                                 modularity_mode='uv', verbose=False):
+def compute_modularity_index_gen(
+    data,
+    bipart_edges_dict,
+    window_col=ye,
+    window=None,
+    mode="all",
+    disjoint_uv=True,
+    modularity_mode="uv",
+    verbose=False,
+):
     """
 
     :param data:
@@ -238,17 +316,17 @@ def compute_modularity_index_gen(data, bipart_edges_dict, window_col=ye, window=
     ixs = sorted(data[window_col].unique())
     r_agg = []
     if verbose:
-        print('***')
-        print('data shape: {0}, columns {1}'.format(data.shape, data.columns))
-        print('ixs: {0}'.format(ixs))
-        print('up, dn: {0}'.format(data.drop_duplicates([up, dn])[[up, dn]]))
+        print("***")
+        print("data shape: {0}, columns {1}".format(data.shape, data.columns))
+        print("ixs: {0}".format(ixs))
+        print("up, dn: {0}".format(data.drop_duplicates([up, dn])[[up, dn]]))
 
     for ii in range(len(ixs)):
         if window:
             lower = max(0, ii - window + 1)
-            mask = data[window_col].isin(ixs[lower:(ii + 1)])
+            mask = data[window_col].isin(ixs[lower : (ii + 1)])
         else:
-            mask = data[window_col].isin(ixs[:(ii + 1)])
+            mask = data[window_col].isin(ixs[: (ii + 1)])
         ix = ixs[ii]
 
         pmids = list(data.loc[mask, pm].unique())
@@ -257,18 +335,28 @@ def compute_modularity_index_gen(data, bipart_edges_dict, window_col=ye, window=
         #     print('***')
         #     print('up, dn, ye: {0} {1}'.format(list(data[[up, dn]].iloc[0].values), ix))
         if pmids_ix:
-            if mode == 'cross':
-                uvs_list = [(k, [y for y in list(set(bipart_edges_dict[k])) if y in pmids])
-                            for k in pmids]
+            if mode == "cross":
+                uvs_list = [
+                    (k, [y for y in list(set(bipart_edges_dict[k])) if y in pmids])
+                    for k in pmids
+                ]
             else:
-                uvs_list = [(k, list(set(bipart_edges_dict[k])))  if k in bipart_edges_dict.keys()
-                            else (k, []) for k in pmids]
-            if modularity_mode == 'uv':
-                commsize_ncomm_usize = compute_comm_structure_bigraph(uvs_list, disjoint_uv, verbose)
+                uvs_list = [
+                    (k, list(set(bipart_edges_dict[k])))
+                    if k in bipart_edges_dict.keys()
+                    else (k, [])
+                    for k in pmids
+                ]
+            if modularity_mode == "uv":
+                commsize_ncomm_usize = compute_comm_structure_bigraph(
+                    uvs_list, disjoint_uv, verbose
+                )
                 csize_dict = dict(zip(pmids, commsize_ncomm_usize))
                 output = [(ix, p, *csize_dict[p]) for p in pmids_ix]
             else:
-                commsize_ncomm_usize = compute_comm_structure_reduced_graph(uvs_list, verbose)
+                commsize_ncomm_usize = compute_comm_structure_reduced_graph(
+                    uvs_list, verbose
+                )
                 csize_dict = dict(zip(pmids, commsize_ncomm_usize))
                 output = [(ix, p, *csize_dict[p]) for p in pmids]
             # ***
@@ -276,15 +364,22 @@ def compute_modularity_index_gen(data, bipart_edges_dict, window_col=ye, window=
                 r_agg.append(output)
 
     if window:
-        suff = f'{window}'
+        suff = f"{window}"
     else:
-        suff = ''
+        suff = ""
 
-    if modularity_mode == 'uv':
-        cols = ['comm_size', 'ncomms', 'size_ulist', 'ncomponents', 'commproj_size', 'commprojrel_size']
+    if modularity_mode == "uv":
+        cols = [
+            "comm_size",
+            "ncomms",
+            "size_ulist",
+            "ncomponents",
+            "commproj_size",
+            "commprojrel_size",
+        ]
     else:
-        cols = ['rcomm_size', 'rncomms', 'rncomponents', 'rcommid', 'rcommrel_size']
-    cols = ['{0}{1}'.format(k, suff) for k in cols]
+        cols = ["rcomm_size", "rncomms", "rncomponents", "rcommid", "rcommrel_size"]
+    cols = ["{0}{1}".format(k, suff) for k in cols]
 
     if r_agg:
         rdata = np.concatenate(r_agg)
@@ -295,8 +390,9 @@ def compute_modularity_index_gen(data, bipart_edges_dict, window_col=ye, window=
     return dfr
 
 
-def compute_modularity_index_multipart(data, bipart_dicts, window_col=ye,
-                                       window=None, verbose=False):
+def compute_modularity_index_multipart(
+    data, bipart_dicts, window_col=ye, window=None, verbose=False
+):
     """
 
     :param data:
@@ -318,40 +414,46 @@ def compute_modularity_index_multipart(data, bipart_dicts, window_col=ye,
     for ii in range(len(ixs)):
         if window:
             lower = max(0, ii - window + 1)
-            mask = data[window_col].isin(ixs[lower:(ii + 1)])
+            mask = data[window_col].isin(ixs[lower : (ii + 1)])
         else:
-            mask = data[window_col].isin(ixs[:(ii + 1)])
+            mask = data[window_col].isin(ixs[: (ii + 1)])
 
         ix = ixs[ii]
         pmids = list(data.loc[mask, pm].unique())
         pmids_ix = list(data.loc[data[window_col] == ix, pm].unique())
         if verbose:
-            print('***')
-            print('up, dn, ye: {0} {1}'.format(list(data[[up, dn]].iloc[0].values), ix))
+            print("***")
+            print("up, dn, ye: {0} {1}".format(list(data[[up, dn]].iloc[0].values), ix))
 
         uv_agg = []
 
         if pmids_ix:
             for bipart_edges_dict in bipart_dicts:
-                uvs_list = [(k, list(set(bipart_edges_dict[k]))) if k in bipart_edges_dict.keys()
-                            else (k, []) for k in pmids]
+                uvs_list = [
+                    (k, list(set(bipart_edges_dict[k])))
+                    if k in bipart_edges_dict.keys()
+                    else (k, [])
+                    for k in pmids
+                ]
                 uv_agg.append(uvs_list)
         else:
             uv_agg = []
         if verbose:
-            print('lens of factions {0}'.format([len(x) for x in uv_agg]))
+            print("lens of factions {0}".format([len(x) for x in uv_agg]))
 
-        commsize_ncomm_usize = compute_comm_structure_reduced_graph(uv_agg, multi=True, verbose=verbose)
+        commsize_ncomm_usize = compute_comm_structure_reduced_graph(
+            uv_agg, multi=True, verbose=verbose
+        )
         csize_dict = dict(zip(pmids, commsize_ncomm_usize))
         output = [(ix, p, *csize_dict[p]) for p in pmids]
         r_agg.append(output)
-    cols = ['rcomm_size', 'rncomms', 'rncomponents', 'rcommid', 'rcommrel_size']
+    cols = ["rcomm_size", "rncomms", "rncomponents", "rcommid", "rcommrel_size"]
     if window:
-        suff = '{0}'.format(window)
+        suff = "{0}".format(window)
     else:
-        suff = ''
+        suff = ""
 
-    cols = ['{0}{1}'.format(k, suff) for k in cols]
+    cols = ["{0}{1}".format(k, suff) for k in cols]
 
     if r_agg:
         rdata = np.concatenate(r_agg)
@@ -380,7 +482,7 @@ def compute_vdegrees(data):
     return uniques, counts, v2i
 
 
-def compute_support(data, frac_important=0.2, mode='square'):
+def compute_support(data, frac_important=0.2, mode="square"):
     """
     compute the support index for a bigraph,
     as a matter of definition, for bigraphs with |U| < 2 and |V| == 0, alpha = 0
@@ -392,18 +494,26 @@ def compute_support(data, frac_important=0.2, mode='square'):
     :return: (support_index, power of set V)
     """
 
-    if mode == 'square':
-        def foo(x): return x**2
-    elif mode == 'linear':
-        def foo(x): return x
+    if mode == "square":
+
+        def foo(x):
+            return x ** 2
+
+    elif mode == "linear":
+
+        def foo(x):
+            return x
+
     else:
-        def foo(x): return x
+
+        def foo(x):
+            return x
 
     uniques, counts, _ = compute_vdegrees(data)
     if len(uniques) == 0 or len(data) == 1:
         return 0, len(uniques), sum(counts)
     power_v = len(uniques)
-    n_top = int(np.ceil(len(uniques)*frac_important))
+    n_top = int(np.ceil(len(uniques) * frac_important))
     volume = n_top * foo(len(data))
     counts_sorted = sorted(counts)[::-1][:n_top]
     alpha = sum([foo(z) for z in counts_sorted]) / volume
@@ -430,7 +540,7 @@ def compute_affinity(data):
             # or n_edges == len(item)?
             affinity = 0
         else:
-            affinity = affinity_unnormed/(len(item) * (len(data) - 1))
+            affinity = affinity_unnormed / (len(item) * (len(data) - 1))
         affinities.append(affinity)
     return affinities
 
@@ -449,9 +559,11 @@ def compute_comm_structure_bigraph(uvs_list, disjoint_uv=True, verbose=False):
     if len(vlist_flat) > 0:
         vset = set(vlist_flat)
         if verbose:
-            print('diff: {0}, len ulist: {1}, len vset {2}, len edges {3}'.format(len(vlist_flat)
-                                                                                  - len(vset), len(ulist),
-                                                                                  len(vset), len(vlist_flat)))
+            print(
+                "diff: {0}, len ulist: {1}, len vset {2}, len edges {3}".format(
+                    len(vlist_flat) - len(vset), len(ulist), len(vset), len(vlist_flat)
+                )
+            )
 
         uset_conv = {k: j for k, j in zip(ulist, range(len(ulist)))}
         # uset_conv_inv = {v: k for k, v in uset_conv.items()}
@@ -461,7 +573,10 @@ def compute_comm_structure_bigraph(uvs_list, disjoint_uv=True, verbose=False):
         else:
             vset_outstanding = list(vset - set(ulist))
             vset_intersection = list(vset & set(ulist))
-            vset_conv = {k: j + len(ulist) for k, j in zip(vset_outstanding, range(len(vset_outstanding)))}
+            vset_conv = {
+                k: j + len(ulist)
+                for k, j in zip(vset_outstanding, range(len(vset_outstanding)))
+            }
             vset_conv = {**vset_conv, **{k: uset_conv[k] for k in vset_intersection}}
 
         edges_agg = [[(uset_conv[u], vset_conv[v]) for v in vs] for u, vs in uvs_list]
@@ -469,27 +584,36 @@ def compute_comm_structure_bigraph(uvs_list, disjoint_uv=True, verbose=False):
         random.seed(13)
         g = ig.Graph(edges_flat, directed=False)
         communities = g.community_infomap()
-        comm_df = pd.DataFrame(communities.membership,
-                               index=[v.index for v in g.vs], columns=['comm_id'])
-        comm_size_dict = comm_df['comm_id'].value_counts().to_dict()
+        comm_df = pd.DataFrame(
+            communities.membership, index=[v.index for v in g.vs], columns=["comm_id"]
+        )
+        comm_size_dict = comm_df["comm_id"].value_counts().to_dict()
         # communities restricted to u set
-        uset_comm_size_dict = comm_df.loc[uset_conv.values(), 'comm_id'].value_counts().to_dict()
+        uset_comm_size_dict = (
+            comm_df.loc[uset_conv.values(), "comm_id"].value_counts().to_dict()
+        )
         if verbose:
-            print('comm_size_dict', comm_size_dict)
+            print("comm_size_dict", comm_size_dict)
             # print('comm_df', comm_df)
-            print('comm_df len', comm_df.shape)
-            print('comm_df uset len', comm_df.loc[uset_conv.values()].shape)
-        uset_comm_dict = comm_df.loc[list(uset_conv.values())]['comm_id'].to_dict()
+            print("comm_df len", comm_df.shape)
+            print("comm_df uset len", comm_df.loc[uset_conv.values()].shape)
+        uset_comm_dict = comm_df.loc[list(uset_conv.values())]["comm_id"].to_dict()
         # map: (original uset id) -> (int uset id) -> (community id) -> (community size)
-        commsize_ncomm_usize = [(comm_size_dict[uset_comm_dict[uset_conv[u]]],
-                                 len(communities),
-                                 len(ulist),
-                                 len(g.clusters()),
-                                 uset_comm_size_dict[uset_comm_dict[uset_conv[u]]],
-                                 uset_comm_size_dict[uset_comm_dict[uset_conv[u]]]/len(ulist))
-                                for u in ulist]
+        commsize_ncomm_usize = [
+            (
+                comm_size_dict[uset_comm_dict[uset_conv[u]]],
+                len(communities),
+                len(ulist),
+                len(g.clusters()),
+                uset_comm_size_dict[uset_comm_dict[uset_conv[u]]],
+                uset_comm_size_dict[uset_comm_dict[uset_conv[u]]] / len(ulist),
+            )
+            for u in ulist
+        ]
     else:
-        commsize_ncomm_usize = [(1, len(ulist), len(ulist), len(ulist), 1, 1) for u in ulist]
+        commsize_ncomm_usize = [
+            (1, len(ulist), len(ulist), len(ulist), 1, 1) for u in ulist
+        ]
     return commsize_ncomm_usize
 
 
@@ -528,13 +652,16 @@ def compute_comm_structure_reduced_graph(uv_list, multi=False, verbose=False):
     uvs = uv_list if multi else [uv_list]
     # uvs = uv_list
     if verbose:
-        print('in compute_comm_structure_reduced_graph() - uvs:')
+        print("in compute_comm_structure_reduced_graph() - uvs:")
         print(uvs)
     u_edges_list = [bipart_graph_to_weights(uv) for uv in uvs]
     # if ulist
     ulist = set.union(*[set([u for u, vs in item]) for item in uvs])
     superset_edges = sorted(set.union(*[set(item.keys()) for item in u_edges_list]))
-    weights_matrix = [[item[k] if k in item.keys() else 0. for k in superset_edges] for item in u_edges_list]
+    weights_matrix = [
+        [item[k] if k in item.keys() else 0.0 for k in superset_edges]
+        for item in u_edges_list
+    ]
     weights = np.array(weights_matrix).sum(axis=0)
     if superset_edges:
         max_weight = weights.max()
@@ -546,42 +673,52 @@ def compute_comm_structure_reduced_graph(uv_list, multi=False, verbose=False):
         edges = [(uset_conv[x], uset_conv[y]) for x, y in superset_edges]
         g = ig.Graph(edges, directed=False)
         communities = g.community_infomap(edge_weights=weights)
-        comm_df = pd.DataFrame(communities.membership,
-                               index=[v.index for v in g.vs], columns=['comm_id'])
+        comm_df = pd.DataFrame(
+            communities.membership, index=[v.index for v in g.vs], columns=["comm_id"]
+        )
         # comm_id : size
-        comm_size_dict = comm_df['comm_id'].value_counts().to_dict()
+        comm_size_dict = comm_df["comm_id"].value_counts().to_dict()
         # u_proj : comm_id
-        uset_comm_dict = comm_df.loc[list(uset_conv.values())]['comm_id'].to_dict()
+        uset_comm_dict = comm_df.loc[list(uset_conv.values())]["comm_id"].to_dict()
         if verbose:
-            print('u vertices: {0}'.format(ulist))
-            print('super set edges: {0}'.format(superset_edges))
-            print('weights: {0}'.format(weights))
-            print('weights_matrix: {0}'.format(weights_matrix))
-            print('uset_conv: {0}'.format(uset_conv))
-            print('uset_conv_inv: {0}'.format(uset_conv_inv))
-            print('comm_size_dict', comm_size_dict)
-            print('comm_df len', comm_df.shape)
+            print("u vertices: {0}".format(ulist))
+            print("super set edges: {0}".format(superset_edges))
+            print("weights: {0}".format(weights))
+            print("weights_matrix: {0}".format(weights_matrix))
+            print("uset_conv: {0}".format(uset_conv))
+            print("uset_conv_inv: {0}".format(uset_conv_inv))
+            print("comm_size_dict", comm_size_dict)
+            print("comm_df len", comm_df.shape)
 
-        commsize_ncomm_usize = [(comm_size_dict[uset_comm_dict[uset_conv[u]]],
-                                 len(communities),
-                                 len(g.clusters()),
-                                 uset_comm_dict[uset_conv[u]],
-                                 comm_size_dict[uset_comm_dict[uset_conv[u]]] / len(ulist))
-                                for u in ulist]
+        commsize_ncomm_usize = [
+            (
+                comm_size_dict[uset_comm_dict[uset_conv[u]]],
+                len(communities),
+                len(g.clusters()),
+                uset_comm_dict[uset_conv[u]],
+                comm_size_dict[uset_comm_dict[uset_conv[u]]] / len(ulist),
+            )
+            for u in ulist
+        ]
     else:
-        commsize_ncomm_usize = [(1,
-                                 len(ulist),
-                                 len(ulist),
-                                 0,
-                                 1 / len(ulist)) for u in ulist]
+        commsize_ncomm_usize = [
+            (1, len(ulist), len(ulist), 0, 1 / len(ulist)) for u in ulist
+        ]
     return commsize_ncomm_usize
 
 
 def calculate_batch_numsum(data, bipart_edges_dict, verbose=False):
-    vn = 'vnode'
+    vn = "vnode"
 
-    slist = data.apply(lambda x: [(x[pm], x[ye], y) for y in
-                                  (bipart_edges_dict[x[pm]] if x[pm] in bipart_edges_dict.keys() else [])], axis=1)
+    slist = data.apply(
+        lambda x: [
+            (x[pm], x[ye], y)
+            for y in (
+                bipart_edges_dict[x[pm]] if x[pm] in bipart_edges_dict.keys() else []
+            )
+        ],
+        axis=1,
+    )
     # list [(paper, year, [vnodes])]
     flat_list = [x for sublist in slist for x in sublist]
     if verbose:
@@ -592,28 +729,32 @@ def calculate_batch_numsum(data, bipart_edges_dict, verbose=False):
         uv_edges_df = pd.DataFrame(flat_list, columns=[pm, ye, vn])
         uv_year = uv_edges_df.groupby([vn, ye]).apply(lambda x: x.shape[0])
         uv_year_cumsum = uv_year.groupby(level=0).apply(lambda x: np.cumsum(x))
-        uv_year_cumsum_observed = uv_year_cumsum.groupby(level=0).apply(lambda x: x.shift())
+        uv_year_cumsum_observed = uv_year_cumsum.groupby(level=0).apply(
+            lambda x: x.shift()
+        )
         if verbose:
-            print('***')
+            print("***")
             print(uv_year_cumsum_observed.shape)
         uv_year_cumsum_observed.loc[~uv_year_cumsum_observed.notnull()] = 0.0
-        uv_year_cumsum_observed.name = 'count'
+        uv_year_cumsum_observed.name = "count"
         uv_year_cumsum_observed = uv_year_cumsum_observed.reset_index()
         if verbose:
-            print('***')
+            print("***")
             print(uv_edges_df.head())
             print(uv_year_cumsum_observed.head())
 
-        ultimate_df = pd.merge(uv_edges_df, uv_year_cumsum_observed, on=[vn, ye], how='inner')
-        take_max = ultimate_df.groupby([pm, ye]).apply(lambda x: x['count'].max())
-        take_max.name = 'count'
+        ultimate_df = pd.merge(
+            uv_edges_df, uv_year_cumsum_observed, on=[vn, ye], how="inner"
+        )
+        take_max = ultimate_df.groupby([pm, ye]).apply(lambda x: x["count"].max())
+        take_max.name = "count"
         take_max = take_max.reset_index()
     else:
-        take_max = pd.DataFrame([], columns=[pm, 'count'])
+        take_max = pd.DataFrame([], columns=[pm, "count"])
     pm_absent = list(set(data[pm]) - set(bipart_edges_dict.keys()))
     if verbose:
         print(len(pm_absent))
-    take_max_absent = pd.DataFrame([(p, 0.) for p in pm_absent], columns=[pm, 'count'])
-    ultimate_df = pd.concat([take_max[[pm, 'count']], take_max_absent])
-    return ultimate_df[[pm, 'count']]
+    take_max_absent = pd.DataFrame([(p, 0.0) for p in pm_absent], columns=[pm, "count"])
+    ultimate_df = pd.concat([take_max[[pm, "count"]], take_max_absent])
+    return ultimate_df[[pm, "count"]]
     # return take_max, take_max_absent

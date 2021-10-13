@@ -11,8 +11,9 @@ class TestTrimData(TestCase):
 
     def test_trim_data(self):
         a, b = trim_data(data=self.data, n_bins=10)
-        diff = ((self.a_ref - a)**2 + (self.b_ref - b)**2)**0.5
+        diff = ((self.a_ref - a) ** 2 + (self.b_ref - b) ** 2) ** 0.5
         self.assertAlmostEqual(diff, 0.0, 3)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

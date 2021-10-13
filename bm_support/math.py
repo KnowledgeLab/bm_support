@@ -1,17 +1,18 @@
 import numpy as np
 import pandas as pd
+
 # one dimensional linear interpolation non uniform grid
 
 
 def find_bbs(x, xs):
-    ia, ib = 0, xs.shape[0]-1
+    ia, ib = 0, xs.shape[0] - 1
     if x <= xs[ia]:
-        return ia, ia+1
+        return ia, ia + 1
     if x >= xs[ib]:
-        return ib-1, ib
-    while (ib-ia) > 1:
+        return ib - 1, ib
+    while (ib - ia) > 1:
         im = (ib + ia) // 2
-        if (xs[ib] - x)*(x - xs[im]) > 0:
+        if (xs[ib] - x) * (x - xs[im]) > 0:
             ia = im
         elif x == xs[ib]:
             return ib - 1, ib
@@ -27,7 +28,7 @@ def get_function_values(x, xs, ys):
     xa, xb = xs[ia], xs[ib]
     ya, yb = ys[ia], ys[ib]
     if xa != xb:
-        y = ya + (yb - ya)*(x - xa)/(xb - xa)
+        y = ya + (yb - ya) * (x - xa) / (xb - xa)
     else:
         y = ya
     return y
@@ -48,8 +49,8 @@ def interpolate_nonuniform_linear(xgrid, xvalues, yvalues, non_unique_x=True):
 
 
 def retrieve_unique_x_maxy(xvalues, yvalues):
-    df_data = pd.DataFrame([xvalues, yvalues], index=['x', 'y']).T
-    dfr = df_data.groupby('x').apply(lambda item: item['y'].max())
+    df_data = pd.DataFrame([xvalues, yvalues], index=["x", "y"]).T
+    dfr = df_data.groupby("x").apply(lambda item: item["y"].max())
     return dfr.index, dfr.values
 
 
@@ -60,5 +61,5 @@ def integral_linear(xvalues, yvalues):
 
     s = 0
     for xa, xb, ya, yb in zip(xvalues[:-1], xvalues[1:], yvalues[:-1], yvalues[1:]):
-        s += 0.5*(ya + yb)*(xb-xa)
+        s += 0.5 * (ya + yb) * (xb - xa)
     return s
